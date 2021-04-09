@@ -189,25 +189,25 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 			pushAndShow(makeEmuView(attachParams(), EmuApp::ViewID::SYSTEM_ACTIONS), e);
 		}
 	},
-	recentGames
-	{
-		"Recent Games",
-		[this](Input::Event e)
-		{
-			if(recentGameList.size())
-			{
-				pushAndShow(makeView<RecentGameView>(recentGameList), e);
-			}
-		}
-	},
-	bundledGames
-	{
-		"Bundled Games",
-		[this](Input::Event e)
-		{
-			pushAndShow(makeView<BundledGamesView>(), e);
-		}
-	},
+//	recentGames
+//	{
+//		"Recent Games",
+//		[this](Input::Event e)
+//		{
+//			if(recentGameList.size())
+//			{
+//				pushAndShow(makeView<RecentGameView>(recentGameList), e);
+//			}
+//		}
+//	},
+//	bundledGames
+//	{
+//		"Bundled Games",
+//		[this](Input::Event e)
+//		{
+//			pushAndShow(makeView<BundledGamesView>(), e);
+//		}
+//	},
 	options
 	{
 		"设置",
