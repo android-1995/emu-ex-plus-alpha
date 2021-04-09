@@ -767,4 +767,34 @@ CLINK void LVISIBLE ANativeActivity_onCreate(ANativeActivity* activity, void* sa
 	{
 		logWarn("didn't create a window");
 	}
+	//爱吾的一些native方法
+	aiWuInit(activity->env);
+}
+//爱吾的一些native方法
+static void aiWuInit(JNIEnv* env)
+{
+    auto env = jEnvForThread();
+    JavaInstMethod<jobject()> jAiWuNativeFun{env, Base::jBaseActivityCls, "NativeFun", "()Lcom/aiwu/NativeFun;"};
+    auto aiWuNativeFun = jAiWuNativeFun(env, Base::jBaseActivity);
+    auto aiWuNativeFunCls = env->GetObjectClass(aiWuNativeFun);
+    JNINativeMethod method[]
+    {
+        {
+            "onKeyPress", "(I)V",
+            (void*)(void (*)(JNIEnv*, jobject, jint))
+            ([](JNIEnv* env, jobject thiz, jint keyCode)
+            {
+
+            })
+        },
+        {
+            "onKeyRelease", "(I)V",
+            (void*)(void (*)(JNIEnv*, jobject, jint))
+            ([](JNIEnv* env, jobject thiz, jint keyCode)
+            {
+
+            })
+        }
+    };
+    env->RegisterNatives(aiWuNativeFunCls, method, std::size(method));
 }
