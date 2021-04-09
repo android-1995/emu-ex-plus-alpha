@@ -46,11 +46,13 @@ bool isXperiaPlayDeviceStr(const char *str)
 bool apkSignatureIsConsistent()
 {
 	bool sigMatchesAPK = true;
+	/*去掉签名验证
 	#ifdef ANDROID_APK_SIGNATURE_HASH
 	auto env = jEnvForThread();
 	JavaInstMethod<jint()> jSigHash{env, jBaseActivityCls, "sigHash", "()I"};
 	sigMatchesAPK = jSigHash(env, jBaseActivity) == ANDROID_APK_SIGNATURE_HASH;
 	#endif
+	*/
 	return sigMatchesAPK;
 }
 
