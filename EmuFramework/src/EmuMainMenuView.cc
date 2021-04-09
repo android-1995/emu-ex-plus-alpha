@@ -125,7 +125,8 @@ void EmuMainMenuView::onShow()
 {
 	TableView::onShow();
 	logMsg("refreshing main menu state");
-	recentGames.setActive(recentGameList.size());
+	//去掉功能
+//	recentGames.setActive(recentGameList.size());
 	systemActions.setActive(EmuSystem::gameIsRunning());
 	#ifdef CONFIG_BLUETOOTH
 	bluetoothDisconnect.setActive(Bluetooth::devsConnected());
@@ -134,12 +135,13 @@ void EmuMainMenuView::onShow()
 
 void EmuMainMenuView::loadFileBrowserItems()
 {
-	item.emplace_back(&loadGame);
-	item.emplace_back(&recentGames);
-	if(EmuSystem::hasBundledGames && optionShowBundledGames)
-	{
-		item.emplace_back(&bundledGames);
-	}
+//去掉功能
+//	item.emplace_back(&loadGame);
+//	item.emplace_back(&recentGames);
+//	if(EmuSystem::hasBundledGames && optionShowBundledGames)
+//	{
+//		item.emplace_back(&bundledGames);
+//	}
 }
 
 void EmuMainMenuView::loadStandardItems()
@@ -171,14 +173,14 @@ void EmuMainMenuView::setAudioVideo(EmuAudio &audio_, EmuVideoLayer &videoLayer_
 //去掉一些功能
 EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	TableView{appViewTitle(), attach, item},
-	loadGame
-	{
-		"Load Game",
-		[this](Input::Event e)
-		{
-			pushAndShow(EmuFilePicker::makeForLoading(attachParams(), e), e, false);
-		}
-	},
+//	loadGame
+//	{
+//		"Load Game",
+//		[this](Input::Event e)
+//		{
+//			pushAndShow(EmuFilePicker::makeForLoading(attachParams(), e), e, false);
+//		}
+//	},
 	systemActions
 	{
 		"System Actions",
