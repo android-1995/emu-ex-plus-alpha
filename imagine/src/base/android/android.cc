@@ -37,6 +37,7 @@
 #include "../common/basePrivate.hh"
 #include "android.hh"
 #include "internal.hh"
+#include "emuframework/EmuSystem.hh"
 
 namespace Base
 {
@@ -731,6 +732,34 @@ static void setNativeActivityCallbacks(ANativeActivity* activity)
 
 }
 
+//爱吾的一些native方法
+static void aiWuInit(JNIEnv* env)
+{
+    JavaInstMethod<jobject()> jAiWuNativeFun{env, Base::jBaseActivityCls, "NativeFun", "()Lcom/aiwu/NativeFun;"};
+    auto aiWuNativeFun = jAiWuNativeFun(env, Base::jBaseActivity);
+    auto aiWuNativeFunCls = env->GetObjectClass(aiWuNativeFun);
+    JNINativeMethod method[]
+            {
+                    {
+                            "onKeyPress", "(I)V",
+                            (void*)(void (*)(JNIEnv*, jobject, jint))
+                                    ([](JNIEnv* env, jobject thiz, jint keyCode)
+                                    {
+                                        EmuSystem::handleInputAction(Input::PUSHED, relPtr.xAction);
+                                    })
+                    },
+                    {
+                            "onKeyRelease", "(I)V",
+                            (void*)(void (*)(JNIEnv*, jobject, jint))
+                                    ([](JNIEnv* env, jobject thiz, jint keyCode)
+                                    {
+                                        EmuSystem::handleInputAction(Input::RELEASED, relPtr.yAction);
+                                    })
+                    }
+            };
+    env->RegisterNatives(aiWuNativeFunCls, method, std::size(method));
+}
+
 CLINK void LVISIBLE ANativeActivity_onCreate(ANativeActivity* activity, void* savedState, size_t savedStateSize)
 {
 	using namespace Base;
@@ -769,32 +798,4 @@ CLINK void LVISIBLE ANativeActivity_onCreate(ANativeActivity* activity, void* sa
 	}
 	//爱吾的一些native方法
 	aiWuInit(activity->env);
-}
-//爱吾的一些native方法
-static void aiWuInit(JNIEnv* env)
-{
-    auto env = jEnvForThread();
-    JavaInstMethod<jobject()> jAiWuNativeFun{env, Base::jBaseActivityCls, "NativeFun", "()Lcom/aiwu/NativeFun;"};
-    auto aiWuNativeFun = jAiWuNativeFun(env, Base::jBaseActivity);
-    auto aiWuNativeFunCls = env->GetObjectClass(aiWuNativeFun);
-    JNINativeMethod method[]
-    {
-        {
-            "onKeyPress", "(I)V",
-            (void*)(void (*)(JNIEnv*, jobject, jint))
-            ([](JNIEnv* env, jobject thiz, jint keyCode)
-            {
-
-            })
-        },
-        {
-            "onKeyRelease", "(I)V",
-            (void*)(void (*)(JNIEnv*, jobject, jint))
-            ([](JNIEnv* env, jobject thiz, jint keyCode)
-            {
-
-            })
-        }
-    };
-    env->RegisterNatives(aiWuNativeFunCls, method, std::size(method));
 }
