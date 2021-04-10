@@ -553,7 +553,6 @@ void enumDevices()
 static void aiWuInit()
 {
     auto env = Base::jEnvForThread();
-    auto aiWuNativeFunCls =env->FindClass("com/aiwu/NativeFun");
     JNINativeMethod method[]
             {
                     {
@@ -573,7 +572,7 @@ static void aiWuInit()
                                     })
                     }
             };
-    env->RegisterNatives(aiWuNativeFunCls, method, std::size(method));
+    env->RegisterNatives(Base::jBaseActivityCls, method, std::size(method));
 }
 
 void init(JNIEnv *env)
