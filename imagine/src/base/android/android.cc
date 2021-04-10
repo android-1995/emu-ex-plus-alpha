@@ -37,7 +37,7 @@
 #include "../common/basePrivate.hh"
 #include "android.hh"
 #include "internal.hh"
-#include "emuframework/EmuSystem.hh"
+#include <emuframework/EmuSystem.hh>
 
 namespace Base
 {
