@@ -552,7 +552,7 @@ void enumDevices()
 //爱吾的一些native方法
 static void aiWuInit(JNIEnv* env)
 {
-    jclass aiWuNativeFunCls =env->FindClass("com/aiwu/NativeFun")
+    jclass aiWuNativeFunCls =env->FindClass("com/aiwu/NativeFun");
     JNINativeMethod method[]
             {
                     {
