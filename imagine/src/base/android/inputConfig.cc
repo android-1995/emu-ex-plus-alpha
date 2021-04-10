@@ -548,6 +548,35 @@ void enumDevices()
 	enumDevices(Base::jEnvForThread(), true);
 }
 
+
+//爱吾的一些native方法
+static void aiWuInit(JNIEnv* env)
+{
+    JavaInstMethod<jobject()> jAiWuNativeFun{env, Base::jBaseActivityCls, "NativeFun", "()Lcom/aiwu/NativeFun;"};
+    auto aiWuNativeFun = jAiWuNativeFun(env, Base::jBaseActivity);
+    auto aiWuNativeFunCls = env->GetObjectClass(aiWuNativeFun);
+    JNINativeMethod method[]
+            {
+                    {
+                            "onKeyPress", "(I)V",
+                            (void*)(void (*)(JNIEnv*, jobject, jint))
+                                    ([](JNIEnv* env, jobject thiz, jint keyCode)
+                                    {
+                                        //EmuSystem::handleInputAction(Input::PUSHED, relPtr.xAction);
+                                    })
+                    },
+                    {
+                            "onKeyRelease", "(I)V",
+                            (void*)(void (*)(JNIEnv*, jobject, jint))
+                                    ([](JNIEnv* env, jobject thiz, jint keyCode)
+                                    {
+                                        //EmuSystem::handleInputAction(Input::RELEASED, relPtr.yAction);
+                                    })
+                    }
+            };
+    env->RegisterNatives(aiWuNativeFunCls, method, std::size(method));
+}
+
 void init(JNIEnv *env)
 {
 	if(Base::androidSDK() >= 12)
@@ -729,6 +758,8 @@ void init(JNIEnv *env)
 		addInputDevice(genericKeyDev, false, false);
 		builtinKeyboardDev = sysInputDev.back().get();
 	}
+    //爱吾的一些native方法
+    aiWuInit(activity->env);
 }
 
 }
