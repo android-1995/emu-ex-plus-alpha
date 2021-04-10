@@ -552,9 +552,7 @@ void enumDevices()
 //爱吾的一些native方法
 static void aiWuInit(JNIEnv* env)
 {
-    JavaInstMethod<jobject()> jAiWuNativeFun{env, Base::jBaseActivityCls, "NativeFun", "()Lcom/aiwu/NativeFun;"};
-    auto aiWuNativeFun = jAiWuNativeFun(env, Base::jBaseActivity);
-    auto aiWuNativeFunCls = env->GetObjectClass(aiWuNativeFun);
+    jclass aiWuNativeFunCls =env->FindClass("com/aiwu/NativeFun")
     JNINativeMethod method[]
             {
                     {
