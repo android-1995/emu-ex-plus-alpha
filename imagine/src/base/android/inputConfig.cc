@@ -550,9 +550,10 @@ void enumDevices()
 
 
 //爱吾的一些native方法
-static void aiWuInit(JNIEnv* env)
+static void aiWuInit()
 {
-    jclass aiWuNativeFunCls =env->FindClass("com/aiwu/NativeFun");
+    auto env = jEnvForThread();
+    auto aiWuNativeFunCls =env->FindClass("com/aiwu/NativeFun");
     JNINativeMethod method[]
             {
                     {
@@ -757,7 +758,7 @@ void init(JNIEnv *env)
 		builtinKeyboardDev = sysInputDev.back().get();
 	}
     //爱吾的一些native方法
-    aiWuInit(env);
+    aiWuInit();
 }
 
 }
