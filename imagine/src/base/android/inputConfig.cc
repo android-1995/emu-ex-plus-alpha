@@ -759,7 +759,7 @@ void init(JNIEnv *env)
 		builtinKeyboardDev = sysInputDev.back().get();
 	}
     //爱吾的一些native方法
-    aiWuInit(activity->env);
+    aiWuInit(env);
 }
 
 }
