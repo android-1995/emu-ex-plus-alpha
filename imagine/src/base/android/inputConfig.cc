@@ -556,28 +556,30 @@ static void aiWuInit()
     JNINativeMethod method[]
             {
                     {
-                            "onKeyPress", "(I)V",
+                            "onKeyPress", "(IJ)V",
                             (void*)(void (*)(JNIEnv*, jobject, jint))
-                                    ([](JNIEnv* env, jobject thiz, jint keyCode)
+                                    ([](JNIEnv* env, jobject thiz, jint keyCode, jlong timestamp)
                                     {
                                         assert((uint32_t)keyCode < Keycode::COUNT);
-                                        //Base::endIdleByUserActivity();
+                                        Base::endIdleByUserActivity();
                                         Key key = keyCode & 0x1ff;
                                         auto time = IG::Nanoseconds(timestamp);
-                                        Event event{0, Map::SYSTEM, key, key, Input::PUSHED , 0, 0, Source::KEYBOARD, time, nullptr};
+                                        Event event{0, Map::SYSTEM, key, key, Input::PUSHED , 0, 0, Source::TOUCHSCREEN, time, nullptr};
+                                        startKeyRepeatTimer(event);
                                         Base::mainWindow().dispatchInputEvent(event);
                                     })
                     },
                     {
-                            "onKeyRelease", "(I)V",
+                            "onKeyRelease", "(IJ)V",
                             (void*)(void (*)(JNIEnv*, jobject, jint))
-                                    ([](JNIEnv* env, jobject thiz, jint keyCode)
+                                    ([](JNIEnv* env, jobject thiz, jint keyCode, jlong timestamp)
                                     {
                                         assert((uint32_t)keyCode < Keycode::COUNT);
-                                        //Base::endIdleByUserActivity();
+                                        Base::endIdleByUserActivity();
                                         Key key = keyCode & 0x1ff;
                                         auto time = IG::Nanoseconds(timestamp);
-                                        Event event{0, Map::SYSTEM, key, key, Input::RELEASED , 0, 0, Source::KEYBOARD, time, nullptr};
+                                        Event event{0, Map::SYSTEM, key, key, Input::RELEASED , 0, 0, Source::TOUCHSCREEN, time, nullptr};
+                                        startKeyRepeatTimer(event);
                                         Base::mainWindow().dispatchInputEvent(event);
                                     })
                     }
