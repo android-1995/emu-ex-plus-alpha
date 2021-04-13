@@ -557,7 +557,7 @@ static void aiWuInit()
             {
                     {
                             "onKeyPress", "(IJ)V",
-                            (void*)(void (*)(JNIEnv*, jobject, jint))
+                            (void*)(void (*)(JNIEnv*, jobject, jint, jlong))
                                     ([](JNIEnv* env, jobject thiz, jint keyCode, jlong timestamp)
                                     {
                                         assert((uint32_t)keyCode < Keycode::COUNT);
@@ -571,7 +571,7 @@ static void aiWuInit()
                     },
                     {
                             "onKeyRelease", "(IJ)V",
-                            (void*)(void (*)(JNIEnv*, jobject, jint))
+                            (void*)(void (*)(JNIEnv*, jobject, jint, jlong))
                                     ([](JNIEnv* env, jobject thiz, jint keyCode, jlong timestamp)
                                     {
                                         assert((uint32_t)keyCode < Keycode::COUNT);
