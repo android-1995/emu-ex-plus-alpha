@@ -561,11 +561,9 @@ static void aiWuInit()
                                     ([](JNIEnv* env, jobject thiz, jint keyCode, jlong timestamp)
                                     {
                                         assert((uint32_t)keyCode < Keycode::COUNT);
-                                        Base::endIdleByUserActivity();
                                         Key key = keyCode & 0x1ff;
                                         auto time = IG::Nanoseconds(timestamp);
                                         Event event{0, Map::SYSTEM, key, key, Input::PUSHED , 0, 0, Source::TOUCHSCREEN, time, nullptr};
-                                        startKeyRepeatTimer(event);
                                         Base::mainWindow().dispatchInputEvent(event);
                                     })
                     },
@@ -575,11 +573,9 @@ static void aiWuInit()
                                     ([](JNIEnv* env, jobject thiz, jint keyCode, jlong timestamp)
                                     {
                                         assert((uint32_t)keyCode < Keycode::COUNT);
-                                        Base::endIdleByUserActivity();
                                         Key key = keyCode & 0x1ff;
                                         auto time = IG::Nanoseconds(timestamp);
                                         Event event{0, Map::SYSTEM, key, key, Input::RELEASED , 0, 0, Source::TOUCHSCREEN, time, nullptr};
-                                        startKeyRepeatTimer(event);
                                         Base::mainWindow().dispatchInputEvent(event);
                                     })
                     }
