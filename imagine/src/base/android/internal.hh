@@ -64,5 +64,5 @@ bool hasGetAxisValue();
 bool addInputDevice(AndroidInputDevice dev, bool updateExisting, bool notify);
 bool removeInputDevice(int id, bool notify);
 
-bool processInputEventAiWu(AInputEvent* event);
+bool processInputEventAiWu(int source, int eventAction, int deviceId,int x,int y, int pointerId,int pointers,long eventTime);
 }

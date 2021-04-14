@@ -574,11 +574,11 @@ static void aiWuInit()
                                     })
                     },
                     {
-                            "inputEvent", "(Landroid/view/MotionEvent;)V",
-                            (void*)(void (*)(JNIEnv*, jobject, jobject))
-                                    ([](JNIEnv* env, jobject thiz, jobject event)
+                            "inputEvent", "(IIIIIIIJ)V",
+                            (void*)(void (*)(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint, jint,jlong))
+                                    ([](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint x, jint y, jint pointerId, jint pointerCount, jlong eventTime)
                                     {
-                                        Input::processInputEventAiWu((AInputEvent*)event);
+                                        Input::processInputEventAiWu(source,action,deviceId,x,y,pointerId,pointerCount,eventTime);
                                     })
                     }
             };

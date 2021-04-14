@@ -490,8 +490,102 @@ void flushSystemEvents()
 	}
 }
 
-bool processInputEventAiWu(AInputEvent* event)
+bool processInputEventAiWu(int source, int eventAction, int deviceId,int x,int y, int pointerId,int pointers,long eventTime)
 {
-    return processInputEvent(event,*Base::mainWindow());
+    auto win = *Base::deviceWindow();
+    auto time =  IG::Nanoseconds(eventTime);
+    switch(source & AINPUT_SOURCE_CLASS_MASK)
+    {
+        case AINPUT_SOURCE_CLASS_POINTER:
+        {
+            auto dev = deviceForInputId(deviceId);
+            if(unlikely(!dev))
+            {
+                if(Config::DEBUG_BUILD)
+                    logWarn("discarding pointer input from unknown device ID: %d", deviceId);
+                return false;
+            }
+            bool isMouse = isFromSource(source, AINPUT_SOURCE_MOUSE);
+            uint32_t action = eventAction & AMOTION_EVENT_ACTION_MASK;
+            if(action == AMOTION_EVENT_ACTION_UP || action == AMOTION_EVENT_ACTION_CANCEL)
+            {
+                // touch gesture ended
+                processTouchEvent(m, action,
+                                  x,
+                                  y,
+                                  pointerId,
+                                  time, isMouse, dev, win);
+                return true;
+            }
+            uint32_t actionPIdx = eventAction >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
+            iterateTimes(pointers, i)
+            {
+                int pAction = action;
+                // a pointer not performing the action just needs its position updated
+                if(actionPIdx != i)
+                {
+                    //logMsg("non-action pointer idx %d", i);
+                    pAction = AMOTION_EVENT_ACTION_MOVE;
+                }
+                processTouchEvent(m, pAction,
+                                  x,
+                                  y,
+                                  pointerId,
+                                  time, isMouse, dev, win);
+            }
+            return true;
+        }
+        case AINPUT_SOURCE_CLASS_NAVIGATION:
+        {
+            //logMsg("from trackball");
+            int iX = x * 1000., iY = y * 1000.;
+            auto pos = transformInputPos(win, {iX, iY});
+            //logMsg("trackball ev %s %f %f", androidEventEnumToStr(action), x, y);
+            auto src = Source::KEYBOARD;
+            if(eventAction == AMOTION_EVENT_ACTION_MOVE)
+                win.dispatchInputEvent({0, Map::REL_POINTER, 0, 0, MOVED_RELATIVE, pos.x, pos.y, 0, Source::NAVIGATION, time, nullptr});
+            else
+            {
+                Key key = Keycode::ENTER;
+                win.dispatchInputEvent({0, Map::REL_POINTER, key, key, eventAction == AMOTION_EVENT_ACTION_DOWN ? PUSHED : RELEASED, 0, 0, Source::KEYBOARD, time, nullptr});
+            }
+            return true;
+        }
+//        case AINPUT_SOURCE_CLASS_JOYSTICK:
+//        {
+//            auto dev = deviceForInputId(deviceId);
+//            if(unlikely(!dev))
+//            {
+//                if(Config::DEBUG_BUILD)
+//                    logWarn("discarding joystick input from unknown device ID: %d", deviceId);
+//                return false;
+//            }
+//            auto enumID = dev->enumId();
+//            if(hasGetAxisValue())
+//            {
+//                for(auto &axis : dev->axis)
+//                {
+//                    auto pos = AMotionEvent_getAxisValue(event, axis.id, 0);
+//                    //logMsg("axis %d with value: %f", axis.id, (double)pos);
+//                    axis.keyEmu.dispatch(pos, enumID, Map::SYSTEM, time, *dev, win);
+//                }
+//            }
+//            else
+//            {
+//                // no getAxisValue, can only use 2 axis values (X and Y)
+//                iterateTimes(std::min((uint32_t)dev->axis.size(), 2u), i)
+//                {
+//                    auto pos = i ? y : x;
+//                    dev->axis[i].keyEmu.dispatch(pos, enumID, Map::SYSTEM, time, *dev, win);
+//                }
+//            }
+//            return true;
+//        }
+        default:
+        {
+            return false;
+        }
+    }
+    return false;
 }
 }
