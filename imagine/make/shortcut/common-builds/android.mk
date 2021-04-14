@@ -1,7 +1,8 @@
 include $(IMAGINE_PATH)/make/config.mk
 
 ifndef android_arch
- android_arch := arm64 armv7 x86 x86_64
+# android_arch := arm64 armv7 x86 x86_64
+  android_arch := armv7
 endif
 
 android_buildPrefix := android
