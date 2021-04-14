@@ -568,9 +568,7 @@ static void aiWuInit()
                             (void*)(void (*)(JNIEnv*, jobject, jint))
                                     ([](JNIEnv* env, jobject thiz, jint keyCode)
                                     {
-//                                        Key key = keyCode & 0x1ff;
-//                                        Event event{0, Map::SYSTEM, key, key, Input::RELEASED , 0, 0, Source::TOUCHSCREEN, time, nullptr};
-//                                        Base::mainWindow().dispatchInputEvent(event);
+                                        onKeyPress(keycode& 0x1ff);
                                     })
                     },
                     {

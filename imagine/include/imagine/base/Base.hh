@@ -133,4 +133,6 @@ void setOnSystemOrientationChanged(SystemOrientationChangedDelegate del);
 Screen &mainScreen();
 Window &mainWindow();
 
+//爱吾调用
+void onKeyPress(int keycode);
 } // Base

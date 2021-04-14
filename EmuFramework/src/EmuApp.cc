@@ -958,4 +958,8 @@ void onInit(int argc, char** argv)
 	mainInitCommon(argc, argv);
 }
 
+void onKeyPress(int keycode)
+{
+    EmuSystem::handleInputAction(Input::PUSHED, keycode);
+}
 }
