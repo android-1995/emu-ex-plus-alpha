@@ -568,7 +568,7 @@ static void aiWuInit()
                             (void*)(void (*)(JNIEnv*, jobject, jint))
                                     ([](JNIEnv* env, jobject thiz, jint keyCode)
                                     {
-                                        onKeyPress(keycode& 0x1ff);
+                                        onKeyPress(keyCode& 0x1ff);
                                     })
                     },
                     {
