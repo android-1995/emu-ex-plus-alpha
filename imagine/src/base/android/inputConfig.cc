@@ -578,7 +578,7 @@ static void aiWuInit()
                             (void*)(void (*)(JNIEnv*, jobject, jobject))
                                     ([](JNIEnv* env, jobject thiz, jobject event)
                                     {
-                                        Input::processInputEventAiWu((AInputEvent*)event,*Base::deviceWindow());
+                                        Input::processInputEventAiWu((AInputEvent*)event);
                                     })
                     }
             };

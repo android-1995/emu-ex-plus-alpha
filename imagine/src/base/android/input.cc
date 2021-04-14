@@ -490,8 +490,8 @@ void flushSystemEvents()
 	}
 }
 
-bool processInputEventAiWu(AInputEvent* event, Base::Window &win)
+bool processInputEventAiWu(AInputEvent* event)
 {
-    return processInputEvent(event,win);
+    return processInputEvent(event,*Base::mainWindow());
 }
 }
