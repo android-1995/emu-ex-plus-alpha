@@ -574,7 +574,7 @@ static void aiWuInit()
                                     })
                     },
                     {
-                            "inputEvent", "(IIIIIIIJ)V",
+                            "motionEvent", "(IIIIIIIJ)V",
                             (void*)(void (*)(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint, jint,jlong))
                                     ([](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint x, jint y, jint pointerId, jint pointerCount, jlong eventTime)
                                     {
