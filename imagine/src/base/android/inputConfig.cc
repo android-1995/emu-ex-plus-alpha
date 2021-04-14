@@ -578,7 +578,7 @@ static void aiWuInit()
                             (void*)(void (*)(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint, jint,jlong))
                                     ([](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint x, jint y, jint pointerId, jint pointerCount, jlong eventTime)
                                     {
-                                        Input::processInputEventAiWu(source,action,deviceId,x,y,pointerId,pointerCount,eventTime);
+                                        Input::processInputEventAiWu(source,action,deviceId,x,y,pointerId,pointerCount,eventTime,*Base::deviceWindow());
                                     })
                     }
             };

@@ -490,9 +490,8 @@ void flushSystemEvents()
 	}
 }
 
-bool processInputEventAiWu(int source, int eventAction, int deviceId,int x,int y, int pointerId,int pointers,long eventTime)
+bool processInputEventAiWu(int source, int eventAction, int deviceId,int x,int y, int pointerId,int pointers,long eventTime,Base::Window &win)
 {
-    auto win = *Base::deviceWindow();
     auto time =  IG::Nanoseconds(eventTime);
     switch(source & AINPUT_SOURCE_CLASS_MASK)
     {
