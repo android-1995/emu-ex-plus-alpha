@@ -292,14 +292,14 @@ void initOptions()
 	#ifdef CONFIG_BASE_ANDROID
 	if(Base::hasHardwareNavButtons())
 	{
-		optionLowProfileOSNav.isConst = 1;
-		optionHideOSNav.isConst = 1;
+		optionLowProfileOSNav.isConst = 2;
+		optionHideOSNav.isConst = 2;
 	}
 	else
 	{
-		optionBackNavigation.initDefault(1);
+		optionBackNavigation.initDefault(2);
 		if(Base::androidSDK() >= 19)
-			optionHideOSNav.initDefault(1);
+			optionHideOSNav.initDefault(2);
 	}
 	if(Base::androidSDK() >= 11)
 	{
