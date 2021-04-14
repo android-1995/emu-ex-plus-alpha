@@ -556,27 +556,29 @@ static void aiWuInit()
     JNINativeMethod method[]
             {
                     {
-                            "onKeyPress", "(IJ)V",
-                            (void*)(void (*)(JNIEnv*, jobject, jint, jlong))
-                                    ([](JNIEnv* env, jobject thiz, jint keyCode, jlong timestamp)
+                            "onKeyPress", "(I)V",
+                            (void*)(void (*)(JNIEnv*, jobject, jint))
+                                    ([](JNIEnv* env, jobject thiz, jint keyCode)
                                     {
-                                        assert((uint32_t)keyCode < Keycode::COUNT);
-                                        Key key = keyCode & 0x1ff;
-                                        auto time = IG::Nanoseconds(timestamp);
-                                        Event event{0, Map::SYSTEM, key, key, Input::PUSHED , 0, 0, Source::TOUCHSCREEN, time, nullptr};
-                                        Base::mainWindow().dispatchInputEvent(event);
+
                                     })
                     },
                     {
-                            "onKeyRelease", "(IJ)V",
-                            (void*)(void (*)(JNIEnv*, jobject, jint, jlong))
-                                    ([](JNIEnv* env, jobject thiz, jint keyCode, jlong timestamp)
+                            "onKeyRelease", "(I)V",
+                            (void*)(void (*)(JNIEnv*, jobject, jint))
+                                    ([](JNIEnv* env, jobject thiz, jint keyCode)
                                     {
-                                        assert((uint32_t)keyCode < Keycode::COUNT);
-                                        Key key = keyCode & 0x1ff;
-                                        auto time = IG::Nanoseconds(timestamp);
-                                        Event event{0, Map::SYSTEM, key, key, Input::RELEASED , 0, 0, Source::TOUCHSCREEN, time, nullptr};
-                                        Base::mainWindow().dispatchInputEvent(event);
+//                                        Key key = keyCode & 0x1ff;
+//                                        Event event{0, Map::SYSTEM, key, key, Input::RELEASED , 0, 0, Source::TOUCHSCREEN, time, nullptr};
+//                                        Base::mainWindow().dispatchInputEvent(event);
+                                    })
+                    },
+                    {
+                            "inputEvent", "(Landroid/view/MotionEvent;)V",
+                            (void*)(void (*)(JNIEnv*, jobject, jobject))
+                                    ([](JNIEnv* env, jobject thiz, jobject event)
+                                    {
+                                        Input::processInputEvent((AInputEvent*)event,*Base::deviceWindow());
                                     })
                     }
             };
