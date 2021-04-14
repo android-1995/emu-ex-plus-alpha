@@ -159,9 +159,10 @@ void applyOSNavStyle(bool inGame)
 	auto flags = Base::SYS_UI_STYLE_NO_FLAGS;
 	if(optionLowProfileOSNav > (inGame ? 0 : 1))
 		flags |= Base::SYS_UI_STYLE_DIM_NAV;
-	if(optionHideOSNav > (inGame ? 0 : 1))
+	//全屏
+//	if(optionHideOSNav > (inGame ? 0 : 1))
 		flags |= Base::SYS_UI_STYLE_HIDE_NAV;
-	if(optionHideStatusBar > (inGame ? 0 : 1))
+//	if(optionHideStatusBar > (inGame ? 0 : 1))
 		flags |= Base::SYS_UI_STYLE_HIDE_STATUS;
 	Base::setSysUIStyle(flags);
 }
