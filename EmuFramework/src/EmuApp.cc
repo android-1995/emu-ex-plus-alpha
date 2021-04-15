@@ -944,21 +944,6 @@ VController &defaultVController()
 	return vController;
 }
 
-namespace Base
-{
-
-void onInit(int argc, char** argv)
-{
-	if(auto err = EmuSystem::onInit();
-		err)
-	{
-		Base::exitWithErrorMessagePrintf(-1, "%s", err->what());
-		return;
-	}
-	mainInitCommon(argc, argv);
-	//改一些配置
-
-}
 //region 爱吾
 void setConfig()
 {
@@ -974,4 +959,20 @@ void onKeyRelease(uint emuKey)
     EmuSystem::handleInputAction(Input::RELEASED, emuKey);
 }
 //endregion
+
+namespace Base
+{
+
+void onInit(int argc, char** argv)
+{
+	if(auto err = EmuSystem::onInit();
+		err)
+	{
+		Base::exitWithErrorMessagePrintf(-1, "%s", err->what());
+		return;
+	}
+	mainInitCommon(argc, argv);
+	//改一些配置
+    setConfig();
+}
 }
