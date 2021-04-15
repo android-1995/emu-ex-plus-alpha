@@ -679,14 +679,15 @@ static void updateSensorStateForWindowOrientations(Base::Window &win)
 
 void Renderer::setWindowValidOrientations(Base::Window &win, Base::Orientation validO)
 {
-	if(win != Base::mainWindow())
-		return;
-	auto oldWinO = win.softOrientation();
-	if(win.setValidOrientations(validO) && !Config::SYSTEM_ROTATES_WINDOWS)
-	{
-		animateProjectionMatrixRotation(win, orientationToGC(oldWinO), orientationToGC(win.softOrientation()));
-	}
-	updateSensorStateForWindowOrientations(win);
+    //去掉设置屏幕方向，方向由JAVA层控制
+//	if(win != Base::mainWindow())
+//		return;
+//	auto oldWinO = win.softOrientation();
+//	if(win.setValidOrientations(validO) && !Config::SYSTEM_ROTATES_WINDOWS)
+//	{
+//		animateProjectionMatrixRotation(win, orientationToGC(oldWinO), orientationToGC(win.softOrientation()));
+//	}
+//	updateSensorStateForWindowOrientations(win);
 }
 
 void GLRenderer::addEventHandlers(RendererTask &task)
