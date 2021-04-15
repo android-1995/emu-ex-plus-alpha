@@ -41,8 +41,8 @@ public:
 		{
 			attach,
 			"",
-			"Continue",
-			"Restart Game",
+			"继续游戏",
+			"重新开始",
 			[this, addToRecent]()
 			{
 				launchSystem(true, addToRecent);
@@ -53,7 +53,7 @@ public:
 			}
 		}
 	{
-		setLabel(string_makePrintf<96>("Auto-save state exists from:\n%s", dateStr).data());
+		setLabel(string_makePrintf<96>("自动存档存在:\n%s", dateStr).data());
 	}
 };
 
@@ -457,20 +457,19 @@ void EmuViewController::showUI(bool updateTopView)
 
 bool EmuViewController::showAutoStateConfirm(Input::Event e, bool addToRecent)
 {
-    //去掉开始游戏的时候提醒继续游戏还是重新开始，直接重新开始
-//	if(!(optionConfirmAutoLoadState && optionAutoSaveState))
-//	{
-//		return false;
-//	}
-//	auto saveStr = EmuSystem::sprintStateFilename(-1);
-//	if(FS::exists(saveStr))
-//	{
-//		auto mTime = FS::status(saveStr).lastWriteTimeLocal();
-//		char dateStr[64]{};
-//		std::strftime(dateStr, sizeof(dateStr), strftimeFormat, &mTime);
-//		pushAndShowModal(std::make_unique<AutoStateConfirmAlertView>(viewStack.top().attachParams(), dateStr, addToRecent), e, false);
-//		return true;
-//	}
+	if(!(optionConfirmAutoLoadState && optionAutoSaveState))
+	{
+		return false;
+	}
+	auto saveStr = EmuSystem::sprintStateFilename(-1);
+	if(FS::exists(saveStr))
+	{
+		auto mTime = FS::status(saveStr).lastWriteTimeLocal();
+		char dateStr[64]{};
+		std::strftime(dateStr, sizeof(dateStr), strftimeFormat, &mTime);
+		pushAndShowModal(std::make_unique<AutoStateConfirmAlertView>(viewStack.top().attachParams(), dateStr, addToRecent), e, false);
+		return true;
+	}
 	return false;
 }
 
