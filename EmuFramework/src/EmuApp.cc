@@ -962,4 +962,8 @@ void onKeyPress(int keycode)
 {
     EmuSystem::handleInputAction(Input::PUSHED, keycode);
 }
+void onKeyRelease(int keycode)
+{
+    EmuSystem::handleInputAction(Input::RELEASED, keycode);
+}
 }
