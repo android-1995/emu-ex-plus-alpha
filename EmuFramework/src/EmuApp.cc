@@ -958,13 +958,13 @@ void onInit(int argc, char** argv)
 	mainInitCommon(argc, argv);
 }
 //region 爱吾
-void onKeyPress(int keycode)
+void onKeyPress(uint emuKey)
 {
-    EmuSystem::handleInputAction(Input::PUSHED, keycode);
+    EmuSystem::handleInputAction(Input::PUSHED, emuKey);
 }
-void onKeyRelease(int keycode)
+void onKeyRelease(uint emuKey)
 {
-    EmuSystem::handleInputAction(Input::RELEASED, keycode);
+    EmuSystem::handleInputAction(Input::RELEASED, emuKey);
 }
 //endregion
 }
