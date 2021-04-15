@@ -211,7 +211,7 @@ bool isValidOption2DOCenterBtn(_2DOrigin val)
 }
 
 Byte1Option optionTouchCtrlBoundingBoxes(CFGKEY_TOUCH_CONTROL_BOUNDING_BOXES, 0);
-Byte1Option optionTouchCtrlShowOnTouch(CFGKEY_TOUCH_CONTROL_SHOW_ON_TOUCH, 1);
+Byte1Option optionTouchCtrlShowOnTouch(CFGKEY_TOUCH_CONTROL_SHOW_ON_TOUCH, 0);
 OptionTouchCtrlScaledCoordinates optionTouchCtrlScaledCoordinates(CFGKEY_TOUCH_CONTROL_SCALED_COORDINATES, 1, !Config::envIsAndroid);
 
 OptionVControllerLayoutPosition optionVControllerLayoutPos;
