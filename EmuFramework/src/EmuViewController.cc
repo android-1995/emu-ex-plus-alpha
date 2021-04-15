@@ -457,19 +457,20 @@ void EmuViewController::showUI(bool updateTopView)
 
 bool EmuViewController::showAutoStateConfirm(Input::Event e, bool addToRecent)
 {
-	if(!(optionConfirmAutoLoadState && optionAutoSaveState))
-	{
-		return false;
-	}
-	auto saveStr = EmuSystem::sprintStateFilename(-1);
-	if(FS::exists(saveStr))
-	{
-		auto mTime = FS::status(saveStr).lastWriteTimeLocal();
-		char dateStr[64]{};
-		std::strftime(dateStr, sizeof(dateStr), strftimeFormat, &mTime);
-		pushAndShowModal(std::make_unique<AutoStateConfirmAlertView>(viewStack.top().attachParams(), dateStr, addToRecent), e, false);
-		return true;
-	}
+    //去掉开始游戏的时候提醒继续游戏还是重新开始，直接重新开始
+//	if(!(optionConfirmAutoLoadState && optionAutoSaveState))
+//	{
+//		return false;
+//	}
+//	auto saveStr = EmuSystem::sprintStateFilename(-1);
+//	if(FS::exists(saveStr))
+//	{
+//		auto mTime = FS::status(saveStr).lastWriteTimeLocal();
+//		char dateStr[64]{};
+//		std::strftime(dateStr, sizeof(dateStr), strftimeFormat, &mTime);
+//		pushAndShowModal(std::make_unique<AutoStateConfirmAlertView>(viewStack.top().attachParams(), dateStr, addToRecent), e, false);
+//		return true;
+//	}
 	return false;
 }
 
