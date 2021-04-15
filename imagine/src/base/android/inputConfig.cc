@@ -560,7 +560,7 @@ static void aiWuInit()
                             (void*)(void (*)(JNIEnv*, jobject, jint))
                                     ([](JNIEnv* env, jobject thiz, jint keyCode)
                                     {
-                                        Base::onKeyPress(bit(keyCode));
+                                        Base::onKeyPress(Base::bit(keyCode));
                                     })
                     },
                     {
@@ -568,7 +568,7 @@ static void aiWuInit()
                             (void*)(void (*)(JNIEnv*, jobject, jint))
                                     ([](JNIEnv* env, jobject thiz, jint keyCode)
                                     {
-                                        Base::onKeyRelease(bit(keyCode));
+                                        Base::onKeyRelease(Base::bit(keyCode));
                                     })
                     },
                     {
