@@ -943,23 +943,13 @@ VController &defaultVController()
 {
 	return vController;
 }
-
 //region 爱吾
 void setConfig()
 {
     //触屏显示按键 关闭
     optionTouchCtrlShowOnTouch = 0;
 }
-void onKeyPress(uint emuKey)
-{
-    EmuSystem::handleInputAction(Input::PUSHED, emuKey);
-}
-void onKeyRelease(uint emuKey)
-{
-    EmuSystem::handleInputAction(Input::RELEASED, emuKey);
-}
 //endregion
-
 namespace Base
 {
 
@@ -975,4 +965,14 @@ void onInit(int argc, char** argv)
 	//改一些配置
     setConfig();
 }
+//region 爱吾
+void onKeyPress(uint emuKey)
+{
+    EmuSystem::handleInputAction(Input::PUSHED, emuKey);
+}
+void onKeyRelease(uint emuKey)
+{
+    EmuSystem::handleInputAction(Input::RELEASED, emuKey);
+}
+//endregion
 }
