@@ -956,8 +956,15 @@ void onInit(int argc, char** argv)
 		return;
 	}
 	mainInitCommon(argc, argv);
+	//改一些配置
+
 }
 //region 爱吾
+void setConfig()
+{
+    //触屏显示按键 关闭
+    optionTouchCtrlShowOnTouch = 0;
+}
 void onKeyPress(uint emuKey)
 {
     EmuSystem::handleInputAction(Input::PUSHED, emuKey);
