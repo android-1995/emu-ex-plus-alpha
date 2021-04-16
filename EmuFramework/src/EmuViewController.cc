@@ -876,7 +876,7 @@ void EmuViewController::showSystemActionsView(ViewAttachParams attach, Input::Ev
 
 void EmuViewController::showSystemActionsViewAiWu()
 {
-    showSystemActionsView(viewStack.top().attachParams(), {})
+    EmuViewController::showSystemActionsView(viewStack.top().attachParams(), {});
 }
 
 void EmuViewController::onInputDevicesChanged()
