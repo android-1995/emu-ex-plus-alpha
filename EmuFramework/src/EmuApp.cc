@@ -1010,5 +1010,13 @@ void reset()
         return;
     EmuSystem::reset(EmuSystem::RESET_SOFT);
 }
+bool isSoundEnabledAiWu()
+{
+    return soundIsEnabled();
+}
+void setSoundEnabledAiWu(bool enabled)
+{
+    setSoundEnabled(enabled);
+}
 //endregion
 }

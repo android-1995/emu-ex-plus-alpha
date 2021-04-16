@@ -139,4 +139,6 @@ void onKeyRelease(uint emuKey);
 void showSetting();
 void changeEmulatorState(bool pause);
 void reset();
+bool isSoundEnabledAiWu();
+void setSoundEnabledAiWu(bool enabled);
 } // Base
