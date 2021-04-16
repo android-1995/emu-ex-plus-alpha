@@ -533,9 +533,13 @@ void EmuApp::showEmuation()
 	}
 }
 
-void EmuApp::pauseEmulationAiWu()
+void EmuApp::changeEmulatorStateAiWu(bool pause)
 {
-    emuViewController().showUI(false);
+    if(pause){
+        emuViewController().pauseEmulation();
+    } else {
+        emuViewController().startEmulation();
+    }
 }
 
 void EmuApp::launchSystemWithResumePrompt(Input::Event e, bool addToRecent)
@@ -990,11 +994,7 @@ void showSetting()
 }
 void changeEmulatorState(bool pause)
 {
-    if (pause){
-        EmuApp::pauseEmulationAiWu();
-    } else {
-        EmuApp::showEmuation();
-    }
+    EmuApp::changeEmulatorStateAiWu(pause);
 }
 //endregion
 }
