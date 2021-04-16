@@ -141,4 +141,5 @@ void changeEmulatorState(bool pause);
 void reset();
 bool isSoundEnabledAiWu();
 void setSoundEnabledAiWu(bool enabled);
+void showEmulationCallbackAiWu(bool showEmulation);
 } // Base

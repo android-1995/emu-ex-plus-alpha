@@ -1022,5 +1022,11 @@ void setSoundEnabledAiWu(bool enabled)
     else
         emuAudio.close();
 }
+void showEmulationCallbackAiWu(bool showEmulation)
+{
+    auto env = jEnvForThread();
+    JavaInstMethod<void(jboolean)> jShowEmulationCallback{env, jBaseActivityCls, "showEmulationCallback", "(Z)V"};
+    jShowEmulationCallback(env, jBaseActivity, showEmulation);
+}
 //endregion
 }
