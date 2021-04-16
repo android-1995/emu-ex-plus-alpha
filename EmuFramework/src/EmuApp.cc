@@ -982,22 +982,32 @@ void onInit(int argc, char** argv)
 //region 爱吾
 void onKeyPress(uint emuKey)
 {
+    if(!EmuSystem::gameIsRunning())
+        return;
     EmuSystem::handleInputAction(Input::PUSHED, emuKey);
 }
 void onKeyRelease(uint emuKey)
 {
+    if(!EmuSystem::gameIsRunning())
+        return;
     EmuSystem::handleInputAction(Input::RELEASED, emuKey);
 }
 void showSetting()
 {
+    if(!EmuSystem::gameIsRunning())
+        return;
     EmuApp::showSystemActionsViewFromSystemAiWu();
 }
 void changeEmulatorState(bool pause)
 {
+    if(!EmuSystem::gameIsRunning())
+        return;
     EmuApp::changeEmulatorStateAiWu(pause);
 }
 void reset()
 {
+    if(!EmuSystem::gameIsRunning())
+        return;
     EmuSystem::reset(EmuSystem::RESET_SOFT);
 }
 //endregion
