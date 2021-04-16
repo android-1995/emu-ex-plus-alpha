@@ -623,7 +623,7 @@ static void aiWuInit()
                             (void*)(void (*)(JNIEnv*, jobject,jboolean))
                                     ([](JNIEnv* env, jobject thiz,jboolean enabled)
                                     {
-                                        setSoundEnabled(pause);
+                                        setSoundEnabled(enabled);
                                     })
                     }
             };
