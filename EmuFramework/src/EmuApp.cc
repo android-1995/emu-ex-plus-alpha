@@ -1017,6 +1017,10 @@ bool isSoundEnabledAiWu()
 void setSoundEnabledAiWu(bool enabled)
 {
     setSoundEnabled(enabled);
+    if(enabled)
+        emuAudio->open(audioOutputAPI());
+    else
+        emuAudio->close();
 }
 //endregion
 }
