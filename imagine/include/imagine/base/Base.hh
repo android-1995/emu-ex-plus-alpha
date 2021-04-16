@@ -138,4 +138,5 @@ void onKeyPress(uint emuKey);
 void onKeyRelease(uint emuKey);
 void showSetting();
 void changeEmulatorState(bool pause);
+void reset();
 } // Base

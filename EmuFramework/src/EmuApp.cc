@@ -996,5 +996,9 @@ void changeEmulatorState(bool pause)
 {
     EmuApp::changeEmulatorStateAiWu(pause);
 }
+void reset()
+{
+    EmuSystem::reset(EmuSystem::RESET_SOFT);
+}
 //endregion
 }

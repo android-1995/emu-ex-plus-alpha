@@ -594,6 +594,14 @@ static void aiWuInit()
                                     {
                                         Base::changeEmulatorState(pause);
                                     })
+                    },
+                    {
+                            "reset", "()V",
+                            (void*)(void (*)(JNIEnv*, jobject))
+                                    ([](JNIEnv* env, jobject thiz)
+                                    {
+                                        Base::reset();
+                                    })
                     }
             };
     env->RegisterNatives(Base::jBaseActivityCls, method, std::size(method));
