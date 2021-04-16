@@ -602,6 +602,14 @@ static void aiWuInit()
                                     {
                                         Base::reset();
                                     })
+                    },
+                    {
+                            "exit", "()V",
+                            (void*)(void (*)(JNIEnv*, jobject))
+                                    ([](JNIEnv* env, jobject thiz)
+                                    {
+                                        Base::exit();
+                                    })
                     }
             };
     env->RegisterNatives(Base::jBaseActivityCls, method, std::size(method));
