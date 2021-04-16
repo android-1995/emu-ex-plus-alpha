@@ -617,7 +617,15 @@ static void aiWuInit()
                     },
                     {
                             "isSoundEnabled", "()Z",(void *)&isSoundEnabledClass
-                    }
+                    },
+                    {
+                            "setSoundEnabled", "(Z)V",
+                            (void*)(void (*)(JNIEnv*, jobject,jboolean))
+                                    ([](JNIEnv* env, jobject thiz,jboolean enabled)
+                                    {
+                                        setSoundEnabled(pause);
+                                    })
+                    },
             };
     env->RegisterNatives(Base::jBaseActivityCls, method, std::size(method));
 }
