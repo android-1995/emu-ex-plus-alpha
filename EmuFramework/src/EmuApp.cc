@@ -976,7 +976,7 @@ void onKeyRelease(uint emuKey)
 }
 void showSetting()
 {
-    EmuApp::showSystemActionsViewFromSystem(attachParams(), {});
+    EmuApp::showSystemActionsViewFromSystem(viewStack.top().attachParams(), {});
 }
 //endregion
 }
