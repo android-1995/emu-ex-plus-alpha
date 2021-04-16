@@ -983,5 +983,13 @@ void showSetting()
 {
     EmuApp::showSystemActionsViewFromSystemAiWu();
 }
+void changeEmulatorState(bool pause)
+{
+    if (pause){
+        EmuViewController::showUI(false);
+    } else {
+        EmuApp::showEmuation();
+    }
+}
 //endregion
 }

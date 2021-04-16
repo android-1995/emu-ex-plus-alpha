@@ -586,6 +586,14 @@ static void aiWuInit()
                                     {
                                         Base::showSetting();
                                     })
+                    },
+                    {
+                            "changeEmulatorState", "(Z)V",
+                            (void*)(void (*)(JNIEnv*, jobject,jboolean))
+                                    ([](JNIEnv* env, jobject thiz,jboolean pause)
+                                    {
+                                        Base::changeEmulatorState(pause);
+                                    })
                     }
             };
     env->RegisterNatives(Base::jBaseActivityCls, method, std::size(method));

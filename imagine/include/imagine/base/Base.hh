@@ -137,4 +137,5 @@ Window &mainWindow();
 void onKeyPress(uint emuKey);
 void onKeyRelease(uint emuKey);
 void showSetting();
+void changeEmulatorState(bool pause);
 } // Base
