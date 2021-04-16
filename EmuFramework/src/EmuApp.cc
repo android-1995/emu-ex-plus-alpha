@@ -172,6 +172,11 @@ void EmuApp::showSystemActionsViewFromSystem(ViewAttachParams attach, Input::Eve
 	emuViewController().showSystemActionsView(attach, e);
 }
 
+void EmuApp::showSystemActionsViewFromSystemAiWu()
+{
+    emuViewController().showSystemActionsViewAiWu();
+}
+
 void EmuApp::showLastViewFromSystem(ViewAttachParams attach, Input::Event e)
 {
 	if(optionSystemActionsIsDefaultMenu)
@@ -976,7 +981,7 @@ void onKeyRelease(uint emuKey)
 }
 void showSetting()
 {
-    EmuApp::showSystemActionsViewFromSystem(viewStack.top().attachParams(), {});
+    EmuApp::showSystemActionsViewFromSystemAiWu();
 }
 //endregion
 }
