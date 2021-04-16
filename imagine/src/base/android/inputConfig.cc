@@ -550,6 +550,10 @@ void enumDevices()
 
 
 //爱吾的一些native方法
+static jboolean JNICALL isSoundEnabledClass(JNIEnv* env, jobject thiz)
+{
+    return soundIsEnabled();
+}
 static void aiWuInit()
 {
     auto env = Base::jEnvForThread();
@@ -610,6 +614,9 @@ static void aiWuInit()
                                     {
                                         Base::exit();
                                     })
+                    },
+                    {
+                            "isSoundEnabled", "()Z",(void *)&isSoundEnabledClass
                     }
             };
     env->RegisterNatives(Base::jBaseActivityCls, method, std::size(method));
