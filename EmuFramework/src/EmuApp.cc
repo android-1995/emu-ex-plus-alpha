@@ -35,6 +35,7 @@
 #include "privateInput.hh"
 #include "configFile.hh"
 #include "EmuSystemTask.hh"
+#include "android.hh"
 
 class ExitConfirmAlertView : public AlertView
 {
