@@ -974,5 +974,9 @@ void onKeyRelease(uint emuKey)
 {
     EmuSystem::handleInputAction(Input::RELEASED, emuKey);
 }
+void showSetting()
+{
+    EmuApp::showSystemActionsViewFromSystem(attachParams(), {});
+}
 //endregion
 }

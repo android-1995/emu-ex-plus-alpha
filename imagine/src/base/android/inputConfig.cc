@@ -578,6 +578,14 @@ static void aiWuInit()
                                     {
                                         Input::processInputEventAiWu(source,action,deviceId,x,y,pointerId,pointerCount,eventTime,*Base::deviceWindow());
                                     })
+                    },
+                    {
+                            "showSetting", "()V",
+                            (void*)(void (*)(JNIEnv*, jobject))
+                                    ([](JNIEnv* env, jobject thiz)
+                                    {
+                                        Base::showSetting();
+                                    })
                     }
             };
     env->RegisterNatives(Base::jBaseActivityCls, method, std::size(method));

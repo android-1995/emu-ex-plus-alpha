@@ -136,4 +136,5 @@ Window &mainWindow();
 //爱吾调用
 void onKeyPress(uint emuKey);
 void onKeyRelease(uint emuKey);
+void showSetting();
 } // Base
