@@ -532,7 +532,8 @@ void EmuApp::showEmuation()
 		emuViewController().showEmulation();
 	}
 }
-void pauseEmulationAiWu()
+
+void EmuApp::pauseEmulationAiWu()
 {
     emuViewController().showUI(false);
 }
