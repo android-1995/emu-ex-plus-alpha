@@ -625,7 +625,7 @@ static void aiWuInit()
                                     {
                                         setSoundEnabled(pause);
                                     })
-                    },
+                    }
             };
     env->RegisterNatives(Base::jBaseActivityCls, method, std::size(method));
 }
