@@ -552,7 +552,7 @@ void enumDevices()
 //爱吾的一些native方法
 static jboolean JNICALL isSoundEnabledClass(JNIEnv* env, jobject thiz)
 {
-    return Base::soundIsEnabledAiWu();
+    return Base::isSoundEnabledAiWu();
 }
 static void aiWuInit()
 {
