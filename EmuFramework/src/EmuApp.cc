@@ -962,6 +962,8 @@ void setConfig()
 {
     //触屏显示按键 关闭
     optionTouchCtrlShowOnTouch = 0;
+    //失去焦点暂停 关闭
+    optionPauseUnfocused = false;
 }
 //endregion
 namespace Base
