@@ -473,16 +473,10 @@ void endIdleByUserActivity()
 static void setStatusBarHidden(JNIEnv *env, bool hidden)
 {
 	auto statusBarIsHidden = (bool)(jWinFlags(env, jBaseActivity) & AWINDOW_FLAG_FULLSCREEN);
-//	if(hidden != statusBarIsHidden)
-//	{
-//		logMsg("setting app window fullscreen: %u", hidden);
-//		jSetWinFlags(env, jBaseActivity, hidden ? AWINDOW_FLAG_FULLSCREEN : 0, AWINDOW_FLAG_FULLSCREEN);
-//	}
-//不管怎么样都全屏
-	if(!statusBarIsHidden)
+	if(hidden != statusBarIsHidden)
 	{
-		logMsg("setting app window fullscreen: %u", true);
-		jSetWinFlags(env, jBaseActivity, AWINDOW_FLAG_FULLSCREEN, AWINDOW_FLAG_FULLSCREEN);
+		logMsg("setting app window fullscreen: %u", hidden);
+		jSetWinFlags(env, jBaseActivity, hidden ? AWINDOW_FLAG_FULLSCREEN : 0, AWINDOW_FLAG_FULLSCREEN);
 	}
 }
 
