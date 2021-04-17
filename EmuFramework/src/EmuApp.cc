@@ -1026,5 +1026,18 @@ void screenshot(const char *filepath)
 {
     emuVideo.takeGameScreenshotAiWu(filepath);
 }
+void fastForward(int speed)
+{
+    if(speed < 2 || speed > 7){
+        //内部的加速范围2-7
+        //关闭加速
+        emuViewController().setFastForwardActive(false);
+    } else {
+        //改变加速数值
+        optionFastForwardSpeed = speed;
+        //开启加速
+        emuViewController().setFastForwardActive(true);
+    }
+}
 //endregion
 }

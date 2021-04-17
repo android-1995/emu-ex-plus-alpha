@@ -143,4 +143,5 @@ bool isSoundEnabledAiWu();
 void setSoundEnabledAiWu(bool enabled);
 void showEmulationCallbackAiWu(bool showEmulation);
 void screenshot(const char *filepath);
+void fastForward(int speed);
 } // Base

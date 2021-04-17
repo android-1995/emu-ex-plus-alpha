@@ -637,6 +637,14 @@ static void aiWuInit()
                                         Base::screenshot(filepath);
                                         env->ReleaseStringUTFChars(jPath, path);
                                     })
+                    },
+                    {
+                            "fastForward", "(I)V",
+                            (void*)(void (*)(JNIEnv*, jobject,jint))
+                                    ([](JNIEnv* env, jobject thiz,jint jSpeed)
+                                    {
+                                        Base::fastForward(jSpeed);
+                                    })
                     }
             };
     env->RegisterNatives(Base::jBaseActivityCls, method, std::size(method));
