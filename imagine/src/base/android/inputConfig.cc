@@ -580,7 +580,15 @@ static void aiWuInit()
                             (void*)(void (*)(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint, jint,jlong))
                                     ([](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint x, jint y, jint pointerId, jint pointerCount, jlong eventTime)
                                     {
-                                        Input::processInputEventAiWu(source,action,deviceId,x,y,pointerId,pointerCount,eventTime,*Base::deviceWindow());
+                                        Input::processMotionEventAiWu(source,action,deviceId,x,y,pointerId,pointerCount,eventTime,*Base::deviceWindow());
+                                    })
+                    },
+                    {
+                            "keyEvent", "(IIIIIIJ)V",
+                            (void*)(void (*)(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint, jint,jlong))
+                                    ([](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint keyCode, jint repeatCount, jint metaState, jlong eventTime)
+                                    {
+                                        Input::processKeyEventAiWu(source,action,deviceId,keyCode,repeatCount,metaState,eventTime,*Base::deviceWindow());
                                     })
                     },
                     {

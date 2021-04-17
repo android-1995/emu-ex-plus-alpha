@@ -490,7 +490,7 @@ void flushSystemEvents()
 	}
 }
 
-bool processInputEventAiWu(int source, int eventAction, int deviceId,int x,int y, int pointerId,int pointers,long eventTime,Base::Window &win)
+bool processMotionEventAiWu(int source, int eventAction, int deviceId,int x,int y, int pointerId,int pointers,long eventTime,Base::Window &win)
 {
     auto time =  IG::Nanoseconds(eventTime);
     switch(source & AINPUT_SOURCE_CLASS_MASK)
@@ -586,5 +586,57 @@ bool processInputEventAiWu(int source, int eventAction, int deviceId,int x,int y
         }
     }
     return false;
+}
+bool processKeyEventAiWu(int source,int eventAction,int deviceId,int keyCode, int repeatCount, int metaState, long eventTime,Base::Window &win)
+{
+    auto eventSource = isFromSource(source, AINPUT_SOURCE_GAMEPAD) ? Source::GAMEPAD : Source::KEYBOARD;
+    auto keyWasReallyRepeated =
+            [](int devID, int mostRecentKeyEventDevID, int repeatCount)
+            {
+                // On Android 3.1+, 2 or more devices pushing the same
+                // button may be considered a repeat event by the OS.
+                // Filter out this case by checking that the previous
+                // event came from the same device ID if it has
+                // a repeat count.
+                return repeatCount != 0 && devID == mostRecentKeyEventDevID;
+            };
+    if(!keyWasReallyRepeated(deviceId, mostRecentKeyEventDevID, repeatCount))
+    {
+        if(repeatCount)
+        {
+            //logDMsg("ignoring repeat count:%d from device:%d", repeatCount, deviceId);
+        }
+        repeatCount = 0;
+    }
+    mostRecentKeyEventDevID = deviceId;
+    const AndroidInputDevice *dev = deviceForInputId(deviceId);
+    if(unlikely(!dev))
+    {
+        if(virtualDev)
+        {
+            //logWarn("re-mapping key event unknown device ID %d to Virtual", deviceId);
+            dev = virtualDev;
+        }
+        else
+        {
+            logWarn("key event from unknown device ID:%d", deviceId);
+            return false;
+        }
+    }
+    if(unlikely(!keyCode)) // ignore "unknown" key codes
+    {
+        return false;
+    }
+    uint32_t shiftState = metaState & AMETA_SHIFT_ON;
+    auto time =  IG::Nanoseconds(eventTime);
+    assert((uint32_t)keyCode < Keycode::COUNT);
+    uint32_t action = eventAction == AKEY_EVENT_ACTION_UP ? RELEASED : PUSHED;
+    if(!dev->iCadeMode() || (dev->iCadeMode() && !processICadeKey(keyCode, action, time, *dev, win)))
+    {
+        cancelKeyRepeatTimer();
+        Key key = keyCode & 0x1ff;
+        return win.dispatchInputEvent({dev->enumId(), Map::SYSTEM, key, key, action, shiftState, repeatCount, eventSource, time, dev});
+    }
+    return true;
 }
 }
