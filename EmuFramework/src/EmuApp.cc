@@ -964,6 +964,8 @@ void setConfig()
     optionTouchCtrlShowOnTouch = 0;
     //失去焦点暂停 关闭
     optionPauseUnfocused = false;
+    //手柄等输入设备更改通知 关闭
+    optionNotifyInputDeviceChange= false;
 }
 //endregion
 namespace Base

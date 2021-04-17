@@ -147,8 +147,9 @@ void EmuMainMenuView::loadFileBrowserItems()
 void EmuMainMenuView::loadStandardItems()
 {
 	item.emplace_back(&systemActions);
-	item.emplace_back(&onScreenInputManager);
-	item.emplace_back(&inputManager);
+    //去掉功能
+//	item.emplace_back(&onScreenInputManager);
+//	item.emplace_back(&inputManager);
 	item.emplace_back(&options);
 	#ifdef CONFIG_BLUETOOTH
 	if(optionShowBluetoothScan)
@@ -218,22 +219,22 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 			pushAndShow(makeView<OptionCategoryView>(*audio, *videoLayer), e);
 		}
 	},
-	onScreenInputManager
-	{
-		"On-screen Input Setup",
-		[this](Input::Event e)
-		{
-			pushAndShow(makeView<TouchConfigView>(defaultVController(), EmuSystem::inputFaceBtnName, EmuSystem::inputCenterBtnName), e);
-		}
-	},
-	inputManager
-	{
-		"Key/Gamepad Input Setup",
-		[this](Input::Event e)
-		{
-			pushAndShow(makeView<InputManagerView>(), e);
-		}
-	},
+//	onScreenInputManager
+//	{
+//		"On-screen Input Setup",
+//		[this](Input::Event e)
+//		{
+//			pushAndShow(makeView<TouchConfigView>(defaultVController(), EmuSystem::inputFaceBtnName, EmuSystem::inputCenterBtnName), e);
+//		}
+//	},
+//	inputManager
+//	{
+//		"Key/Gamepad Input Setup",
+//		[this](Input::Event e)
+//		{
+//			pushAndShow(makeView<InputManagerView>(), e);
+//		}
+//	},
 	benchmark
 	{
 		"Benchmark Game",
