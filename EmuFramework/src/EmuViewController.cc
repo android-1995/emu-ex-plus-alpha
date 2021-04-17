@@ -119,7 +119,7 @@ EmuViewController::EmuViewController(ViewAttachParams viewAttach,
 		[this](Base::Window &win, uint in)
 		{
 		    //去掉焦点改变的操作
-//			windowData(win).focused = in;
+			windowData(win).focused = in;
 //			onFocusChange(in);
 		});
 
@@ -597,7 +597,7 @@ void EmuViewController::setEmuViewOnExtraWindow(bool on, Base::Screen &screen)
 					[this](Base::Window &win, uint in)
 					{
                         //去掉焦点改变的操作
-//						windowData(win).focused = in;
+						windowData(win).focused = in;
 //						onFocusChange(in);
 					});
 
