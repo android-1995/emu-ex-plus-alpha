@@ -172,9 +172,9 @@ void EmuVideo::doScreenshot(EmuSystemTask *task, IG::Pixmap pix)
 {
 	screenshotNextFrame = false;
 	//指定路径的截图
-	if(screenshotPathAiWu != "\0"){
+	if(screenshotPathAiWu != nullptr){
         auto success = writeScreenshot(pix, screenshotPathAiWu);
-        screenshotPathAiWu = "\0";
+        screenshotPathAiWu = nullptr;
 	    return;
 	}
 	FS::PathString path;
