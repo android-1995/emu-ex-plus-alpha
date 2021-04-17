@@ -760,7 +760,8 @@ void EmuViewController::pauseEmulation()
 	systemTask->pause();
 	EmuSystem::pause();
 	videoLayer().setBrightness(showingEmulation ? .75f : .25f);
-	setFastForwardActive(false);
+	//暂停模拟器不关闭加速
+//	setFastForwardActive(false);
 	emuWindow().setDrawEventPriority();
 	removeOnFrame();
 }
