@@ -118,9 +118,8 @@ EmuViewController::EmuViewController(ViewAttachParams viewAttach,
 	win.setOnFocusChange(
 		[this](Base::Window &win, uint in)
 		{
-		    //去掉焦点改变的操作
 			windowData(win).focused = in;
-//			onFocusChange(in);
+			onFocusChange(in);
 		});
 
 	win.setOnDragDrop(
@@ -596,9 +595,8 @@ void EmuViewController::setEmuViewOnExtraWindow(bool on, Base::Screen &screen)
 				win.setOnFocusChange(
 					[this](Base::Window &win, uint in)
 					{
-                        //去掉焦点改变的操作
 						windowData(win).focused = in;
-//						onFocusChange(in);
+						onFocusChange(in);
 					});
 
 				win.setOnDismissRequest(
@@ -955,23 +953,24 @@ void EmuViewController::handleOpenFileCommand(const char *path)
 
 void EmuViewController::onFocusChange(uint in)
 {
-	if(showingEmulation)
-	{
-		if(in && EmuSystem::isPaused())
-		{
-			logMsg("resuming emulation due to window focus");
-			#ifdef CONFIG_EMUFRAMEWORK_VCONTROLS
-			emuInputView.activeVController()->resetInput();
-			#endif
-			startEmulation();
-		}
-		else if(optionPauseUnfocused && !EmuSystem::isPaused() && !allWindowsAreFocused())
-		{
-			logMsg("pausing emulation with all windows unfocused");
-			pauseEmulation();
-			postDrawToEmuWindows();
-		}
-	}
+    //去掉焦点改变的操作
+//	if(showingEmulation)
+//	{
+//		if(in && EmuSystem::isPaused())
+//		{
+//			logMsg("resuming emulation due to window focus");
+//			#ifdef CONFIG_EMUFRAMEWORK_VCONTROLS
+//			emuInputView.activeVController()->resetInput();
+//			#endif
+//			startEmulation();
+//		}
+//		else if(optionPauseUnfocused && !EmuSystem::isPaused() && !allWindowsAreFocused())
+//		{
+//			logMsg("pausing emulation with all windows unfocused");
+//			pauseEmulation();
+//			postDrawToEmuWindows();
+//		}
+//	}
 }
 
 void EmuViewController::setOnScreenControls(bool on)
