@@ -165,16 +165,16 @@ void EmuVideo::takeGameScreenshot()
 void EmuVideo::takeGameScreenshotAiWu(const char *filepath)
 {
     screenshotNextFrame = true;
-    screenshotPathAiWu = filepath;
+    strcpy(screenshotPathAiWu,filepath);
 }
 
 void EmuVideo::doScreenshot(EmuSystemTask *task, IG::Pixmap pix)
 {
 	screenshotNextFrame = false;
 	//指定路径的截图
-	if(screenshotPathAiWu != nullptr){
+	if(screenshotPathAiWu != "\0"){
         auto success = writeScreenshot(pix, screenshotPathAiWu);
-        screenshotPathAiWu = nullptr;
+        screenshotPathAiWu = "\0";
 	    return;
 	}
 	FS::PathString path;

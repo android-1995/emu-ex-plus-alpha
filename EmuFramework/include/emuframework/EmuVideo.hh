@@ -85,7 +85,7 @@ protected:
 	bool singleBuffer = false;
 	bool needsFence = false;
 	//增加截图路径
-    const char *screenshotPathAiWu;
+	char screenshotPathAiWu[256]= "\0";
 
 	void doScreenshot(EmuSystemTask *task, IG::Pixmap pix);
 	void postFrameFinished(EmuSystemTask *task);
