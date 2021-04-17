@@ -585,7 +585,7 @@ static void aiWuInit()
                     },
                     {
                             "keyEvent", "(IIIIIIJ)V",
-                            (void*)(void (*)(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint, jint,jlong))
+                            (void*)(void (*)(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint,jlong))
                                     ([](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint keyCode, jint repeatCount, jint metaState, jlong eventTime)
                                     {
                                         Input::processKeyEventAiWu(source,action,deviceId,keyCode,repeatCount,metaState,eventTime,*Base::deviceWindow());
