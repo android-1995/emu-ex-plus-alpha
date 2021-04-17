@@ -165,7 +165,7 @@ void EmuVideo::takeGameScreenshot()
 void EmuVideo::takeGameScreenshotAiWu(const char *filepath)
 {
     screenshotNextFrame = true;
-    strcpy(screenshotPathAiWu,filepath);
+    screenshotPathAiWu = filepath;
 }
 
 void EmuVideo::doScreenshot(EmuSystemTask *task, IG::Pixmap pix)
