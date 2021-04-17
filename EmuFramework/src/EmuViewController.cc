@@ -118,8 +118,9 @@ EmuViewController::EmuViewController(ViewAttachParams viewAttach,
 	win.setOnFocusChange(
 		[this](Base::Window &win, uint in)
 		{
-			windowData(win).focused = in;
-			onFocusChange(in);
+		    //去掉焦点改变的操作
+//			windowData(win).focused = in;
+//			onFocusChange(in);
 		});
 
 	win.setOnDragDrop(
@@ -595,8 +596,9 @@ void EmuViewController::setEmuViewOnExtraWindow(bool on, Base::Screen &screen)
 				win.setOnFocusChange(
 					[this](Base::Window &win, uint in)
 					{
-						windowData(win).focused = in;
-						onFocusChange(in);
+                        //去掉焦点改变的操作
+//						windowData(win).focused = in;
+//						onFocusChange(in);
 					});
 
 				win.setOnDismissRequest(
