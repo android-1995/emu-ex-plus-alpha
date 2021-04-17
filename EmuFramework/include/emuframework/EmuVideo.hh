@@ -59,6 +59,8 @@ public:
 	bool addFence(Gfx::RendererCommands &cmds);
 	void clear();
 	void takeGameScreenshot();
+	//增加指定路径的截图
+    void takeGameScreenshotAiWu(const char *filepath);
 	bool isExternalTexture() const;
 	Gfx::PixmapBufferTexture &image();
 	Gfx::Renderer &renderer() const;
@@ -82,6 +84,8 @@ protected:
 	bool screenshotNextFrame = false;
 	bool singleBuffer = false;
 	bool needsFence = false;
+	//增加截图路径
+    const char screenshotPathAiWu;
 
 	void doScreenshot(EmuSystemTask *task, IG::Pixmap pix);
 	void postFrameFinished(EmuSystemTask *task);

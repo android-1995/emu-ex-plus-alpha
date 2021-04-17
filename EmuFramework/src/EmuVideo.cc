@@ -161,9 +161,22 @@ void EmuVideo::takeGameScreenshot()
 	screenshotNextFrame = true;
 }
 
+//指定路径的截图
+void EmuVideo::takeGameScreenshotAiWu(const char *filepath)
+{
+    screenshotNextFrame = true;
+    screenshotPathAiWu = filepath;
+}
+
 void EmuVideo::doScreenshot(EmuSystemTask *task, IG::Pixmap pix)
 {
 	screenshotNextFrame = false;
+	//指定路径的截图
+	if(screenshotPathAiWu != nullptr){
+        auto success = writeScreenshot(pix, screenshotPathAiWu);
+        screenshotPathAiWu = nullptr;
+	    return;
+	}
 	FS::PathString path;
 	int screenshotNum = sprintScreenshotFilename(path);
 	if(screenshotNum == -1)

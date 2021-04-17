@@ -1022,5 +1022,9 @@ void setSoundEnabledAiWu(bool enabled)
     else
         emuAudio.close();
 }
+void screenshot(const char *filepath)
+{
+    emuVideo.takeGameScreenshotAiWu(filepath);
+}
 //endregion
 }

@@ -142,4 +142,5 @@ void reset();
 bool isSoundEnabledAiWu();
 void setSoundEnabledAiWu(bool enabled);
 void showEmulationCallbackAiWu(bool showEmulation);
+void screenshot(const char *filepath);
 } // Base

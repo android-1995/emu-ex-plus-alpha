@@ -625,6 +625,16 @@ static void aiWuInit()
                                     {
                                         Base::setSoundEnabledAiWu(enabled);
                                     })
+                    },
+                    {
+                            "screenshot", "(Ljava/lang/String;)V",
+                            (void*)(void (*)(JNIEnv*, jobject,jstring))
+                                    ([](JNIEnv* env, jobject thiz,jstring jPath)
+                                    {
+                                        const char *path = env->GetStringUTFChars(jPath, nullptr);
+                                        Base::screenshot(path);
+                                        env->ReleaseStringUTFChars(jPath, path);
+                                    })
                     }
             };
     env->RegisterNatives(Base::jBaseActivityCls, method, std::size(method));
