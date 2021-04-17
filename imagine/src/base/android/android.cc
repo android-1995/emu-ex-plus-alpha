@@ -728,7 +728,14 @@ static void setNativeActivityCallbacks(ANativeActivity* activity)
 	// for correct handling of system window insets
 	//activity->callbacks->onContentRectChanged = nullptr;
 }
-
+//region爱吾
+void showEmulationCallbackAiWu(bool showEmulation)
+{
+    auto env = jEnvForThread();
+    JavaInstMethod<void(jboolean)> jShowEmulationCallback{env, jBaseActivityCls, "showEmulationCallback", "(Z)V"};
+    jShowEmulationCallback(env, jBaseActivity, showEmulation);
+}
+//endregion
 }
 
 CLINK void LVISIBLE ANativeActivity_onCreate(ANativeActivity* activity, void* savedState, size_t savedStateSize)

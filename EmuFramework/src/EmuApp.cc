@@ -35,7 +35,6 @@
 #include "privateInput.hh"
 #include "configFile.hh"
 #include "EmuSystemTask.hh"
-#include "android.hh"
 
 class ExitConfirmAlertView : public AlertView
 {
@@ -1022,12 +1021,6 @@ void setSoundEnabledAiWu(bool enabled)
         emuAudio.open(audioOutputAPI());
     else
         emuAudio.close();
-}
-void showEmulationCallbackAiWu(bool showEmulation)
-{
-    auto env = jEnvForThread();
-    JavaInstMethod<void(jboolean)> jShowEmulationCallback{env, jBaseActivityCls, "showEmulationCallback", "(Z)V"};
-    jShowEmulationCallback(env, jBaseActivity, showEmulation);
 }
 //endregion
 }
