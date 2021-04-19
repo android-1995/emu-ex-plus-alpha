@@ -109,6 +109,7 @@ public:
 
     void startEmulation();
     void pauseEmulation();
+    void onPauseAiWu();
 
 protected:
 	static constexpr bool HAS_USE_RENDER_TIME = Config::envIsLinux

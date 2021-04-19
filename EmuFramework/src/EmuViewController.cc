@@ -87,7 +87,7 @@ EmuViewController::EmuViewController(ViewAttachParams viewAttach,
 		{
 			if(backgrounded)
 			{
-				showUI();
+                onPauseAiWu();
 				if(optionShowOnSecondScreen && Base::Screen::screens() > 1)
 				{
 					setEmuViewOnExtraWindow(false, *Base::Screen::screen(1));
@@ -458,6 +458,17 @@ void EmuViewController::showUI(bool updateTopView)
 	}
     //回调一下C层
     Base::showEmulationCallbackAiWu(false);
+}
+
+void EmuViewController::onPauseAiWu()
+{
+    if(!showingEmulation)
+        return;
+    showingEmulation = false;
+    pauseEmulation();
+    configureAppForEmulation(false);
+    configureWindowForEmulation(emuView.window(), false);
+    emuView.postDraw();
 }
 
 bool EmuViewController::showAutoStateConfirm(Input::Event e, bool addToRecent)
