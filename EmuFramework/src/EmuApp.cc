@@ -966,6 +966,15 @@ void setConfig()
     optionPauseUnfocused = false;
     //手柄等输入设备更改通知 关闭
     optionNotifyInputDeviceChange= false;
+
+    //region不显示加速和菜单按钮
+    auto &layoutPos0 = vController.layoutPosition()[0];
+    layoutPos0[3].state = 0;
+    layoutPos0[4].state = 0;
+    auto &layoutPos1 = vController.layoutPosition()[1];
+    layoutPos1[3].state = 0;
+    layoutPos1[4].state = 0;
+    //endregion
 }
 //endregion
 namespace Base
