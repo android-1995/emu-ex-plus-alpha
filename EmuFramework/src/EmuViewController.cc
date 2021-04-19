@@ -87,13 +87,12 @@ EmuViewController::EmuViewController(ViewAttachParams viewAttach,
 		{
 			if(backgrounded)
 			{
-			    //去掉 应用后台自动切换到设置页
-//				showUI();
-//				if(optionShowOnSecondScreen && Base::Screen::screens() > 1)
-//				{
-//					setEmuViewOnExtraWindow(false, *Base::Screen::screen(1));
-//				}
-//				viewStack.top().onHide();
+				showUI();
+				if(optionShowOnSecondScreen && Base::Screen::screens() > 1)
+				{
+					setEmuViewOnExtraWindow(false, *Base::Screen::screen(1));
+				}
+				viewStack.top().onHide();
 			}
 			else
 			{
