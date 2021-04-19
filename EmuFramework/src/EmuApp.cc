@@ -43,15 +43,15 @@ public:
 		AlertView
 		{
 			attach,
-			"Really Exit? (Push Back/Escape again to confirm)",
+			"确定退出游戏吗?(再次按下返回键确认)",
 			EmuSystem::gameIsRunning() ? 3u : 2u
 		}
 	{
-		setItem(0, "Yes", [](){ Base::exit(); });
-		setItem(1, "No", [](){});
+		setItem(0, "确定", [](){ Base::exit(); });
+		setItem(1, "取消", [](){});
 		if(item.size() == 3)
 		{
-			setItem(2, "Close Menu",
+			setItem(2, "关闭设置菜单",
 				[&]()
 				{
 					if(EmuSystem::gameIsRunning())
