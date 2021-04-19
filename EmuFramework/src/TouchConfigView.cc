@@ -399,6 +399,10 @@ void TouchConfigView::place()
 void TouchConfigView::refreshTouchConfigMenu()
 {
 	auto &layoutPos = layoutPosArr(vController, window());
+    //region不显示加速和菜单按钮
+    layoutPos[3].state = 0;
+    layoutPos[4].state = 0;
+    //endregion
 	alpha.setSelected(findIdxInArrayOrDefault(alphaMenuVal, optionTouchCtrlAlpha.val, 3), *this);
 	ffState.setSelected(layoutPos[4].state, *this);
 	menuState.setSelected(layoutPos[3].state - (CAN_TURN_OFF_MENU_BTN ? 0 : 1), *this);
@@ -854,9 +858,6 @@ TouchConfigView::TouchConfigView(ViewAttachParams attach, VController &vCtrl, co
 			if(layoutPos[3].state == 0)
 				layoutPos[3].state = 1;
 		}
-		//不显示加速和菜单按钮
-        layoutPos[3].state = 0;
-        layoutPos[4].state = 0;
 		item.emplace_back(&menuState);
 	}
 	item.emplace_back(&ffState);
