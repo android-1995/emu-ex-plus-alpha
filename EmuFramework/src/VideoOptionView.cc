@@ -303,7 +303,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	aspectRatio
 	{
-		"Aspect Ratio",
+		"长宽比",
 		[this](uint32_t idx, Gfx::Text &t)
 		{
 			if(idx == EmuSystem::aspectRatioInfos)
@@ -321,9 +321,9 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		{"100%", [this]() { setZoom(100); }},
 		{"90%", [this]() { setZoom(90); }},
 		{"80%", [this]() { setZoom(80); }},
-		{"Integer-only", [this]() { setZoom(optionImageZoomIntegerOnly); }},
-		{"Integer-only (Height)", [this]() { setZoom(optionImageZoomIntegerOnlyY); }},
-		{"Custom Value",
+		{"仅整数倍", [this]() { setZoom(optionImageZoomIntegerOnly); }},
+		{"仅整数倍(高度)", [this]() { setZoom(optionImageZoomIntegerOnlyY); }},
+		{"自定义",
 			[this](Input::Event e)
 			{
 				EmuApp::pushAndShowNewCollectValueInputView<int>(attachParams(), e, "Input 10 to 100", "",
@@ -348,7 +348,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	zoom
 	{
-		"Content Zoom",
+		"缩放",
 		[this](uint32_t idx, Gfx::Text &t)
 		{
 			if(optionImageZoom <= 100)
@@ -377,7 +377,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		{"100%", [this]() { setViewportZoom(100); }},
 		{"95%", [this]() { setViewportZoom(95); }},
 		{"90%", [this]() { setViewportZoom(90); }},
-		{"Custom Value",
+		{"自定义",
 			[this](Input::Event e)
 			{
 				EmuApp::pushAndShowNewCollectValueInputView<int>(attachParams(), e, "Input 50 to 100", "",
@@ -402,7 +402,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	viewportZoom
 	{
-		"App Zoom",
+		"屏幕大小",
 		[this](uint32_t idx, Gfx::Text &t)
 		{
 			t.setString(string_makePrintf<5>("%u%%", optionViewportZoom.val).data());
@@ -422,9 +422,9 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	imgFilter
 	{
-		"Image Interpolation",
+		"图像插值过滤",
 		(bool)optionImgFilter,
-		"None", "Linear",
+		"无", "线性",
 		[this](BoolMenuItem &item, Input::Event e)
 		{
 			optionImgFilter.val = item.flipBoolValue(*this);
@@ -435,14 +435,14 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	#ifdef CONFIG_GFX_OPENGL_SHADER_PIPELINE
 	imgEffectItem
 	{
-		{"Off", [this]() { setImgEffect(0, *videoLayer); }},
+		{"关", [this]() { setImgEffect(0, *videoLayer); }},
 		{"hq2x", [this]() { setImgEffect(VideoImageEffect::HQ2X, *videoLayer); }},
 		{"Scale2x", [this]() { setImgEffect(VideoImageEffect::SCALE2X, *videoLayer); }},
 		{"Prescale 2x", [this]() { setImgEffect(VideoImageEffect::PRESCALE2X, *videoLayer); }}
 	},
 	imgEffect
 	{
-		"Image Effect",
+		"图像效果",
 		[]()
 		{
 			switch(optionImgEffect)
@@ -458,16 +458,16 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	#endif
 	overlayEffectItem
 	{
-		{"Off", [this]() { setOverlayEffect(0, *videoLayer); }},
-		{"Scanlines", [this]() { setOverlayEffect(VideoImageOverlay::SCANLINES, *videoLayer); }},
-		{"Scanlines 2x", [this]() { setOverlayEffect(VideoImageOverlay::SCANLINES_2, *videoLayer); }},
+		{"关", [this]() { setOverlayEffect(0, *videoLayer); }},
+		{"扫描线", [this]() { setOverlayEffect(VideoImageOverlay::SCANLINES, *videoLayer); }},
+		{"扫描线 2x", [this]() { setOverlayEffect(VideoImageOverlay::SCANLINES_2, *videoLayer); }},
 		{"CRT Mask", [this]() { setOverlayEffect(VideoImageOverlay::CRT, *videoLayer); }},
 		{"CRT", [this]() { setOverlayEffect(VideoImageOverlay::CRT_RGB, *videoLayer); }},
 		{"CRT 2x", [this]() { setOverlayEffect(VideoImageOverlay::CRT_RGB_2, *videoLayer); }}
 	},
 	overlayEffect
 	{
-		"Overlay Effect",
+		"叠加效果",
 		[]()
 		{
 			switch(optionOverlayEffect)
@@ -488,7 +488,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		{"75%", [this]() { setOverlayEffectLevel(75); }},
 		{"50%", [this]() { setOverlayEffectLevel(50); }},
 		{"25%", [this]() { setOverlayEffectLevel(25); }},
-		{"Custom Value",
+		{"自定义",
 			[this](Input::Event e)
 			{
 				EmuApp::pushAndShowNewCollectValueInputView<int>(attachParams(), e, "Input 10 to 100", "",
@@ -513,7 +513,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	overlayEffectLevel
 	{
-		"Overlay Effect Level",
+		"叠加效果级别",
 		[this](uint32_t idx, Gfx::Text &t)
 		{
 			t.setString(string_makePrintf<5>("%u%%", optionOverlayEffectLevel.val).data());
@@ -535,18 +535,18 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	#ifdef CONFIG_GFX_OPENGL_SHADER_PIPELINE
 	imgEffectPixelFormatItem
 	{
-		{"Auto (Match render format as needed)", [this]() { setImgEffectPixelFormat(PIXEL_NONE, *videoLayer); }},
+		{"自动(根据需要匹配渲染格式)", [this]() { setImgEffectPixelFormat(PIXEL_NONE, *videoLayer); }},
 		{"RGB565", [this]() { setImgEffectPixelFormat(PIXEL_RGB565, *videoLayer); }},
 		{"RGBA8888", [this]() { setImgEffectPixelFormat(PIXEL_RGBA8888, *videoLayer);}},
 	},
 	imgEffectPixelFormat
 	{
-		"Effect Color Format",
+		"效果色彩格式",
 		[](int idx, Gfx::Text &t)
 		{
 			if(idx == 0)
 			{
-				t.setString("Auto");
+				t.setString("自动");
 				return true;
 			}
 			else
@@ -567,7 +567,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	#ifdef EMU_FRAMEWORK_WINDOW_PIXEL_FORMAT_OPTION
 	windowPixelFormatItem
 	{
-		{"Auto", [this]() { setWindowPixelFormat(PIXEL_NONE); }},
+		{"自动", [this]() { setWindowPixelFormat(PIXEL_NONE); }},
 		{"RGB565", [this]() { setWindowPixelFormat(PIXEL_RGB565); }},
 		{"RGB888", [this]() { setWindowPixelFormat(PIXEL_RGB888); }},
 		{"RGBX8888", [this]() { setWindowPixelFormat(PIXEL_RGBX8888); }},
@@ -575,7 +575,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	windowPixelFormat
 	{
-		"Display Color Format",
+		"显示色彩格式",
 		[](int idx, Gfx::Text &t)
 		{
 			if(idx == 0)
@@ -627,13 +627,13 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	#endif
 	imageBuffersItem
 	{
-		{"Auto", [this]() { setImageBuffers(0, *videoLayer); }},
-		{"1 (Syncs GPU each frame, less input lag)", [this]() { setImageBuffers(1, *videoLayer); }},
-		{"2 (More stable, may add 1 frame of lag)", [this]() { setImageBuffers(2, *videoLayer); }},
+		{"自动", [this]() { setImageBuffers(0, *videoLayer); }},
+		{"1 (每帧同步GPU，减少输入滞后)", [this]() { setImageBuffers(1, *videoLayer); }},
+		{"2 (更稳定，可能会增加1帧延迟)", [this]() { setImageBuffers(2, *videoLayer); }},
 	},
 	imageBuffers
 	{
-		"Image Buffers",
+		"图像缓冲区",
 		[this](int idx, Gfx::Text &t)
 		{
 			t.setString(videoLayer->imageBuffers() == 1 ? "1" : "2");
@@ -650,10 +650,10 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		}(),
 		imageBuffersItem
 	},
-	visualsHeading{"Visuals"},
-	screenShapeHeading{"Screen Shape"},
-	advancedHeading{"Advanced"},
-	systemSpecificHeading{"System-specific"}
+	visualsHeading{"视觉效果"},
+	screenShapeHeading{"屏幕形状"},
+	advancedHeading{"高级"},
+	systemSpecificHeading{"系统特定"}
 {
 	iterateTimes(EmuSystem::aspectRatioInfos, i)
 	{

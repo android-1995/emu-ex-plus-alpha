@@ -270,7 +270,7 @@ public:
 
 protected:
 	SelectDelegate selectD{};
-	const char *offStr = "Off", *onStr = "On";
+	const char *offStr = "关", *onStr = "开";
 	bool on = false;
 	bool onOffStyle = true;
 };
