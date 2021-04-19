@@ -151,8 +151,8 @@ YesNoAlertView::YesNoAlertView(ViewAttachParams attach, const char *label, const
 		{
 			return idx == 0 ? yes : no;
 		}),
-	yes{yesStr ? yesStr : "Yes", onYes ? onYes : makeDefaultSelectDelegate()},
-	no{noStr ? noStr : "No", onNo ? onNo : makeDefaultSelectDelegate()}
+	yes{yesStr ? yesStr : "确定", onYes ? onYes : makeDefaultSelectDelegate()},
+	no{noStr ? noStr : "取消", onNo ? onNo : makeDefaultSelectDelegate()}
 {}
 
 void YesNoAlertView::setOnYes(TextMenuItem::SelectDelegate del)
