@@ -377,14 +377,14 @@ void GUIOptionView::loadStockItems()
 	{
 		item.emplace_back(&lowProfileOSNav);
 	}
-	if(!optionHideOSNav.isConst)
-	{
-		item.emplace_back(&hideOSNav);
-	}
-	if(!optionHideStatusBar.isConst)
-	{
-		item.emplace_back(&statusBar);
-	}
+//	if(!optionHideOSNav.isConst)
+//	{
+//		item.emplace_back(&hideOSNav);
+//	}
+//	if(!optionHideStatusBar.isConst)
+//	{
+//		item.emplace_back(&statusBar);
+//	}
 //	if(EmuSystem::hasBundledGames)
 //	{
 //		item.emplace_back(&showBundledGames);

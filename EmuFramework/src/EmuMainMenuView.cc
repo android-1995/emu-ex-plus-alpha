@@ -184,7 +184,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 //	},
 	systemActions
 	{
-		"System Actions",
+		"系统操作",
 		[this](Input::Event e)
 		{
 			if(!EmuSystem::gameIsRunning())
