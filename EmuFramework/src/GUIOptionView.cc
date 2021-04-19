@@ -40,16 +40,16 @@ static void setGameOrientation(uint val)
 }
 
 GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
-	TableView{"GUI Options", attach, item},
-	pauseUnfocused
-	{
-		"Pause if unfocused",
-		(bool)optionPauseUnfocused,
-		[this](BoolMenuItem &item, Input::Event e)
-		{
-			optionPauseUnfocused = item.flipBoolValue(*this);
-		}
-	},
+	TableView{"界面UI设置", attach, item},
+//	pauseUnfocused
+//	{
+//		"Pause if unfocused",
+//		(bool)optionPauseUnfocused,
+//		[this](BoolMenuItem &item, Input::Event e)
+//		{
+//			optionPauseUnfocused = item.flipBoolValue(*this);
+//		}
+//	},
 	fontSizeItem
 	{
 		{"2", [this]() { setFontSize(2000); }},
@@ -61,10 +61,10 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 		{"8", [this]() { setFontSize(8000); }},
 		{"9", [this]() { setFontSize(9000); }},
 		{"10", [this]() { setFontSize(10000); }},
-		{"Custom Value",
+		{"自定义",
 			[this](Input::Event e)
 			{
-				EmuApp::pushAndShowNewCollectValueInputView<double>(attachParams(), e, "Input 2.0 to 10.0", "",
+				EmuApp::pushAndShowNewCollectValueInputView<double>(attachParams(), e, "输入2.0到10.0", "",
 					[this](auto val)
 					{
 						int scaledIntVal = val * 1000.0;
@@ -77,7 +77,7 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 						}
 						else
 						{
-							EmuApp::postErrorMessage("Value not in range");
+							EmuApp::postErrorMessage("值错误");
 							return false;
 						}
 					});
@@ -87,7 +87,7 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	fontSize
 	{
-		"Font Size",
+		"字体大小",
 		[this](uint32_t idx, Gfx::Text &t)
 		{
 			t.setString(string_makePrintf<6>("%.2f", optionFontSize / 1000.).data());
@@ -113,50 +113,50 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	notificationIcon
 	{
-		"Suspended App Icon",
+		"通知栏图标",
 		(bool)optionNotificationIcon,
 		[this](BoolMenuItem &item, Input::Event e)
 		{
 			optionNotificationIcon = item.flipBoolValue(*this);
 		}
 	},
-	statusBarItem
-	{
-		{
-			"Off",
-			[this]()
-			{
-				optionHideStatusBar = 0;
-				applyOSNavStyle(false);
-			}
-		},
-		{
-			"In Game",
-			[this]()
-			{
-				optionHideStatusBar = 1;
-				applyOSNavStyle(false);
-			}
-		},
-		{
-			"On",
-			[this]()
-			{
-				optionHideStatusBar = 2;
-				applyOSNavStyle(false);
-			}
-		}
-	},
-	statusBar
-	{
-		"Hide Status Bar",
-		optionHideStatusBar,
-		statusBarItem
-	},
+//	statusBarItem
+//	{
+//		{
+//			"Off",
+//			[this]()
+//			{
+//				optionHideStatusBar = 0;
+//				applyOSNavStyle(false);
+//			}
+//		},
+//		{
+//			"In Game",
+//			[this]()
+//			{
+//				optionHideStatusBar = 1;
+//				applyOSNavStyle(false);
+//			}
+//		},
+//		{
+//			"On",
+//			[this]()
+//			{
+//				optionHideStatusBar = 2;
+//				applyOSNavStyle(false);
+//			}
+//		}
+//	},
+//	statusBar
+//	{
+//		"Hide Status Bar",
+//		optionHideStatusBar,
+//		statusBarItem
+//	},
 	lowProfileOSNavItem
 	{
 		{
-			"Off",
+			"关",
 			[this]()
 			{
 				optionLowProfileOSNav = 0;
@@ -164,7 +164,7 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 			}
 		},
 		{
-			"In Game",
+			"游戏中",
 			[this]()
 			{
 				optionLowProfileOSNav = 1;
@@ -172,7 +172,7 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 			}
 		},
 		{
-			"On",
+			"开",
 			[this]()
 			{
 				optionLowProfileOSNav = 2;
@@ -186,42 +186,42 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 		optionLowProfileOSNav,
 		lowProfileOSNavItem
 	},
-	hideOSNavItem
-	{
-		{
-			"Off",
-			[this]()
-			{
-				optionHideOSNav = 0;
-				applyOSNavStyle(false);
-			}
-		},
-		{
-			"In Game",
-			[this]()
-			{
-				optionHideOSNav = 1;
-				applyOSNavStyle(false);
-			}
-		},
-		{
-			"On",
-			[this]()
-			{
-				optionHideOSNav = 2;
-				applyOSNavStyle(false);
-			}
-		}
-	},
-	hideOSNav
-	{
-		"Hide OS Navigation",
-		optionHideOSNav,
-		hideOSNavItem
-	},
+//	hideOSNavItem
+//	{
+//		{
+//			"Off",
+//			[this]()
+//			{
+//				optionHideOSNav = 0;
+//				applyOSNavStyle(false);
+//			}
+//		},
+//		{
+//			"In Game",
+//			[this]()
+//			{
+//				optionHideOSNav = 1;
+//				applyOSNavStyle(false);
+//			}
+//		},
+//		{
+//			"On",
+//			[this]()
+//			{
+//				optionHideOSNav = 2;
+//				applyOSNavStyle(false);
+//			}
+//		}
+//	},
+//	hideOSNav
+//	{
+//		"Hide OS Navigation",
+//		optionHideOSNav,
+//		hideOSNavItem
+//	},
 	idleDisplayPowerSave
 	{
-		"Allow Screen Timeout In Emulation",
+		"模拟中允许屏幕超时",
 		(bool)optionIdleDisplayPowerSave,
 		[this](BoolMenuItem &item, Input::Event e)
 		{
@@ -231,7 +231,7 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	navView
 	{
-		"Title Bar",
+		"标题栏",
 		(bool)optionTitleBar,
 		[this](BoolMenuItem &item, Input::Event e)
 		{
@@ -242,7 +242,7 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	backNav
 	{
-		"Title Back Navigation",
+		"标题栏返回按钮",
 		View::needsBackControl,
 		[this](BoolMenuItem &item, Input::Event e)
 		{
@@ -253,105 +253,105 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	systemActionsIsDefaultMenu
 	{
-		"Default Menu",
+		"默认菜单",
 		(bool)optionSystemActionsIsDefaultMenu,
-		"Last Used", "System Actions",
+		"上次使用", "系统操作",
 		[this](BoolMenuItem &item, Input::Event e)
 		{
 			optionSystemActionsIsDefaultMenu = item.flipBoolValue(*this);
 		}
 	},
-	showBundledGames
-	{
-		"Show Bundled Games",
-		(bool)optionShowBundledGames,
-		[this](BoolMenuItem &item, Input::Event e)
-		{
-			optionShowBundledGames = item.flipBoolValue(*this);
-			onMainMenuItemOptionChanged();
-		}
-	},
-	showBluetoothScan
-	{
-		"Show Bluetooth Menu Items",
-		(bool)optionShowBluetoothScan,
-		[this](BoolMenuItem &item, Input::Event e)
-		{
-			optionShowBluetoothScan = item.flipBoolValue(*this);
-			onMainMenuItemOptionChanged();
-		}
-	},
-	orientationHeading
-	{
-		"Orientation",
-	},
-	menuOrientationItem
-	{
-		#ifdef CONFIG_BASE_SUPPORTS_ORIENTATION_SENSOR
-		{"Auto", [this](){ setMenuOrientation(Base::VIEW_ROTATE_AUTO, window(), renderer()); }},
-		#endif
-		{landscapeName, [this](){ setMenuOrientation(Base::VIEW_ROTATE_90, window(), renderer()); }},
-		{landscape2Name, [this](){ setMenuOrientation(Base::VIEW_ROTATE_270, window(), renderer()); }},
-		{portraitName, [this](){ setMenuOrientation(Base::VIEW_ROTATE_0, window(), renderer()); }},
-		{portrait2Name, [this](){ setMenuOrientation(Base::VIEW_ROTATE_180, window(), renderer()); }},
-	},
-	menuOrientation
-	{
-		"In Menu",
-		[]()
-		{
-			int itemOffset = Config::BASE_SUPPORTS_ORIENTATION_SENSOR ? 0 : 1;
-			switch(optionMenuOrientation)
-			{
-				default: return 0;
-				case Base::VIEW_ROTATE_90: return 1 - itemOffset;
-				case Base::VIEW_ROTATE_270: return 2 - itemOffset;
-				case Base::VIEW_ROTATE_0: return 3 - itemOffset;
-				case Base::VIEW_ROTATE_180: return 4 - itemOffset;
-			}
-		}(),
-		menuOrientationItem
-	},
-	gameOrientationItem
-	{
-		#ifdef CONFIG_BASE_SUPPORTS_ORIENTATION_SENSOR
-		{"Auto", [](){ setGameOrientation(Base::VIEW_ROTATE_AUTO); }},
-		#endif
-		{landscapeName, [](){ setGameOrientation(Base::VIEW_ROTATE_90); }},
-		{landscape2Name, [](){ setGameOrientation(Base::VIEW_ROTATE_270); }},
-		{portraitName, [](){ setGameOrientation(Base::VIEW_ROTATE_0); }},
-		{portrait2Name, [](){ setGameOrientation(Base::VIEW_ROTATE_180); }},
-	},
-	gameOrientation
-	{
-		"In Game",
-		[]()
-		{
-			int itemOffset = Config::BASE_SUPPORTS_ORIENTATION_SENSOR ? 0 : 1;
-			switch(optionGameOrientation)
-			{
-				default: return 0;
-				case Base::VIEW_ROTATE_90: return 1 - itemOffset;
-				case Base::VIEW_ROTATE_270: return 2 - itemOffset;
-				case Base::VIEW_ROTATE_0: return 3 - itemOffset;
-				case Base::VIEW_ROTATE_180: return 4 - itemOffset;
-			}
-		}(),
-		gameOrientationItem
-	}
+//	showBundledGames
+//	{
+//		"Show Bundled Games",
+//		(bool)optionShowBundledGames,
+//		[this](BoolMenuItem &item, Input::Event e)
+//		{
+//			optionShowBundledGames = item.flipBoolValue(*this);
+//			onMainMenuItemOptionChanged();
+//		}
+//	},
+//	showBluetoothScan
+//	{
+//		"Show Bluetooth Menu Items",
+//		(bool)optionShowBluetoothScan,
+//		[this](BoolMenuItem &item, Input::Event e)
+//		{
+//			optionShowBluetoothScan = item.flipBoolValue(*this);
+//			onMainMenuItemOptionChanged();
+//		}
+//	},
+//	orientationHeading
+//	{
+//		"Orientation",
+//	},
+//	menuOrientationItem
+//	{
+//		#ifdef CONFIG_BASE_SUPPORTS_ORIENTATION_SENSOR
+//		{"Auto", [this](){ setMenuOrientation(Base::VIEW_ROTATE_AUTO, window(), renderer()); }},
+//		#endif
+//		{landscapeName, [this](){ setMenuOrientation(Base::VIEW_ROTATE_90, window(), renderer()); }},
+//		{landscape2Name, [this](){ setMenuOrientation(Base::VIEW_ROTATE_270, window(), renderer()); }},
+//		{portraitName, [this](){ setMenuOrientation(Base::VIEW_ROTATE_0, window(), renderer()); }},
+//		{portrait2Name, [this](){ setMenuOrientation(Base::VIEW_ROTATE_180, window(), renderer()); }},
+//	},
+//	menuOrientation
+//	{
+//		"In Menu",
+//		[]()
+//		{
+//			int itemOffset = Config::BASE_SUPPORTS_ORIENTATION_SENSOR ? 0 : 1;
+//			switch(optionMenuOrientation)
+//			{
+//				default: return 0;
+//				case Base::VIEW_ROTATE_90: return 1 - itemOffset;
+//				case Base::VIEW_ROTATE_270: return 2 - itemOffset;
+//				case Base::VIEW_ROTATE_0: return 3 - itemOffset;
+//				case Base::VIEW_ROTATE_180: return 4 - itemOffset;
+//			}
+//		}(),
+//		menuOrientationItem
+//	},
+//	gameOrientationItem
+//	{
+//		#ifdef CONFIG_BASE_SUPPORTS_ORIENTATION_SENSOR
+//		{"Auto", [](){ setGameOrientation(Base::VIEW_ROTATE_AUTO); }},
+//		#endif
+//		{landscapeName, [](){ setGameOrientation(Base::VIEW_ROTATE_90); }},
+//		{landscape2Name, [](){ setGameOrientation(Base::VIEW_ROTATE_270); }},
+//		{portraitName, [](){ setGameOrientation(Base::VIEW_ROTATE_0); }},
+//		{portrait2Name, [](){ setGameOrientation(Base::VIEW_ROTATE_180); }},
+//	},
+//	gameOrientation
+//	{
+//		"In Game",
+//		[]()
+//		{
+//			int itemOffset = Config::BASE_SUPPORTS_ORIENTATION_SENSOR ? 0 : 1;
+//			switch(optionGameOrientation)
+//			{
+//				default: return 0;
+//				case Base::VIEW_ROTATE_90: return 1 - itemOffset;
+//				case Base::VIEW_ROTATE_270: return 2 - itemOffset;
+//				case Base::VIEW_ROTATE_0: return 3 - itemOffset;
+//				case Base::VIEW_ROTATE_180: return 4 - itemOffset;
+//			}
+//		}(),
+//		gameOrientationItem
+//	}
 {
 	if(!customMenu)
 	{
 		loadStockItems();
 	}
 }
-
+//去掉一些功能
 void GUIOptionView::loadStockItems()
 {
-	if(!optionPauseUnfocused.isConst)
-	{
-		item.emplace_back(&pauseUnfocused);
-	}
+//	if(!optionPauseUnfocused.isConst)
+//	{
+//		item.emplace_back(&pauseUnfocused);
+//	}
 	if(!optionNotificationIcon.isConst)
 	{
 		item.emplace_back(&notificationIcon);
@@ -385,19 +385,19 @@ void GUIOptionView::loadStockItems()
 	{
 		item.emplace_back(&statusBar);
 	}
-	if(EmuSystem::hasBundledGames)
-	{
-		item.emplace_back(&showBundledGames);
-	}
-	#ifdef CONFIG_BLUETOOTH
-	item.emplace_back(&showBluetoothScan);
-	#endif
-	if(!optionGameOrientation.isConst)
-	{
-		item.emplace_back(&orientationHeading);
-		item.emplace_back(&gameOrientation);
-		item.emplace_back(&menuOrientation);
-	}
+//	if(EmuSystem::hasBundledGames)
+//	{
+//		item.emplace_back(&showBundledGames);
+//	}
+//	#ifdef CONFIG_BLUETOOTH
+//	item.emplace_back(&showBluetoothScan);
+//	#endif
+//	if(!optionGameOrientation.isConst)
+//	{
+//		item.emplace_back(&orientationHeading);
+//		item.emplace_back(&gameOrientation);
+//		item.emplace_back(&menuOrientation);
+//	}
 }
 
 void GUIOptionView::setFontSize(uint16_t val)
