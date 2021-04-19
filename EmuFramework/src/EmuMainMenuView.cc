@@ -237,7 +237,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 //	},
 	benchmark
 	{
-		"Benchmark Game",
+		"游戏测试",
 		[this](Input::Event e)
 		{
 			pushAndShow(EmuFilePicker::makeForBenchmarking(attachParams(), e), e, false);
@@ -329,7 +329,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	#endif
 	about
 	{
-		"About",
+		"关于",
 		[this](Input::Event e)
 		{
 			pushAndShow(makeView<CreditsView>(EmuSystem::creditsViewStr), e);
@@ -337,7 +337,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	},
 	exitApp
 	{
-		"Exit",
+		"退出",
 		[](Input::Event e)
 		{
 			Base::exit();
@@ -362,7 +362,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 OptionCategoryView::OptionCategoryView(ViewAttachParams attach, EmuAudio &audio, EmuVideoLayer &videoLayer):
 	TableView
 	{
-		"Options",
+		"设置",
 		attach,
 		[this](const TableView &) { return hasGooglePlayStoreFeatures() ? std::size(subConfig) : std::size(subConfig)-1; },
 		[this](const TableView &, uint idx) -> MenuItem& { return subConfig[idx]; }
@@ -370,7 +370,7 @@ OptionCategoryView::OptionCategoryView(ViewAttachParams attach, EmuAudio &audio,
 	subConfig
 	{
 		{
-			"Video",
+			"视频",
 			[this, &videoLayer](Input::Event e)
 			{
 				auto view = makeEmuView(attachParams(), EmuApp::ViewID::VIDEO_OPTIONS);
@@ -379,7 +379,7 @@ OptionCategoryView::OptionCategoryView(ViewAttachParams attach, EmuAudio &audio,
 			}
 		},
 		{
-			"Audio",
+			"音频",
 			[this, &audio](Input::Event e)
 			{
 				auto view = makeEmuView(attachParams(), EmuApp::ViewID::AUDIO_OPTIONS);
@@ -388,14 +388,14 @@ OptionCategoryView::OptionCategoryView(ViewAttachParams attach, EmuAudio &audio,
 			}
 		},
 		{
-			"System",
+			"系统",
 			[this](Input::Event e)
 			{
 				pushAndShow(makeEmuView(attachParams(), EmuApp::ViewID::SYSTEM_OPTIONS), e);
 			}
 		},
 		{
-			"GUI",
+			"界面UI",
 			[this](Input::Event e)
 			{
 				pushAndShow(makeEmuView(attachParams(), EmuApp::ViewID::GUI_OPTIONS), e);

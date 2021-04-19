@@ -252,7 +252,7 @@ static int aspectRatioValueIndex(double val)
 }
 
 VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
-	TableView{"Video Options", attach, item},
+	TableView{"视频设置", attach, item},
 	textureBufferMode
 	{
 		"GPU Copy Mode",
