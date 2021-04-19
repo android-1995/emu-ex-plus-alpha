@@ -130,9 +130,9 @@ SystemOptionView::SystemOptionView(ViewAttachParams attach, bool customMenu):
 			}
 		}(),
 		autoSaveStateItem
-	},
-	//region去掉一些功能
-//	confirmAutoLoadState
+	}
+//region去掉一些功能
+// ,confirmAutoLoadState
 //	{
 //		"Confirm Auto-load State",
 //		(bool)optionConfirmAutoLoadState,
