@@ -38,10 +38,10 @@ static void setSoundVolume(uint8_t val, EmuAudio &audio)
 }
 
 AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
-	TableView{"Audio Options", attach, item},
+	TableView{"音频设置", attach, item},
 	snd
 	{
-		"Sound",
+		"声音",
 		(bool)soundIsEnabled(),
 		[this](BoolMenuItem &item, Input::Event e)
 		{
@@ -54,7 +54,7 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	soundDuringFastForward
 	{
-		"Sound During Fast Forward",
+		"加速时声音",
 		(bool)soundDuringFastForwardIsEnabled(),
 		[this](BoolMenuItem &item, Input::Event e)
 		{
@@ -66,10 +66,10 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 		{"100%", [this]() { setSoundVolume(100, *audio); }},
 		{"50%", [this]() { setSoundVolume(50, *audio); }},
 		{"25%", [this]() { setSoundVolume(25, *audio); }},
-		{"Custom Value",
+		{"自定义",
 			[this](Input::Event e)
 			{
-				EmuApp::pushAndShowNewCollectValueInputView<int>(attachParams(), e, "Input 0 to 100", "",
+				EmuApp::pushAndShowNewCollectValueInputView<int>(attachParams(), e, "输入0到100", "",
 					[this](auto val)
 					{
 						if(optionSoundVolume.isValidVal(val))
@@ -81,7 +81,7 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 						}
 						else
 						{
-							EmuApp::postErrorMessage("Value not in range");
+							EmuApp::postErrorMessage("值错误");
 							return false;
 						}
 					});
@@ -91,7 +91,7 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	soundVolume
 	{
-		"Volume",
+		"音量",
 		[this](uint32_t idx, Gfx::Text &t)
 		{
 			t.setString(string_makePrintf<5>("%u%%", optionSoundVolume.val).data());
@@ -121,7 +121,7 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	soundBuffers
 	{
-		"Buffer Size In Frames",
+		"缓冲大小",
 		(int)optionSoundBuffers - 2,
 		[this](const MultiChoiceMenuItem &) -> int
 		{
@@ -134,7 +134,7 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	addSoundBuffersOnUnderrun
 	{
-		"Auto-increase Buffer Size",
+		"自动增加缓冲大小",
 		(bool)optionAddSoundBuffersOnUnderrun,
 		[this](BoolMenuItem &item, Input::Event e)
 		{
@@ -144,14 +144,14 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	audioRate
 	{
-		"Sound Rate",
+		"采样率",
 		0,
 		audioRateItem
 	}
 	#ifdef CONFIG_AUDIO_MANAGER_SOLO_MIX
 	,audioSoloMix
 	{
-		"Mix With Other Apps",
+		"允许其他应用后台播放音乐",
 		!optionAudioSoloMix,
 		[this](BoolMenuItem &item, Input::Event e)
 		{
@@ -162,7 +162,7 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 	#ifdef CONFIG_AUDIO_MULTIPLE_SYSTEM_APIS
 	,api
 	{
-		"Audio Driver",
+		"音频驱动",
 		0,
 		apiItem
 	}
@@ -203,7 +203,7 @@ void AudioOptionView::loadStockItems()
 	if(!optionSoundRate.isConst)
 	{
 		audioRateItem.clear();
-		audioRateItem.emplace_back("Device Native",
+		audioRateItem.emplace_back("跟随设备",
 			[this](View &view)
 			{
 				setAudioRate(optionSoundRate.defaultVal);
