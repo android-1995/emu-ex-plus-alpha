@@ -207,7 +207,7 @@ void DualTextMenuItem::setOnSelect(SelectDelegate onSelect)
 BoolMenuItem::BoolMenuItem() {}
 
 BoolMenuItem::BoolMenuItem(const char *str, bool val, SelectDelegate selectDel):
-	BaseDualTextMenuItem{str, val ? "On" : "Off"},
+	BaseDualTextMenuItem{str, val ? "开" : "关"},
 	selectD{selectDel},
 	on{val}
 {}
