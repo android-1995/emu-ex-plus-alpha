@@ -854,6 +854,9 @@ TouchConfigView::TouchConfigView(ViewAttachParams attach, VController &vCtrl, co
 			if(layoutPos[3].state == 0)
 				layoutPos[3].state = 1;
 		}
+		//不显示加速和菜单按钮
+        layoutPos[3].state = 0;
+        layoutPos[4].state = 0;
 		item.emplace_back(&menuState);
 	}
 	item.emplace_back(&ffState);
