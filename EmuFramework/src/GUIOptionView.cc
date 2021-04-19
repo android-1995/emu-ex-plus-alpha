@@ -260,8 +260,8 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 		{
 			optionSystemActionsIsDefaultMenu = item.flipBoolValue(*this);
 		}
-	},
-//	showBundledGames
+	}
+//	,showBundledGames
 //	{
 //		"Show Bundled Games",
 //		(bool)optionShowBundledGames,
