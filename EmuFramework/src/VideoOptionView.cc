@@ -48,7 +48,7 @@ public:
 	{
 		View::defaultFace.precacheAlphaNum(attach.renderer());
 		View::defaultFace.precache(attach.renderer(), ".");
-		fpsText.setString("Preparing to detect frame rate...");
+		fpsText.setString("准备检测刷新率...");
 		useRenderTaskTime = !screen()->supportsTimestamps();
 		frameTimeSample.reserve(std::round(screen()->frameRate() * 2.));
 	}
@@ -174,13 +174,13 @@ public:
 
 static std::array<char, 64> makeFrameRateStr()
 {
-	return string_makePrintf<64>("Frame Rate: %.2fHz",
+	return string_makePrintf<64>("刷新率: %.2fHz",
 		EmuSystem::frameRate(EmuSystem::VIDSYS_NATIVE_NTSC));
 }
 
 static std::array<char, 64> makeFrameRatePALStr()
 {
-	return string_makePrintf<64>("Frame Rate (PAL): %.2fHz",
+	return string_makePrintf<64>("刷新率 (PAL): %.2fHz",
 		EmuSystem::frameRate(EmuSystem::VIDSYS_PAL));
 }
 
@@ -255,7 +255,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	TableView{"视频设置", attach, item},
 	textureBufferMode
 	{
-		"GPU Copy Mode",
+		"GPU复制模式",
 		0,
 		textureBufferModeItem
 	},
@@ -276,7 +276,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	#endif
 	dropLateFrames
 	{
-		"Skip Late Frames",
+		"跳帧",
 		(bool)optionSkipLateFrames,
 		[this](BoolMenuItem &item, Input::Event e)
 		{
@@ -326,7 +326,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		{"自定义",
 			[this](Input::Event e)
 			{
-				EmuApp::pushAndShowNewCollectValueInputView<int>(attachParams(), e, "Input 10 to 100", "",
+				EmuApp::pushAndShowNewCollectValueInputView<int>(attachParams(), e, "输入10到100", "",
 					[this](auto val)
 					{
 						if(optionImageZoom.isValidVal(val))
@@ -338,7 +338,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 						}
 						else
 						{
-							EmuApp::postErrorMessage("Value not in range");
+							EmuApp::postErrorMessage("值错误");
 							return false;
 						}
 					});
@@ -380,7 +380,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		{"自定义",
 			[this](Input::Event e)
 			{
-				EmuApp::pushAndShowNewCollectValueInputView<int>(attachParams(), e, "Input 50 to 100", "",
+				EmuApp::pushAndShowNewCollectValueInputView<int>(attachParams(), e, "输入50到100", "",
 					[this](auto val)
 					{
 						if(optionViewportZoom.isValidVal(val))
@@ -392,7 +392,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 						}
 						else
 						{
-							EmuApp::postErrorMessage("Value not in range");
+							EmuApp::postErrorMessage("值错误");
 							return false;
 						}
 					});
@@ -491,7 +491,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		{"自定义",
 			[this](Input::Event e)
 			{
-				EmuApp::pushAndShowNewCollectValueInputView<int>(attachParams(), e, "Input 10 to 100", "",
+				EmuApp::pushAndShowNewCollectValueInputView<int>(attachParams(), e, "输入10到100", "",
 					[this](auto val)
 					{
 						if(optionOverlayEffectLevel.isValidVal(val))
@@ -503,7 +503,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 						}
 						else
 						{
-							EmuApp::postErrorMessage("Value not in range");
+							EmuApp::postErrorMessage("值错误");
 							return false;
 						}
 					});
@@ -663,11 +663,11 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 				setAspectRatio((double)EmuSystem::aspectRatioInfo[i]);
 			});
 	}
-	aspectRatioItem.emplace_back("Custom Value",
+	aspectRatioItem.emplace_back("自定义",
 		[this](Input::Event e)
 		{
 			EmuApp::pushAndShowNewCollectValueInputView<std::pair<double, double>>(attachParams(), e,
-				"Input decimal or fraction", "",
+				"输入整数或者浮点数", "",
 				[this](auto val)
 				{
 					double ratio = val.first / val.second;
@@ -688,7 +688,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 					}
 					else
 					{
-						EmuApp::postErrorMessage("Value not in range");
+						EmuApp::postErrorMessage("值错误");
 						return false;
 					}
 				});
@@ -699,7 +699,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	{
 		aspectRatio.setSelected(idx, *this);
 	}
-	textureBufferModeItem.emplace_back("Auto (Set optimal mode)",
+	textureBufferModeItem.emplace_back("自动 (设置最佳模式)",
 		[this](View &view)
 		{
 			optionTextureBufferMode = 0;
@@ -809,8 +809,8 @@ bool VideoOptionView::onFrameTimeChange(EmuSystem::VideoSystem vidSys, IG::Float
 void VideoOptionView::pushAndShowFrameRateSelectMenu(EmuSystem::VideoSystem vidSys, Input::Event e)
 {
 	const bool includeFrameRateDetection = !Config::envIsIOS;
-	auto multiChoiceView = makeViewWithName<TextTableView>("Frame Rate", includeFrameRateDetection ? 4 : 3);
-	multiChoiceView->appendItem("Set with screen's reported rate",
+	auto multiChoiceView = makeViewWithName<TextTableView>("刷新率", includeFrameRateDetection ? 4 : 3);
+	multiChoiceView->appendItem("设置为设备屏幕刷新率",
 		[this, vidSys](View &view, Input::Event e)
 		{
 			if(!emuViewController().emuWindowScreen()->frameRateIsReliable())
@@ -831,17 +831,17 @@ void VideoOptionView::pushAndShowFrameRateSelectMenu(EmuSystem::VideoSystem vidS
 			if(onFrameTimeChange(vidSys, {}))
 				view.dismiss();
 		});
-	multiChoiceView->appendItem("Set default rate",
+	multiChoiceView->appendItem("设置为默认刷新率",
 		[this, vidSys](View &view, Input::Event e)
 		{
 			onFrameTimeChange(vidSys, EmuSystem::defaultFrameTime(vidSys));
 			view.dismiss();
 		});
-	multiChoiceView->appendItem("Set custom rate",
+	multiChoiceView->appendItem("设置为自定义刷新率",
 		[this, vidSys](Input::Event e)
 		{
 			EmuApp::pushAndShowNewCollectValueInputView<std::pair<double, double>>(attachParams(), e,
-				"Input decimal or fraction", "",
+				"输入整数或者浮点数", "",
 				[this, vidSys](auto val)
 				{
 					if(onFrameTimeChange(vidSys, IG::FloatSeconds{val.second / val.first}))
@@ -855,7 +855,7 @@ void VideoOptionView::pushAndShowFrameRateSelectMenu(EmuSystem::VideoSystem vidS
 		});
 	if(includeFrameRateDetection)
 	{
-		multiChoiceView->appendItem("Detect screen's rate and set",
+		multiChoiceView->appendItem("检测设备屏幕刷新率并设置",
 			[this, vidSys](Input::Event e)
 			{
 				window().setIntendedFrameRate(vidSys == EmuSystem::VIDSYS_NATIVE_NTSC ? 60. : 50.);
