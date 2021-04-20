@@ -156,14 +156,14 @@ void EmuApp::exitGame(bool allowAutosaveState)
 
 void applyOSNavStyle(bool inGame)
 {
-	auto flags = Base::SYS_UI_STYLE_NO_FLAGS;
+    //强制全屏
+	auto flags = Base::SYS_UI_STYLE_NO_FLAGS | Base::SYS_UI_STYLE_HIDE_NAV | Base::SYS_UI_STYLE_HIDE_STATUS;
 	if(optionLowProfileOSNav > (inGame ? 0 : 1))
 		flags |= Base::SYS_UI_STYLE_DIM_NAV;
-	//全屏
 //	if(optionHideOSNav > (inGame ? 0 : 1))
-		flags |= Base::SYS_UI_STYLE_HIDE_NAV;
+//		flags |= Base::SYS_UI_STYLE_HIDE_NAV;
 //	if(optionHideStatusBar > (inGame ? 0 : 1))
-		flags |= Base::SYS_UI_STYLE_HIDE_STATUS;
+//		flags |= Base::SYS_UI_STYLE_HIDE_STATUS;
 	Base::setSysUIStyle(flags);
 }
 
