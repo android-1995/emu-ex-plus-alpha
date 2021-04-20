@@ -87,7 +87,7 @@ EmuViewController::EmuViewController(ViewAttachParams viewAttach,
 		{
 			if(backgrounded)
 			{
-                onPauseAiWu();
+				showUI();
 				if(optionShowOnSecondScreen && Base::Screen::screens() > 1)
 				{
 					setEmuViewOnExtraWindow(false, *Base::Screen::screen(1));
@@ -458,21 +458,6 @@ void EmuViewController::showUI(bool updateTopView)
 	}
     //回调一下C层
     Base::showEmulationCallbackAiWu(false);
-}
-
-void EmuViewController::onPauseAiWu()
-{
-    if(!showingEmulation)
-        return;
-    showingEmulation = false;
-    pauseEmulation();
-    configureAppForEmulation(false);
-#if defined CONFIG_BASE_SCREEN_FRAME_INTERVAL
-    emuView.window().screen()->setFrameInterval(optionFrameInterval);
-#endif
-    emuView.renderer().setWindowValidOrientations(emuView.window(), optionMenuOrientation);
-    emuView.window().setIntendedFrameRate(0.);
-    emuView.postDraw();
 }
 
 bool EmuViewController::showAutoStateConfirm(Input::Event e, bool addToRecent)
