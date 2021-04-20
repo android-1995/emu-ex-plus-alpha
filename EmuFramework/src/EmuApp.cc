@@ -959,6 +959,8 @@ VController &defaultVController()
 //region 爱吾
 void setConfig()
 {
+    //虚拟按键 关闭
+    optionTouchCtrl = 0 ;
     //触屏显示按键 关闭
     optionTouchCtrlShowOnTouch = 0;
     //失去焦点暂停 关闭
