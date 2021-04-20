@@ -233,6 +233,29 @@ void EmuApp::resetVideo()
 	EmuSystem::prepareVideo(emuVideo);
 }
 
+//region 爱吾
+void setConfigAiWu()
+{
+    //触屏显示按键 关闭
+    optionTouchCtrlShowOnTouch = 0;
+    //失去焦点暂停 关闭
+    optionPauseUnfocused = false;
+    //手柄等输入设备更改通知 关闭
+    optionNotifyInputDeviceChange= false;
+    //隐藏导航栏和状态栏
+    optionHideOSNav = 2 ;
+    optionHideStatusBar = 2 ;
+    //region不显示加速和菜单按钮
+    auto &layoutPos0 = vController.layoutPosition()[0];
+    layoutPos0[3].state = 0;
+    layoutPos0[4].state = 0;
+    auto &layoutPos1 = vController.layoutPosition()[1];
+    layoutPos1[3].state = 0;
+    layoutPos1[4].state = 0;
+    //endregion
+}
+//endregion
+
 void mainInitCommon(int argc, char** argv)
 {
 	using namespace IG;
@@ -251,7 +274,7 @@ void mainInitCommon(int argc, char** argv)
 		EmuSystem::setInitialLoadPath(launchGame);
 	loadConfigFile();
     //region改一些配置
-    setConfig();
+    setConfigAiWu();
     //endregion
 	if(auto err = EmuSystem::onOptionsLoaded();
 		err)
@@ -959,28 +982,7 @@ VController &defaultVController()
 {
 	return vController;
 }
-//region 爱吾
-void setConfig()
-{
-    //触屏显示按键 关闭
-    optionTouchCtrlShowOnTouch = 0;
-    //失去焦点暂停 关闭
-    optionPauseUnfocused = false;
-    //手柄等输入设备更改通知 关闭
-    optionNotifyInputDeviceChange= false;
-    //隐藏导航栏和状态栏
-    optionHideOSNav = 2 ;
-    optionHideStatusBar = 2 ;
-    //region不显示加速和菜单按钮
-    auto &layoutPos0 = vController.layoutPosition()[0];
-    layoutPos0[3].state = 0;
-    layoutPos0[4].state = 0;
-    auto &layoutPos1 = vController.layoutPosition()[1];
-    layoutPos1[3].state = 0;
-    layoutPos1[4].state = 0;
-    //endregion
-}
-//endregion
+
 namespace Base
 {
 
