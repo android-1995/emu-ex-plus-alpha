@@ -156,14 +156,13 @@ void EmuApp::exitGame(bool allowAutosaveState)
 
 void applyOSNavStyle(bool inGame)
 {
-    //强制全屏
-	auto flags = Base::SYS_UI_STYLE_NO_FLAGS | Base::SYS_UI_STYLE_HIDE_NAV | Base::SYS_UI_STYLE_HIDE_STATUS;
+	auto flags = Base::SYS_UI_STYLE_NO_FLAGS;
 	if(optionLowProfileOSNav > (inGame ? 0 : 1))
 		flags |= Base::SYS_UI_STYLE_DIM_NAV;
-//	if(optionHideOSNav > (inGame ? 0 : 1))
-//		flags |= Base::SYS_UI_STYLE_HIDE_NAV;
-//	if(optionHideStatusBar > (inGame ? 0 : 1))
-//		flags |= Base::SYS_UI_STYLE_HIDE_STATUS;
+	if(optionHideOSNav > (inGame ? 0 : 1))
+		flags |= Base::SYS_UI_STYLE_HIDE_NAV;
+	if(optionHideStatusBar > (inGame ? 0 : 1))
+		flags |= Base::SYS_UI_STYLE_HIDE_STATUS;
 	Base::setSysUIStyle(flags);
 }
 
@@ -966,7 +965,9 @@ void setConfig()
     optionPauseUnfocused = false;
     //手柄等输入设备更改通知 关闭
     optionNotifyInputDeviceChange= false;
-
+    //隐藏导航栏和状态栏
+    optionHideOSNav = 2 ;
+    optionHideStatusBar = 2 ;
     //region不显示加速和菜单按钮
     auto &layoutPos0 = vController.layoutPosition()[0];
     layoutPos0[3].state = 0;
