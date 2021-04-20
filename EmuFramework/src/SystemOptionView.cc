@@ -130,99 +130,97 @@ SystemOptionView::SystemOptionView(ViewAttachParams attach, bool customMenu):
 			}
 		}(),
 		autoSaveStateItem
+	},
+	confirmAutoLoadState
+	{
+		"Confirm Auto-load State",
+		(bool)optionConfirmAutoLoadState,
+		[this](BoolMenuItem &item, Input::Event e)
+		{
+			optionConfirmAutoLoadState = item.flipBoolValue(*this);
+		}
+	},
+	confirmOverwriteState
+	{
+		"Confirm Overwrite State",
+		(bool)optionConfirmOverwriteState,
+		[this](BoolMenuItem &item, Input::Event e)
+		{
+			optionConfirmOverwriteState = item.flipBoolValue(*this);
+		}
+	},
+	savePath
+	{
+		nullptr,
+		[this](TextMenuItem &, View &view, Input::Event e)
+		{
+			auto multiChoiceView = makeViewWithName<TextTableView>("Save Path", 3);
+			multiChoiceView->appendItem("Set Custom Path",
+				[this](Input::Event e)
+				{
+					auto startPath = strlen(optionSavePath) ? optionSavePath : optionLastLoadPath;
+					auto fPicker = makeView<EmuFilePicker>(startPath, true,
+						EmuSystem::NameFilterFunc{}, FS::RootPathInfo{}, e);
+					fPicker->setOnClose(
+						[this](FSPicker &picker, Input::Event e)
+						{
+							EmuSystem::savePath_ = picker.path();
+							logMsg("set save path %s", (char*)optionSavePath);
+							onSavePathChange(optionSavePath);
+							dismissPrevious();
+							picker.dismiss();
+						});
+					pushAndShowModal(std::move(fPicker), e);
+				});
+			multiChoiceView->appendItem("Same as Game",
+				[this](View &view)
+				{
+					strcpy(optionSavePath, "");
+					onSavePathChange("");
+					view.dismiss();
+				});
+			multiChoiceView->appendItem("Default",
+				[this](View &view)
+				{
+					strcpy(optionSavePath, optionSavePathDefaultToken);
+					onSavePathChange(optionSavePathDefaultToken);
+					view.dismiss();
+				});
+			pushAndShow(std::move(multiChoiceView), e);
+			postDraw();
+		}
+	},
+	checkSavePathWriteAccess
+	{
+		"Check Save Path Write Access",
+		(bool)optionCheckSavePathWriteAccess,
+		[this](BoolMenuItem &item, Input::Event e)
+		{
+			optionCheckSavePathWriteAccess = item.flipBoolValue(*this);
+		}
+	},
+	fastForwardSpeedItem
+	{
+		{"2x", [this]() { optionFastForwardSpeed = 2; }},
+		{"3x", [this]() { optionFastForwardSpeed = 3; }},
+		{"4x", [this]() { optionFastForwardSpeed = 4; }},
+		{"5x", [this]() { optionFastForwardSpeed = 5; }},
+		{"6x", [this]() { optionFastForwardSpeed = 6; }},
+		{"7x", [this]() { optionFastForwardSpeed = 7; }},
+	},
+	fastForwardSpeed
+	{
+		"Fast Forward Speed",
+		[]() -> int
+		{
+			if(optionFastForwardSpeed >= MIN_FAST_FORWARD_SPEED && optionFastForwardSpeed <= 7)
+			{
+				return optionFastForwardSpeed - MIN_FAST_FORWARD_SPEED;
+			}
+			return 0;
+		}(),
+		fastForwardSpeedItem
 	}
-//region去掉一些功能
-// ,confirmAutoLoadState
-//	{
-//		"Confirm Auto-load State",
-//		(bool)optionConfirmAutoLoadState,
-//		[this](BoolMenuItem &item, Input::Event e)
-//		{
-//			optionConfirmAutoLoadState = item.flipBoolValue(*this);
-//		}
-//	},
-//	confirmOverwriteState
-//	{
-//		"Confirm Overwrite State",
-//		(bool)optionConfirmOverwriteState,
-//		[this](BoolMenuItem &item, Input::Event e)
-//		{
-//			optionConfirmOverwriteState = item.flipBoolValue(*this);
-//		}
-//	},
-//	savePath
-//	{
-//		nullptr,
-//		[this](TextMenuItem &, View &view, Input::Event e)
-//		{
-//			auto multiChoiceView = makeViewWithName<TextTableView>("Save Path", 3);
-//			multiChoiceView->appendItem("Set Custom Path",
-//				[this](Input::Event e)
-//				{
-//					auto startPath = strlen(optionSavePath) ? optionSavePath : optionLastLoadPath;
-//					auto fPicker = makeView<EmuFilePicker>(startPath, true,
-//						EmuSystem::NameFilterFunc{}, FS::RootPathInfo{}, e);
-//					fPicker->setOnClose(
-//						[this](FSPicker &picker, Input::Event e)
-//						{
-//							EmuSystem::savePath_ = picker.path();
-//							logMsg("set save path %s", (char*)optionSavePath);
-//							onSavePathChange(optionSavePath);
-//							dismissPrevious();
-//							picker.dismiss();
-//						});
-//					pushAndShowModal(std::move(fPicker), e);
-//				});
-//			multiChoiceView->appendItem("Same as Game",
-//				[this](View &view)
-//				{
-//					strcpy(optionSavePath, "");
-//					onSavePathChange("");
-//					view.dismiss();
-//				});
-//			multiChoiceView->appendItem("Default",
-//				[this](View &view)
-//				{
-//					strcpy(optionSavePath, optionSavePathDefaultToken);
-//					onSavePathChange(optionSavePathDefaultToken);
-//					view.dismiss();
-//				});
-//			pushAndShow(std::move(multiChoiceView), e);
-//			postDraw();
-//		}
-//	},
-//	checkSavePathWriteAccess
-//	{
-//		"Check Save Path Write Access",
-//		(bool)optionCheckSavePathWriteAccess,
-//		[this](BoolMenuItem &item, Input::Event e)
-//		{
-//			optionCheckSavePathWriteAccess = item.flipBoolValue(*this);
-//		}
-//	},
-//	fastForwardSpeedItem
-//	{
-//		{"2x", [this]() { optionFastForwardSpeed = 2; }},
-//		{"3x", [this]() { optionFastForwardSpeed = 3; }},
-//		{"4x", [this]() { optionFastForwardSpeed = 4; }},
-//		{"5x", [this]() { optionFastForwardSpeed = 5; }},
-//		{"6x", [this]() { optionFastForwardSpeed = 6; }},
-//		{"7x", [this]() { optionFastForwardSpeed = 7; }},
-//	},
-//	fastForwardSpeed
-//	{
-//		"Fast Forward Speed",
-//		[]() -> int
-//		{
-//			if(optionFastForwardSpeed >= MIN_FAST_FORWARD_SPEED && optionFastForwardSpeed <= 7)
-//			{
-//				return optionFastForwardSpeed - MIN_FAST_FORWARD_SPEED;
-//			}
-//			return 0;
-//		}(),
-//		fastForwardSpeedItem
-//	}
-//endregion
 	#if defined __ANDROID__
 	,performanceMode
 	{
@@ -266,9 +264,7 @@ void SystemOptionView::onSavePathChange(const char *path)
 		auto defaultPath = EmuSystem::baseDefaultGameSavePath();
 		EmuApp::printfMessage(4, false, "Default Save Path:\n%s", defaultPath.data());
 	}
-    //region去掉存档路径
-//	savePath.compile(makePathMenuEntryStr(optionSavePath).data(), renderer(), projP);
-    //endregion
+	savePath.compile(makePathMenuEntryStr(optionSavePath).data(), renderer(), projP);
 	EmuSystem::setupGameSavePath();
 	EmuSystem::savePathChanged();
 }

@@ -125,8 +125,7 @@ void EmuMainMenuView::onShow()
 {
 	TableView::onShow();
 	logMsg("refreshing main menu state");
-	//去掉功能
-//	recentGames.setActive(recentGameList.size());
+	recentGames.setActive(recentGameList.size());
 	systemActions.setActive(EmuSystem::gameIsRunning());
 	#ifdef CONFIG_BLUETOOTH
 	bluetoothDisconnect.setActive(Bluetooth::devsConnected());
@@ -171,17 +170,17 @@ void EmuMainMenuView::setAudioVideo(EmuAudio &audio_, EmuVideoLayer &videoLayer_
 	audio = &audio_;
 	videoLayer = &videoLayer_;
 }
-//去掉一些功能
+
 EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	TableView{appViewTitle(), attach, item},
-//	loadGame
-//	{
-//		"Load Game",
-//		[this](Input::Event e)
-//		{
-//			pushAndShow(EmuFilePicker::makeForLoading(attachParams(), e), e, false);
-//		}
-//	},
+	loadGame
+	{
+		"Load Game",
+		[this](Input::Event e)
+		{
+			pushAndShow(EmuFilePicker::makeForLoading(attachParams(), e), e, false);
+		}
+	},
 	systemActions
 	{
 		"系统操作",
@@ -192,25 +191,25 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 			pushAndShow(makeEmuView(attachParams(), EmuApp::ViewID::SYSTEM_ACTIONS), e);
 		}
 	},
-//	recentGames
-//	{
-//		"Recent Games",
-//		[this](Input::Event e)
-//		{
-//			if(recentGameList.size())
-//			{
-//				pushAndShow(makeView<RecentGameView>(recentGameList), e);
-//			}
-//		}
-//	},
-//	bundledGames
-//	{
-//		"Bundled Games",
-//		[this](Input::Event e)
-//		{
-//			pushAndShow(makeView<BundledGamesView>(), e);
-//		}
-//	},
+	recentGames
+	{
+		"Recent Games",
+		[this](Input::Event e)
+		{
+			if(recentGameList.size())
+			{
+				pushAndShow(makeView<RecentGameView>(recentGameList), e);
+			}
+		}
+	},
+	bundledGames
+	{
+		"Bundled Games",
+		[this](Input::Event e)
+		{
+			pushAndShow(makeView<BundledGamesView>(), e);
+		}
+	},
 	options
 	{
 		"设置",
@@ -219,22 +218,22 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 			pushAndShow(makeView<OptionCategoryView>(*audio, *videoLayer), e);
 		}
 	},
-//	onScreenInputManager
-//	{
-//		"On-screen Input Setup",
-//		[this](Input::Event e)
-//		{
-//			pushAndShow(makeView<TouchConfigView>(defaultVController(), EmuSystem::inputFaceBtnName, EmuSystem::inputCenterBtnName), e);
-//		}
-//	},
-//	inputManager
-//	{
-//		"Key/Gamepad Input Setup",
-//		[this](Input::Event e)
-//		{
-//			pushAndShow(makeView<InputManagerView>(), e);
-//		}
-//	},
+	onScreenInputManager
+	{
+		"On-screen Input Setup",
+		[this](Input::Event e)
+		{
+			pushAndShow(makeView<TouchConfigView>(defaultVController(), EmuSystem::inputFaceBtnName, EmuSystem::inputCenterBtnName), e);
+		}
+	},
+	inputManager
+	{
+		"Key/Gamepad Input Setup",
+		[this](Input::Event e)
+		{
+			pushAndShow(makeView<InputManagerView>(), e);
+		}
+	},
 	benchmark
 	{
 		"游戏测试",

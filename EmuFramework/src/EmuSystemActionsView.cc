@@ -86,16 +86,16 @@ void EmuSystemActionsView::onShow()
 	TableView::onShow();
 	logMsg("refreshing action menu state");
 	cheats.setActive(EmuSystem::gameIsRunning());
-//	reset.setActive(EmuSystem::gameIsRunning());
+	reset.setActive(EmuSystem::gameIsRunning());
 	saveState.setActive(EmuSystem::gameIsRunning());
 	loadState.setActive(EmuSystem::gameIsRunning() && EmuSystem::stateExists(EmuSystem::saveStateSlot));
 	stateSlot.compile(makeStateSlotStr(EmuSystem::saveStateSlot).data(), renderer(), projP);
-//	screenshot.setActive(EmuSystem::gameIsRunning());
-//	#ifdef CONFIG_EMUFRAMEWORK_ADD_LAUNCHER_ICON
-//	addLauncherIcon.setActive(EmuSystem::gameIsRunning());
-//	#endif
+	screenshot.setActive(EmuSystem::gameIsRunning());
+	#ifdef CONFIG_EMUFRAMEWORK_ADD_LAUNCHER_ICON
+	addLauncherIcon.setActive(EmuSystem::gameIsRunning());
+	#endif
 	resetSessionOptions.setActive(EmuApp::hasSavedSessionOptions());
-//	close.setActive(EmuSystem::gameIsRunning());
+	close.setActive(EmuSystem::gameIsRunning());
 }
 
 void EmuSystemActionsView::loadStandardItems()
@@ -130,31 +130,31 @@ EmuSystemActionsView::EmuSystemActionsView(ViewAttachParams attach, bool customM
 			}
 		}
 	},
-//	reset
-//	{
-//		"Reset",
-//		[this](Input::Event e)
-//		{
-//			if(EmuSystem::gameIsRunning())
-//			{
-//				if(EmuSystem::hasResetModes)
-//				{
-//					pushAndShowModal(makeView<ResetAlertView>("Really reset?"), e);
-//				}
-//				else
-//				{
-//					auto ynAlertView = makeView<YesNoAlertView>("Really reset?");
-//					ynAlertView->setOnYes(
-//						[]()
-//						{
-//							EmuSystem::reset(EmuSystem::RESET_SOFT);
-//							emuViewController().showEmulation();
-//						});
-//					pushAndShowModal(std::move(ynAlertView), e);
-//				}
-//			}
-//		}
-//	},
+	reset
+	{
+		"Reset",
+		[this](Input::Event e)
+		{
+			if(EmuSystem::gameIsRunning())
+			{
+				if(EmuSystem::hasResetModes)
+				{
+					pushAndShowModal(makeView<ResetAlertView>("Really reset?"), e);
+				}
+				else
+				{
+					auto ynAlertView = makeView<YesNoAlertView>("Really reset?");
+					ynAlertView->setOnYes(
+						[]()
+						{
+							EmuSystem::reset(EmuSystem::RESET_SOFT);
+							emuViewController().showEmulation();
+						});
+					pushAndShowModal(std::move(ynAlertView), e);
+				}
+			}
+		}
+	},
 	loadState
 	{
 		"Load State",
@@ -222,51 +222,51 @@ EmuSystemActionsView::EmuSystemActionsView(ViewAttachParams attach, bool customM
 			pushAndShow(makeView<StateSlotView>(), e);
 		}
 	},
-//	#ifdef CONFIG_EMUFRAMEWORK_ADD_LAUNCHER_ICON
-//	addLauncherIcon
-//	{
-//		"Add Game Shortcut to Launcher",
-//		[this](Input::Event e)
-//		{
-//			if(EmuSystem::gameIsRunning())
-//			{
-//				if(!strlen(EmuSystem::gamePath()))
-//				{
-//					// shortcuts to bundled games not yet supported
-//					return;
-//				}
-//				EmuApp::pushAndShowNewCollectValueInputView<const char*>(attachParams(), e, "Shortcut Name", EmuSystem::fullGameName().data(),
-//					[this](auto str)
-//					{
-//						Base::addLauncherIcon(str, EmuSystem::fullGamePath());
-//						EmuApp::printfMessage(2, false, "Added shortcut:\n%s", str);
-//						return true;
-//					});
-//			}
-//			else
-//			{
-//				EmuApp::postMessage("Load a game first");
-//			}
-//		}
-//	},
-//	#endif
-//	screenshot
-//	{
-//		"Screenshot Next Frame",
-//		[this](Input::Event e)
-//		{
-//			if(!EmuSystem::gameIsRunning())
-//				return;
-//			auto ynAlertView = makeView<YesNoAlertView>(string_makePrintf<1024>("Save screenshot to %s ?", EmuSystem::savePath()).data());
-//			ynAlertView->setOnYes(
-//				[]()
-//				{
-//					emuVideo.takeGameScreenshot();
-//					EmuSystem::runFrame(nullptr, &emuVideo, nullptr);
-//				});
-//			pushAndShowModal(std::move(ynAlertView), e);
-//		}
-//	},
+	#ifdef CONFIG_EMUFRAMEWORK_ADD_LAUNCHER_ICON
+	addLauncherIcon
+	{
+		"Add Game Shortcut to Launcher",
+		[this](Input::Event e)
+		{
+			if(EmuSystem::gameIsRunning())
+			{
+				if(!strlen(EmuSystem::gamePath()))
+				{
+					// shortcuts to bundled games not yet supported
+					return;
+				}
+				EmuApp::pushAndShowNewCollectValueInputView<const char*>(attachParams(), e, "Shortcut Name", EmuSystem::fullGameName().data(),
+					[this](auto str)
+					{
+						Base::addLauncherIcon(str, EmuSystem::fullGamePath());
+						EmuApp::printfMessage(2, false, "Added shortcut:\n%s", str);
+						return true;
+					});
+			}
+			else
+			{
+				EmuApp::postMessage("Load a game first");
+			}
+		}
+	},
+	#endif
+	screenshot
+	{
+		"Screenshot Next Frame",
+		[this](Input::Event e)
+		{
+			if(!EmuSystem::gameIsRunning())
+				return;
+			auto ynAlertView = makeView<YesNoAlertView>(string_makePrintf<1024>("Save screenshot to %s ?", EmuSystem::savePath()).data());
+			ynAlertView->setOnYes(
+				[]()
+				{
+					emuVideo.takeGameScreenshot();
+					EmuSystem::runFrame(nullptr, &emuVideo, nullptr);
+				});
+			pushAndShowModal(std::move(ynAlertView), e);
+		}
+	},
 	resetSessionOptions
 	{
 		"重置保存的设置",
@@ -284,21 +284,21 @@ EmuSystemActionsView::EmuSystemActionsView(ViewAttachParams attach, bool customM
 				});
 			pushAndShowModal(std::move(ynAlertView), e);
 		}
+	},
+	close
+	{
+		"Close Game",
+		[this](Input::Event e)
+		{
+			auto ynAlertView = makeView<YesNoAlertView>("Really close current game?");
+			ynAlertView->setOnYes(
+				[this]()
+				{
+					emuViewController().closeSystem(true); // pops any System Actions views in stack
+				});
+			pushAndShowModal(std::move(ynAlertView), e);
+		}
 	}
-//	,close
-//	{
-//		"Close Game",
-//		[this](Input::Event e)
-//		{
-//			auto ynAlertView = makeView<YesNoAlertView>("Really close current game?");
-//			ynAlertView->setOnYes(
-//				[this]()
-//				{
-//					emuViewController().closeSystem(true); // pops any System Actions views in stack
-//				});
-//			pushAndShowModal(std::move(ynAlertView), e);
-//		}
-//	}
 {
 	if(!customMenu)
 	{
