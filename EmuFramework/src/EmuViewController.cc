@@ -467,7 +467,11 @@ void EmuViewController::onPauseAiWu()
     showingEmulation = false;
     pauseEmulation();
     configureAppForEmulation(false);
-    configureWindowForEmulation(emuView.window(), false);
+#if defined CONFIG_BASE_SCREEN_FRAME_INTERVAL
+    emuView.window().screen()->setFrameInterval(optionFrameInterval);
+#endif
+    emuView.renderer().setWindowValidOrientations(emuView.window(), optionMenuOrientation);
+    emuView.window().setIntendedFrameRate(0.);
     emuView.postDraw();
 }
 
