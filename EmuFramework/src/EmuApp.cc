@@ -252,6 +252,7 @@ void setConfigAiWu()
     auto &layoutPos1 = vController.layoutPosition()[1];
     layoutPos1[3].state = 0;
     layoutPos1[4].state = 0;
+    vController.setLayoutPositionChanged();
     //endregion
 }
 //endregion
