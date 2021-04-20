@@ -373,10 +373,10 @@ void GUIOptionView::loadStockItems()
 	{
 		item.emplace_back(&idleDisplayPowerSave);
 	}
-//	if(!optionLowProfileOSNav.isConst)
-//	{
-//		item.emplace_back(&lowProfileOSNav);
-//	}
+	if(!optionLowProfileOSNav.isConst)
+	{
+		item.emplace_back(&lowProfileOSNav);
+	}
 //	if(!optionHideOSNav.isConst)
 //	{
 //		item.emplace_back(&hideOSNav);

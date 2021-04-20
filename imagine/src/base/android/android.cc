@@ -482,7 +482,6 @@ static void setStatusBarHidden(JNIEnv *env, bool hidden)
 
 void setSysUIStyle(uint32_t flags)
 {
-    /* 由JAVA层控制
 	// Flags mapped directly to SYSTEM_UI_FLAG_*
 	// SYS_UI_STYLE_DIM_NAV -> SYSTEM_UI_FLAG_LOW_PROFILE (0)
 	// SYS_UI_STYLE_HIDE_NAV -> SYSTEM_UI_FLAG_HIDE_NAVIGATION (1)
@@ -503,7 +502,6 @@ void setSysUIStyle(uint32_t flags)
 		uiVisibilityFlags = flags;
 		jSetUIVisibility(env, jBaseActivity, flags);
 	}
-    */
 }
 
 bool hasTranslucentSysUI()
