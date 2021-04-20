@@ -1048,5 +1048,13 @@ void fastForward(int speed)
         emuViewController().setFastForwardActive(true);
     }
 }
+void saveStateAiWu(const char *filepath)
+{
+    EmuApp::saveState(filepath);
+}
+void loadStateAiWu(const char *filepath)
+{
+    EmuApp::loadState(filepath);
+}
 //endregion
 }

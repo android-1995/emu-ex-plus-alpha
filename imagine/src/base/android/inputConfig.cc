@@ -653,6 +653,30 @@ static void aiWuInit()
                                     {
                                         Base::fastForward(jSpeed);
                                     })
+                    },
+                    {
+                            "saveState", "(Ljava/lang/String;)V",
+                            (void*)(void (*)(JNIEnv*, jobject,jstring))
+                                    ([](JNIEnv* env, jobject thiz,jstring jPath)
+                                    {
+                                        const char *path = env->GetStringUTFChars(jPath, nullptr);
+                                        char *filepath;
+                                        strcpy(filepath,path);
+                                        Base::saveStateAiWu(filepath);
+                                        env->ReleaseStringUTFChars(jPath, path);
+                                    })
+                    },
+                    {
+                            "loadState", "(Ljava/lang/String;)V",
+                            (void*)(void (*)(JNIEnv*, jobject,jstring))
+                                    ([](JNIEnv* env, jobject thiz,jstring jPath)
+                                    {
+                                        const char *path = env->GetStringUTFChars(jPath, nullptr);
+                                        char *filepath;
+                                        strcpy(filepath,path);
+                                        Base::loadStateAiWu(filepath);
+                                        env->ReleaseStringUTFChars(jPath, path);
+                                    })
                     }
             };
     env->RegisterNatives(Base::jBaseActivityCls, method, std::size(method));

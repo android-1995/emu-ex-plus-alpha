@@ -144,4 +144,6 @@ void setSoundEnabledAiWu(bool enabled);
 void showEmulationCallbackAiWu(bool showEmulation);
 void screenshot(const char *filepath);
 void fastForward(int speed);
+void saveStateAiWu(const char *filepath);
+void loadStateAiWu(const char *filepath);
 } // Base
