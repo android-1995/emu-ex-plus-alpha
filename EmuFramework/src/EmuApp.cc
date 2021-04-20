@@ -250,6 +250,9 @@ void mainInitCommon(int argc, char** argv)
 	if(launchGame)
 		EmuSystem::setInitialLoadPath(launchGame);
 	loadConfigFile();
+    //region改一些配置
+    setConfig();
+    //endregion
 	if(auto err = EmuSystem::onOptionsLoaded();
 		err)
 	{
@@ -990,8 +993,6 @@ void onInit(int argc, char** argv)
 		return;
 	}
 	mainInitCommon(argc, argv);
-	//改一些配置
-    setConfig();
 }
 //region 爱吾
 void onKeyPress(uint emuKey)
