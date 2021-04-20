@@ -88,9 +88,19 @@ void EmuSystem::reset(ResetMode mode)
 	CPUReset(gGba);
 }
 
+const char *saveSlotCharAiWu(int slot)
+{
+    switch(slot)
+    {
+        case -1: return "10";
+        case 0 ... 9: return '0' + slot;
+        default: return "10";
+    }
+}
+
 FS::PathString EmuSystem::sprintStateFilename(int slot, const char *statePath, const char *gameName)
 {
-	return FS::makePathStringPrintf("%s/%s%c.sgm", statePath, gameName, saveSlotChar(slot));
+	return FS::makePathStringPrintf("%s/%s%s.sgm", statePath, gameName, saveSlotCharAiWu(slot));
 }
 
 EmuSystem::Error EmuSystem::saveState(const char *path)
