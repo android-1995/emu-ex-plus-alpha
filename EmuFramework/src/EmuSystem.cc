@@ -604,8 +604,7 @@ char EmuSystem::saveSlotChar(int slot)
 {
 	switch(slot)
 	{
-	    //改一下自动存档的名字
-		case -1: return '10';
+		case -1: return 'a';
 		case 0 ... 9: return '0' + slot;
 		default: bug_unreachable("slot == %d", slot); return 0;
 	}
@@ -615,8 +614,7 @@ char EmuSystem::saveSlotCharUpper(int slot)
 {
 	switch(slot)
 	{
-        //改一下自动存档的名字
-		case -1: return '10';
+		case -1: return 'A';
 		case 0 ... 9: return '0' + slot;
 		default: bug_unreachable("slot == %d", slot); return 0;
 	}
