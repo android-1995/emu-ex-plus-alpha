@@ -245,15 +245,6 @@ void setConfigAiWu()
     //隐藏导航栏和状态栏
     optionHideOSNav = 2 ;
     optionHideStatusBar = 2 ;
-    //region不显示加速和菜单按钮
-    auto &layoutPos0 = vController.layoutPosition()[0];
-    layoutPos0[3].state = 0;
-    layoutPos0[4].state = 0;
-    auto &layoutPos1 = vController.layoutPosition()[1];
-    layoutPos1[3].state = 0;
-    layoutPos1[4].state = 0;
-    vController.setLayoutPositionChanged();
-    //endregion
 }
 //endregion
 

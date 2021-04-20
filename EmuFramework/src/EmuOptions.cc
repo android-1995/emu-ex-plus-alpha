@@ -447,7 +447,10 @@ bool OptionVControllerLayoutPosition::readFromIO(IO &io, uint readSize_)
 				logWarn("invalid v-controller state from config file");
 			}
 			else
-				e.state = state;
+//				e.state = state;
+                //region不显示加速和菜单按钮
+                e.state = 0;
+                //endregion
 			e.pos.x = io.get<int32_t>();
 			e.pos.y = io.get<int32_t>();
 			vController->setLayoutPositionChanged();
