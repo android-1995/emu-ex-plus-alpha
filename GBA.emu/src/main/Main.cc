@@ -92,16 +92,6 @@ FS::PathString EmuSystem::sprintStateFilename(int slot, const char *statePath, c
 {
 	return FS::makePathStringPrintf("%s/%s%c.sgm", statePath, gameName, saveSlotChar(slot));
 }
-//改一些自动存档的名字
-char EmuSystem::saveSlotChar(int slot)
-{
-    switch(slot)
-    {
-        case -1: return '10';
-        case 0 ... 9: return '0' + slot;
-        default: bug_unreachable("slot == %d", slot); return 10;
-    }
-}
 
 EmuSystem::Error EmuSystem::saveState(const char *path)
 {
