@@ -93,7 +93,10 @@ const char *saveSlotCharAiWu(int slot)
     switch(slot)
     {
         case -1: return "10";
-        case 0 ... 9: return '0' + slot;
+        case 0 ... 9:
+            char *s [1];
+            sprintf(s, "%d", slot);
+            return s;
         default: return "10";
     }
 }
