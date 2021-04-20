@@ -301,7 +301,9 @@ void EmuInputView::setTouchControlsOn(bool on)
 
 bool EmuInputView::touchControlsAreOn() const
 {
-	return touchControlsOn;
+//	return touchControlsOn;
+    //一直显示按键
+    return true;
 }
 
 void EmuInputView::setConsumeUnboundGamepadKeys(bool on)
