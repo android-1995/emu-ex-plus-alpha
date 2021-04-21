@@ -1048,13 +1048,25 @@ void fastForward(int speed)
         emuViewController().setFastForwardActive(true);
     }
 }
-void saveStateAiWu(const char *filepath)
+bool saveStateAiWu(const char *filepath)
 {
-    EmuApp::saveState(filepath);
+    if(auto err = EmuApp::saveState(filepath);
+            err)
+    {
+        EmuApp::printfMessage(4, true, "Save State: %s", err->what());
+        return false;
+    }
+    return true;
 }
-void loadStateAiWu(const char *filepath)
+bool loadStateAiWu(const char *filepath)
 {
-    EmuApp::loadState(filepath);
+    if(auto err = EmuApp::loadState(filepath);
+            err)
+    {
+        EmuApp::printfMessage(4, true, "Load State: %s", err->what());
+        return false;
+    }
+    return true;
 }
 //endregion
 }
