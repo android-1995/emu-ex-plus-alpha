@@ -663,7 +663,7 @@ static void aiWuInit()
 //                                        char *filepath;
 //                                        strcpy(filepath,path);
                                         Base::saveStateAiWu(path);
-//                                        env->ReleaseStringUTFChars(jPath, path);
+                                        env->ReleaseStringUTFChars(jPath, path);
                                     })
                     },
                     {
@@ -675,7 +675,7 @@ static void aiWuInit()
 //                                        char *filepath;
 //                                        strcpy(filepath,path);
                                         Base::loadStateAiWu(path);
-//                                        env->ReleaseStringUTFChars(jPath, path);
+                                        env->ReleaseStringUTFChars(jPath, path);
                                     })
                     }
             };
