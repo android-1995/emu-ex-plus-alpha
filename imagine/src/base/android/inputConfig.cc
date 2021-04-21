@@ -639,11 +639,8 @@ static void aiWuInit()
                             (void*)(void (*)(JNIEnv*, jobject,jstring))
                                     ([](JNIEnv* env, jobject thiz,jstring jPath)
                                     {
-                                        const char *path = env->GetStringUTFChars(jPath, nullptr);
-                                        char *filepath;
-                                        strcpy(filepath,path);
-                                        Base::screenshot(filepath);
-                                        env->ReleaseStringUTFChars(jPath, path);
+                                        auto path = javaStringCopy<FS::PathString>(env, jPath);
+                                        Base::screenshot(path.data());
                                     })
                     },
                     {
