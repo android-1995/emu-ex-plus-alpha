@@ -660,8 +660,6 @@ static void aiWuInit()
                                     ([](JNIEnv* env, jobject thiz,jstring jPath)
                                     {
                                         const char *path = env->GetStringUTFChars(jPath, nullptr);
-//                                        char *filepath;
-//                                        strcpy(filepath,path);
                                         Base::saveStateAiWu(path);
                                         env->ReleaseStringUTFChars(jPath, path);
                                     })
@@ -672,8 +670,6 @@ static void aiWuInit()
                                     ([](JNIEnv* env, jobject thiz,jstring jPath)
                                     {
                                         const char *path = env->GetStringUTFChars(jPath, nullptr);
-//                                        char *filepath;
-//                                        strcpy(filepath,path);
                                         Base::loadStateAiWu(path);
                                         env->ReleaseStringUTFChars(jPath, path);
                                     })
