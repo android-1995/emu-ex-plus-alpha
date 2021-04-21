@@ -662,14 +662,6 @@ static void aiWuInit()
                                     })
                     },
                     {
-                            "saveStateWithSlot", "(I)V",
-                            (void*)(void (*)(JNIEnv*, jobject,jint))
-                                    ([](JNIEnv* env, jobject thiz,jint jSlot)
-                                    {
-                                        Base::saveStateWithSlotAiWu(jSlot);
-                                    })
-                    },
-                    {
                             "loadState", "(Ljava/lang/String;)V",
                             (void*)(void (*)(JNIEnv*, jobject,jstring))
                                     ([](JNIEnv* env, jobject thiz,jstring jPath)
