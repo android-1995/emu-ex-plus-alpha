@@ -1058,6 +1058,19 @@ bool saveStateAiWu(const char *filepath)
     }
     return true;
 }
+bool saveStateWithSlotAiWu(int slot)
+{
+    if(auto err = EmuApp::saveStateWithSlot(slot);
+            err)
+    {
+        EmuApp::printfMessage(4, true, "Save State: %s", err->what());
+        return false;
+    }
+    FS::PathString picPath;
+    string_printf(picPath, "%s/%s.%d.sgm.png", EmuSystem::savePath(), EmuSystem::gameName().data(), slot);
+    emuVideo.takeGameScreenshotAiWu(picPath.data());
+    return true;
+}
 bool loadStateAiWu(const char *filepath)
 {
     if(auto err = EmuApp::loadState(filepath);

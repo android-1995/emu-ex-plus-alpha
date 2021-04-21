@@ -145,5 +145,6 @@ void showEmulationCallbackAiWu(bool showEmulation);
 void screenshot(const char *filepath);
 void fastForward(int speed);
 bool saveStateAiWu(const char *filepath);
+bool saveStateWithSlotAiWu(int slot);
 bool loadStateAiWu(const char *filepath);
 } // Base
