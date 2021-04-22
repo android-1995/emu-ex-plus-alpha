@@ -245,7 +245,7 @@ public:
 	static Error makeBlankError();
 
 	//region爱吾
-    static void setCheatListAiWu(std::list<std::string> cheats) { }
+    static void setCheatListAiWu(std::list<std::string> cheats);
     //endregion
 };
 

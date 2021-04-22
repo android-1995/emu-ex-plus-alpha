@@ -669,3 +669,7 @@ void EmuSystem::sessionOptionSet()
 [[gnu::weak]] void EmuSystem::writeSessionConfig(IO &io) {}
 
 [[gnu::weak]] bool EmuSystem::readSessionConfig(IO &io, uint key, uint readSize) { return false; }
+
+//region爱吾
+[[gnu::weak]] void EmuSystem::setCheatListAiWu(std::list<std::string> cheats) {}
+//endregion
