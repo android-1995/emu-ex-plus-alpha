@@ -21,6 +21,7 @@
 #include <imagine/base/baseDefs.hh>
 #include <imagine/fs/FSDefs.hh>
 #include <vector>
+#include <list>
 
 namespace Base
 {
