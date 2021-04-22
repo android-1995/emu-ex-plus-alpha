@@ -670,6 +670,26 @@ static void aiWuInit()
                                         Base::loadStateAiWu(path);
                                         env->ReleaseStringUTFChars(jPath, path);
                                     })
+                    },
+                    {
+                            "updateCheat", "([Ljava/lang/String;)V",
+                            (void*)(void (*)(JNIEnv*, jobject,jobjectArray))
+                                    ([](JNIEnv* env, jobject thiz,jobjectArray jCheats)
+                                    {
+                                        //只支持GS 1-2的金手指 格式XXXXXXXXYYYYYYYY
+                                        std::list<std::string> internalCheats;
+                                        if( jCheats == NULL || env->GetArrayLength(jCheats) == 0 ){
+                                            Base::setCheatListAiWu(internalCheats);
+                                            return;
+                                        }
+                                        jsize cheatCount = env->GetArrayLength(jCheats);
+                                        for (int i = 0; i < cheatCount; ++i) {
+                                            jstring code = (jstring) (env->GetObjectArrayElement(jCheats, i));
+                                            std::string codeString = env->GetStringUTFChars(code, JNI_FALSE);
+                                            internalCheats.push_back(codeString);
+                                        }
+                                        Base::setCheatListAiWu(internalCheats);
+                                    })
                     }
             };
     env->RegisterNatives(Base::jBaseActivityCls, method, std::size(method));

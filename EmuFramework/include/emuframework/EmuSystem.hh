@@ -242,6 +242,10 @@ public:
 	static Error makeFileReadError();
 	static Error makeFileWriteError();
 	static Error makeBlankError();
+
+	//region爱吾
+    static void setCheatListAiWu(std::list<std::string> cheats) { }
+    //endregion
 };
 
 static const char *stateNameStr(int slot)

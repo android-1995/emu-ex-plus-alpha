@@ -264,3 +264,10 @@ EmuSystem::Error EmuSystem::onInit()
 	utilUpdateSystemColorMaps(0);
 	return {};
 }
+
+//region爱吾
+void EmuSystem::setCheatListAiWu(std::list<std::string> cheats)
+{
+
+}
+//endregion

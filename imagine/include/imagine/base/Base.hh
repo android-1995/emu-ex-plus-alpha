@@ -133,7 +133,7 @@ void setOnSystemOrientationChanged(SystemOrientationChangedDelegate del);
 Screen &mainScreen();
 Window &mainWindow();
 
-//爱吾调用
+//region爱吾调用
 void onKeyPress(uint emuKey);
 void onKeyRelease(uint emuKey);
 void showSetting();
@@ -146,4 +146,6 @@ void screenshot(const char *filepath);
 void fastForward(int speed);
 bool saveStateAiWu(const char *filepath);
 bool loadStateAiWu(const char *filepath);
+void setCheatListAiWu(std::list<std::string> cheats);
+//endregion
 } // Base

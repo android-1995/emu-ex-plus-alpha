@@ -1068,5 +1068,9 @@ bool loadStateAiWu(const char *filepath)
     }
     return true;
 }
+void setCheatListAiWu(std::list<std::string> cheats)
+{
+    EmuSystem::setCheatListAiWu(cheats);
+}
 //endregion
 }
