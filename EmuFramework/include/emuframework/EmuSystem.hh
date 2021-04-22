@@ -26,6 +26,7 @@
 #include <emuframework/config.hh>
 #include <optional>
 #include <stdexcept>
+#include <list>
 
 class EmuInputView;
 class EmuSystemTask;
