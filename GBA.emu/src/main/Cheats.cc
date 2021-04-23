@@ -248,7 +248,8 @@ void setCheatListAiWu(std::list<std::string> cheats)
     //然后写入
     for (std::list<std::string>::iterator it = cheats.begin(); it != cheats.end(); it++)
     {
-        cheatsAddGSACode(gGba.cpu, it.c_str(), "", false);
+        std::string& cheat = *it;
+        cheatsAddGSACode(gGba.cpu, cheat.c_str(), "", false);
     }
 }
 //endregion
