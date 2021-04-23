@@ -94,7 +94,6 @@ public:
 	void showNavView(bool show);
 	void setShowNavViewBackButton(bool show);
 	void showSystemActionsView(ViewAttachParams attach, Input::Event e);
-    void showSystemActionsViewAiWu();
 	void onInputDevicesChanged();
 	void onSystemCreated();
 	EmuInputView &inputView();

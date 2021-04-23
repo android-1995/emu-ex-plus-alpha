@@ -171,11 +171,6 @@ void EmuApp::showSystemActionsViewFromSystem(ViewAttachParams attach, Input::Eve
 	emuViewController().showSystemActionsView(attach, e);
 }
 
-void EmuApp::showSystemActionsViewFromSystemAiWu()
-{
-    emuViewController().showSystemActionsViewAiWu();
-}
-
 void EmuApp::showLastViewFromSystem(ViewAttachParams attach, Input::Event e)
 {
 	if(optionSystemActionsIsDefaultMenu)
@@ -1005,7 +1000,7 @@ void showSetting()
 {
     if(!EmuSystem::gameIsRunning())
         return;
-    EmuApp::showSystemActionsViewFromSystemAiWu();
+    emuViewController().showUI();
 }
 void changeEmulatorState(bool pause)
 {

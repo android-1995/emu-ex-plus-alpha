@@ -64,7 +64,6 @@ public:
 	static void popModalViews();
 	static void popMenuToRoot();
 	static void showSystemActionsViewFromSystem(ViewAttachParams attach, Input::Event e);
-    static void showSystemActionsViewFromSystemAiWu();
 	static void showLastViewFromSystem(ViewAttachParams attach, Input::Event e);
 	static void showExitAlert(ViewAttachParams attach, Input::Event e);
 	static void showEmuation();

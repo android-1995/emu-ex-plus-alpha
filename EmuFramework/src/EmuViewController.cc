@@ -879,11 +879,6 @@ void EmuViewController::showSystemActionsView(ViewAttachParams attach, Input::Ev
 	}
 }
 
-void EmuViewController::showSystemActionsViewAiWu()
-{
-    EmuViewController::showSystemActionsView(viewStack.top().attachParams(), {});
-}
-
 void EmuViewController::onInputDevicesChanged()
 {
 	#ifdef CONFIG_BLUETOOTH
