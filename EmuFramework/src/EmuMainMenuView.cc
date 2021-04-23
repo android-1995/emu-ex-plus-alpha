@@ -147,7 +147,7 @@ void EmuMainMenuView::loadStandardItems()
 {
 	item.emplace_back(&systemActions);
     //去掉功能
-//	item.emplace_back(&onScreenInputManager);
+	item.emplace_back(&onScreenInputManager);
 //	item.emplace_back(&inputManager);
 	item.emplace_back(&options);
 	#ifdef CONFIG_BLUETOOTH
@@ -220,7 +220,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	},
 	onScreenInputManager
 	{
-		"On-screen Input Setup",
+		"屏幕按键设置",
 		[this](Input::Event e)
 		{
 			pushAndShow(makeView<TouchConfigView>(defaultVController(), EmuSystem::inputFaceBtnName, EmuSystem::inputCenterBtnName), e);

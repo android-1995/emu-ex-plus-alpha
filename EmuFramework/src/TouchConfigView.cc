@@ -441,7 +441,7 @@ void TouchConfigView::refreshTouchConfigMenu()
 }
 
 TouchConfigView::TouchConfigView(ViewAttachParams attach, VController &vCtrl, const char *faceBtnName, const char *centerBtnName):
-	TableView{"On-screen Input Setup", attach, item},
+	TableView{"屏幕按键设置", attach, item},
 	vController{vCtrl},
 	#ifdef CONFIG_VCONTROLS_GAMEPAD
 	touchCtrlItem
@@ -765,7 +765,7 @@ TouchConfigView::TouchConfigView(ViewAttachParams attach, VController &vCtrl, co
 	},
 	menuState
 	{
-		"Open Menu Button",
+		"菜单按钮",
 		(int)layoutPosArr(vController, window())[3].state,
 		[](const MultiChoiceMenuItem &) -> int
 		{
@@ -784,7 +784,7 @@ TouchConfigView::TouchConfigView(ViewAttachParams attach, VController &vCtrl, co
 	},
 	ffState
 	{
-		"Fast-forward Button",
+		"加速按钮",
 		(int)layoutPosArr(vController, window())[4].state,
 		ffStateItem
 	},
@@ -837,16 +837,16 @@ TouchConfigView::TouchConfigView(ViewAttachParams attach, VController &vCtrl, co
 		"Other Options"
 	}
 {
-	#ifdef CONFIG_VCONTROLS_GAMEPAD
-	item.emplace_back(&touchCtrl);
-	if(EmuSystem::maxPlayers > 1)
-	{
-		item.emplace_back(&pointerInput);
-	}
-	item.emplace_back(&size);
-	#endif
-	item.emplace_back(&btnPlace);
-	item.emplace_back(&btnTogglesHeading);
+//	#ifdef CONFIG_VCONTROLS_GAMEPAD
+//	item.emplace_back(&touchCtrl);
+//	if(EmuSystem::maxPlayers > 1)
+//	{
+//		item.emplace_back(&pointerInput);
+//	}
+//	item.emplace_back(&size);
+//	#endif
+//	item.emplace_back(&btnPlace);
+//	item.emplace_back(&btnTogglesHeading);
 	auto &layoutPos = layoutPosArr(vController, window());
 	{
 		if(!CAN_TURN_OFF_MENU_BTN) // prevent iOS port from disabling menu control
@@ -857,45 +857,45 @@ TouchConfigView::TouchConfigView(ViewAttachParams attach, VController &vCtrl, co
 		item.emplace_back(&menuState);
 	}
 	item.emplace_back(&ffState);
-	#ifdef CONFIG_VCONTROLS_GAMEPAD
-	item.emplace_back(&dPadState);
-	item.emplace_back(&faceBtnState);
-	item.emplace_back(&centerBtnState);
-	if(vController.hasTriggers())
-	{
-		item.emplace_back(&lTriggerState);
-		item.emplace_back(&rTriggerState);
-		item.emplace_back(&triggerPos);
-	}
-	item.emplace_back(&dpadtHeading);
-	item.emplace_back(&deadzone);
-	item.emplace_back(&diagonalSensitivity);
-	item.emplace_back(&faceBtnHeading);
-	item.emplace_back(&btnSpace);
-	item.emplace_back(&btnStagger);
-	item.emplace_back(&btnExtraXSize);
-	if(EmuSystem::inputFaceBtns < 4 || (EmuSystem::inputFaceBtns == 6 && !EmuSystem::inputHasTriggerBtns))
-	{
-		item.emplace_back(&btnExtraYSize);
-	}
-	if(EmuSystem::inputFaceBtns >= 4)
-	{
-		item.emplace_back(&btnExtraYSizeMultiRow);
-	}
-	item.emplace_back(&otherHeading);
-	item.emplace_back(&boundingBoxes);
-	if(!optionVibrateOnPush.isConst)
-	{
-		item.emplace_back(&vibrate);
-	}
-	item.emplace_back(&showOnTouch);
-		#ifdef CONFIG_BASE_ANDROID
-		item.emplace_back(&useScaledCoordinates);
-		#endif
-	#else
-	item.emplace_back(&otherHeading);
-	#endif // CONFIG_VCONTROLS_GAMEPAD
-	item.emplace_back(&alpha);
-	item.emplace_back(&resetControls);
-	item.emplace_back(&resetAllControls);
+//	#ifdef CONFIG_VCONTROLS_GAMEPAD
+//	item.emplace_back(&dPadState);
+//	item.emplace_back(&faceBtnState);
+//	item.emplace_back(&centerBtnState);
+//	if(vController.hasTriggers())
+//	{
+//		item.emplace_back(&lTriggerState);
+//		item.emplace_back(&rTriggerState);
+//		item.emplace_back(&triggerPos);
+//	}
+//	item.emplace_back(&dpadtHeading);
+//	item.emplace_back(&deadzone);
+//	item.emplace_back(&diagonalSensitivity);
+//	item.emplace_back(&faceBtnHeading);
+//	item.emplace_back(&btnSpace);
+//	item.emplace_back(&btnStagger);
+//	item.emplace_back(&btnExtraXSize);
+//	if(EmuSystem::inputFaceBtns < 4 || (EmuSystem::inputFaceBtns == 6 && !EmuSystem::inputHasTriggerBtns))
+//	{
+//		item.emplace_back(&btnExtraYSize);
+//	}
+//	if(EmuSystem::inputFaceBtns >= 4)
+//	{
+//		item.emplace_back(&btnExtraYSizeMultiRow);
+//	}
+//	item.emplace_back(&otherHeading);
+//	item.emplace_back(&boundingBoxes);
+//	if(!optionVibrateOnPush.isConst)
+//	{
+//		item.emplace_back(&vibrate);
+//	}
+//	item.emplace_back(&showOnTouch);
+//		#ifdef CONFIG_BASE_ANDROID
+//		item.emplace_back(&useScaledCoordinates);
+//		#endif
+//	#else
+//	item.emplace_back(&otherHeading);
+//	#endif // CONFIG_VCONTROLS_GAMEPAD
+//	item.emplace_back(&alpha);
+//	item.emplace_back(&resetControls);
+//	item.emplace_back(&resetAllControls);
 }
