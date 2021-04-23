@@ -135,7 +135,9 @@ void EmuSystem::saveBackupMem()
 		logMsg("saving backup memory");
 		auto saveStr = FS::makePathStringPrintf("%s/%s.sav", savePath(), gameName().data());
 		CPUWriteBatteryFile(gGba, saveStr.data());
-		writeCheatFile();
+		//region 不写金手指文件
+		//writeCheatFile();
+		//endregion
 	}
 }
 
@@ -268,6 +270,6 @@ EmuSystem::Error EmuSystem::onInit()
 //region爱吾
 void EmuSystem::setCheatListAiWu(std::list<std::string> cheats)
 {
-
+    setCheatListAiWu(cheats);
 }
 //endregion

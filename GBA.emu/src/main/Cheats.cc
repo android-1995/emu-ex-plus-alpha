@@ -239,3 +239,10 @@ void readCheatFile()
 		logMsg("loaded cheat file: %s", filename.data());
 	}
 }
+
+//region爱吾
+void setCheatListAiWu(std::list<std::string> cheats)
+{
+
+}
+//endregion
