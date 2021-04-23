@@ -270,6 +270,6 @@ EmuSystem::Error EmuSystem::onInit()
 //region爱吾
 void EmuSystem::setCheatListAiWu(std::list<std::string> cheats)
 {
-    setCheatListAiWu(cheats);
+    setCheatListForAiWu(cheats);
 }
 //endregion

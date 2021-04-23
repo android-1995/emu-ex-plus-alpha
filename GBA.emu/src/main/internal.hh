@@ -12,4 +12,4 @@ void setRTC(uint mode);
 void readCheatFile();
 void writeCheatFile();
 
-void setCheatListAiWu(std::list<std::string> cheats);
+void setCheatListForAiWu(std::list<std::string> cheats);

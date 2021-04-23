@@ -241,7 +241,7 @@ void readCheatFile()
 }
 
 //region爱吾
-void setCheatListAiWu(std::list<std::string> cheats)
+void setCheatListForAiWu(std::list<std::string> cheats)
 {
     //先删除所有
     cheatsDeleteAll(gGba.cpu, false);
