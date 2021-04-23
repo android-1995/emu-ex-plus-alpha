@@ -27,7 +27,7 @@ static constexpr bool CAN_TURN_OFF_MENU_BTN = !Config::envIsIOS;
 
 static const char *ctrlStateStr[]
 {
-	"Off", "On", "Hidden"
+	"关", "开", "隐藏"
 };
 
 static const char *touchCtrlSizeMenuName[10]
@@ -386,7 +386,8 @@ void TouchConfigView::draw(Gfx::RendererCommands &cmds)
 {
 	using namespace Gfx;
 	projP.resetTransforms(cmds);
-	vController.draw(cmds, true, false, true, .75);
+	//隐藏按键
+//	vController.draw(cmds, true, false, true, .75);
 	TableView::draw(cmds);
 }
 
