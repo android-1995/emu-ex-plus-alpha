@@ -105,10 +105,10 @@ void EmuSystemActionsView::loadStandardItems()
 		item.emplace_back(&cheats);
 	}
 //	item.emplace_back(&reset);
-	item.emplace_back(&loadState);
-	item.emplace_back(&saveState);
-	stateSlot.setName(makeStateSlotStr(EmuSystem::saveStateSlot).data());
-	item.emplace_back(&stateSlot);
+//	item.emplace_back(&loadState);
+//	item.emplace_back(&saveState);
+//	stateSlot.setName(makeStateSlotStr(EmuSystem::saveStateSlot).data());
+//	item.emplace_back(&stateSlot);
 //	#ifdef CONFIG_EMUFRAMEWORK_ADD_LAUNCHER_ICON
 //	item.emplace_back(&addLauncherIcon);
 //	#endif
