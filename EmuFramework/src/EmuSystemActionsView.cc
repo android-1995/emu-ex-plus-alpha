@@ -100,10 +100,10 @@ void EmuSystemActionsView::onShow()
 
 void EmuSystemActionsView::loadStandardItems()
 {
-	if(EmuSystem::hasCheats)
-	{
-		item.emplace_back(&cheats);
-	}
+//	if(EmuSystem::hasCheats)
+//	{
+//		item.emplace_back(&cheats);
+//	}
 //	item.emplace_back(&reset);
 //	item.emplace_back(&loadState);
 //	item.emplace_back(&saveState);
