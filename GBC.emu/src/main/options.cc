@@ -28,7 +28,7 @@ bool renderPixelFormatIsValid(uint8_t val);
 const char *EmuSystem::configFilename = "GbcEmu.config";
 const AspectRatioInfo EmuSystem::aspectRatioInfo[] =
 {
-		{"10:9 (Original)", 10, 9},
+		{"10:9 (初始)", 10, 9},
 		EMU_SYSTEM_DEFAULT_ASPECT_RATIO_INFO_INIT
 };
 const uint EmuSystem::aspectRatioInfos = std::size(EmuSystem::aspectRatioInfo);

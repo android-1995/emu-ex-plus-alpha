@@ -28,7 +28,7 @@ class CustomAudioOptionView : public AudioOptionView
 
 	MultiChoiceMenuItem resampler
 	{
-		"Resampler",
+		"重采样",
 		optionAudioResampler,
 		resamplerItem
 	};
@@ -58,31 +58,31 @@ class CustomVideoOptionView : public VideoOptionView
 {
 	TextMenuItem gbPaletteItem[13]
 	{
-		{"Original", [](){ optionGBPal = 0; applyGBPalette(); }},
-		{"Brown", [](){ optionGBPal = 1; applyGBPalette(); }},
-		{"Red", [](){ optionGBPal = 2; applyGBPalette(); }},
-		{"Dark Brown", [](){ optionGBPal = 3; applyGBPalette(); }},
+		{"原始", [](){ optionGBPal = 0; applyGBPalette(); }},
+		{"棕色", [](){ optionGBPal = 1; applyGBPalette(); }},
+		{"红色", [](){ optionGBPal = 2; applyGBPalette(); }},
+		{"深棕色", [](){ optionGBPal = 3; applyGBPalette(); }},
 		{"Pastel", [](){ optionGBPal = 4; applyGBPalette(); }},
-		{"Orange", [](){ optionGBPal = 5; applyGBPalette(); }},
-		{"Yellow", [](){ optionGBPal = 6; applyGBPalette(); }},
-		{"Blue", [](){ optionGBPal = 7; applyGBPalette(); }},
-		{"Dark Blue", [](){ optionGBPal = 8; applyGBPalette(); }},
-		{"Gray", [](){ optionGBPal = 9; applyGBPalette(); }},
-		{"Green", [](){ optionGBPal = 10; applyGBPalette(); }},
-		{"Dark Green", [](){ optionGBPal = 11; applyGBPalette(); }},
-		{"Reverse", [](){ optionGBPal = 12; applyGBPalette(); }},
+		{"橙色", [](){ optionGBPal = 5; applyGBPalette(); }},
+		{"黄色", [](){ optionGBPal = 6; applyGBPalette(); }},
+		{"蓝色", [](){ optionGBPal = 7; applyGBPalette(); }},
+		{"深蓝色", [](){ optionGBPal = 8; applyGBPalette(); }},
+		{"灰色", [](){ optionGBPal = 9; applyGBPalette(); }},
+		{"绿色", [](){ optionGBPal = 10; applyGBPalette(); }},
+		{"深绿色", [](){ optionGBPal = 11; applyGBPalette(); }},
+		{"反转", [](){ optionGBPal = 12; applyGBPalette(); }},
 	};
 
 	MultiChoiceMenuItem gbPalette
 	{
-		"GB Palette",
+		"GB 调色板",
 		optionGBPal,
 		gbPaletteItem
 	};
 
 	BoolMenuItem fullSaturation
 	{
-		"Saturated GBC Colors",
+		"GBC颜色饱和",
 		(bool)optionFullGbcSaturation,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -102,19 +102,19 @@ class CustomVideoOptionView : public VideoOptionView
 
 	TextMenuItem renderPixelFormatItem[3]
 	{
-		{"Auto (Match display format as needed)", [this]() { setRenderFormat(IG::PIXEL_NONE); }},
+		{"自动 (根据需要匹配显示格式)", [this]() { setRenderFormat(IG::PIXEL_NONE); }},
 		{"RGB565", [this]() { setRenderFormat(IG::PIXEL_RGB565); }},
 		{"RGBA8888", [this]() { setRenderFormat(IG::PIXEL_RGBA8888); }},
 	};
 
 	MultiChoiceMenuItem renderPixelFormat
 	{
-		"Render Color Format",
+		"渲染颜色格式",
 		[](int idx, Gfx::Text &t)
 		{
 			if(idx == 0)
 			{
-				t.setString("Auto");
+				t.setString("自动");
 				return true;
 			}
 			return false;
@@ -146,7 +146,7 @@ class ConsoleOptionView : public TableView
 {
 	BoolMenuItem useBuiltinGBPalette
 	{
-		"Use Built-in GB Palettes",
+		"使用内置GB调色板",
 		(bool)optionUseBuiltinGBPalette,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -158,7 +158,7 @@ class ConsoleOptionView : public TableView
 
 	BoolMenuItem reportAsGba
 	{
-		"Report Hardware as GBA",
+		"将硬件报告为GBA",
 		(bool)optionReportAsGba,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -178,7 +178,7 @@ public:
 	ConsoleOptionView(ViewAttachParams attach):
 		TableView
 		{
-			"Console Options",
+			"控制台选项",
 			attach,
 			menuItem
 		}
@@ -189,7 +189,7 @@ class CustomSystemActionsView : public EmuSystemActionsView
 {
 	TextMenuItem options
 	{
-		"Console Options",
+		"控制台选项",
 		[this](TextMenuItem &, View &, Input::Event e)
 		{
 			if(EmuSystem::gameIsRunning())
