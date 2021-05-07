@@ -3,6 +3,7 @@
 #include <emuframework/Option.hh>
 #include <gambatte.h>
 #include "Palette.hh"
+#include <list>
 
 class GbcInput : public gambatte::InputGetter
 {
@@ -39,3 +40,5 @@ extern gambatte::GB gbEmu;
 extern GbcInput gbcInput;
 
 void applyGBPalette();
+
+void setCheatListForAiWu(std::list<std::string> cheats);
