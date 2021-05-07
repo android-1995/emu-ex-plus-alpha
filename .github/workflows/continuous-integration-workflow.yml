@@ -90,23 +90,23 @@ jobs:
         make -f $EMUFRAMEWORK_PATH/android-release.mk config -j2
         make -f $EMUFRAMEWORK_PATH/android-release.mk install V=1 -j2
 
-    - name: Build GBA.emu
-      run: |        
-        cd GBA.emu
+  - name: Build GBC.emu
+      run: |
+        cd GBC.emu
         make -f android-release.mk V=1 -j2
 
     - name: Copy Artifacts
       run: |
-        cp GBA.emu/target/android-release/build/outputs/apk/release/GbaEmu-release.apk EX-Emulators/GbaEmu-release.apk
-        
+        cp GBC.emu/target/android-release/build/outputs/apk/release/GbcEmu-release.apk EX-Emulators/GbcEmu-release.apk
+
     - name: Upload Artifacts
       uses: actions/upload-artifact@v2
-      with: 
+      with:
         name: EX-Emulators
         path: EX-Emulators/
 
-    - name: Upload GBA.emu Artifact
-      uses: actions/upload-artifact@v2
-      with: 
-        name: GBAemu
-        path: ${{ github.workspace }}/GBA.emu/target/android-release/build/outputs/apk/release/GbaEmu-release.apk
+      - name: Upload GBC.emu Artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: GBCemu
+          path: ${{ github.workspace }}/GBC.emu/target/android-release/build/outputs/apk/release/GbcEmu-release.apk
