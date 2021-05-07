@@ -30,12 +30,12 @@ static Resampler * createLinint(long inRate, long outRate, std::size_t ) {
 }
 
 ResamplerInfo const ResamplerInfo::resamplers_[] = {
-	{ "Fast", createLinint },
-	{ "High quality (polyphase FIR)", ChainResampler::create<RectSinc> },
+	{ "快速", createLinint },
+	{ "高质量 (polyphase FIR)", ChainResampler::create<RectSinc> },
 // 	{ "Hamming windowed sinc (~50 dB SNR)", ChainResampler::create<HammingSinc> },
 // 	{ "Blackman windowed sinc (~70 dB SNR)", ChainResampler::create<BlackmanSinc> },
-	{ "Very high quality (polyphase FIR)", ChainResampler::create<Kaiser50Sinc> },
-	{ "Highest quality (polyphase FIR)", ChainResampler::create<Kaiser70Sinc> },
+	{ "超高质量 (polyphase FIR)", ChainResampler::create<Kaiser50Sinc> },
+	{ "最高质量 (polyphase FIR)", ChainResampler::create<Kaiser70Sinc> },
 };
 
 std::size_t const ResamplerInfo::num_ =
