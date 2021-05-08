@@ -77,7 +77,7 @@ class ConsoleOptionView : public TableView
 
 	TextMenuItem videoSystemItem[4]
 	{
-		{"Auto", [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(0, e); }},
+		{"自动", [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(0, e); }},
 		{"NTSC", [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(1, e); }},
 		{"PAL", [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(2, e); }},
 		{"Dendy", [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(3, e); }},
@@ -85,7 +85,7 @@ class ConsoleOptionView : public TableView
 
 	MultiChoiceMenuItem videoSystem
 	{
-		"Video System",
+		"视频系统",
 		[this](uint32_t idx, Gfx::Text &t)
 		{
 			if(idx == 0)
@@ -109,16 +109,15 @@ class ConsoleOptionView : public TableView
 
 	BoolMenuItem compatibleFrameskip
 	{
-		"Frameskip Mode",
+		"跳帧模式",
 		(bool)optionCompatibleFrameskip,
-		"Fast", "Compatible",
+		"快速", "兼容",
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
 			if(!item.boolValue())
 			{
 				auto ynAlertView = makeView<YesNoAlertView>(
-					"Use compatible mode if the current game has glitches when "
-					"fast-forwarding/frame-skipping, at the cost of increased CPU usage.");
+					"如果游戏在快进/跳帧时出现故障，请使用兼容模式，快速模式会增加CPU使用率。");
 				ynAlertView->setOnYes(
 					[this, &item]()
 					{
@@ -146,7 +145,7 @@ public:
 	ConsoleOptionView(ViewAttachParams attach):
 		TableView
 		{
-			"Console Options",
+			"控制台选项",
 			attach,
 			menuItem
 		}
@@ -157,7 +156,7 @@ class CustomVideoOptionView : public VideoOptionView
 {
 	BoolMenuItem spriteLimit
 	{
-		"Sprite Limit",
+		"Sprite 限制",
 		(bool)optionSpriteLimit,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -168,7 +167,7 @@ class CustomVideoOptionView : public VideoOptionView
 
 	TextMenuItem videoSystemItem[4]
 	{
-		{"Auto", [this](TextMenuItem &, View &, Input::Event e){ optionDefaultVideoSystem = 0; }},
+		{"自动", [this](TextMenuItem &, View &, Input::Event e){ optionDefaultVideoSystem = 0; }},
 		{"NTSC", [this](TextMenuItem &, View &, Input::Event e){ optionDefaultVideoSystem = 1; }},
 		{"PAL", [this](TextMenuItem &, View &, Input::Event e){ optionDefaultVideoSystem = 2; }},
 		{"Dendy", [this](TextMenuItem &, View &, Input::Event e){ optionDefaultVideoSystem = 3; }},
@@ -176,7 +175,7 @@ class CustomVideoOptionView : public VideoOptionView
 
 	MultiChoiceMenuItem videoSystem
 	{
-		"Default Video System",
+		"默认视频系统",
 		optionDefaultVideoSystem,
 		videoSystemItem
 	};
@@ -204,8 +203,8 @@ class CustomVideoOptionView : public VideoOptionView
 		{"FCEUX", [](){ setPalette({}); }},
 		{"FirebrandX", []() { setPalette(firebrandXPalPath); }},
 		{"Wavebeam", []() { setPalette(wavebeamPalPath); }},
-		{"Classic", []() { setPalette(classicPalPath); }},
-		{"Custom File", [this](TextMenuItem &, View &, Input::Event e)
+		{"经典", []() { setPalette(classicPalPath); }},
+		{"自定义文件", [this](TextMenuItem &, View &, Input::Event e)
 			{
 				auto startPath = EmuApp::mediaSearchPath();
 				auto fsFilter = [](const char *name)
@@ -228,7 +227,7 @@ class CustomVideoOptionView : public VideoOptionView
 
 	MultiChoiceMenuItem defaultPal
 	{
-		"Default Palette",
+		"默认调色板",
 		[this](uint32_t idx, Gfx::Text &t)
 		{
 			if(idx == defaultPaletteCustomFileIdx())
@@ -276,14 +275,14 @@ class CustomAudioOptionView : public AudioOptionView
 
 	TextMenuItem qualityItem[3]
 	{
-		{"Normal", [](){ setQuality(0); }},
-		{"High", []() { setQuality(1); }},
-		{"Highest", []() { setQuality(2); }}
+		{"正常", [](){ setQuality(0); }},
+		{"高", []() { setQuality(1); }},
+		{"最高", []() { setQuality(2); }}
 	};
 
 	MultiChoiceMenuItem quality
 	{
-		"Emulation Quality",
+		"模拟质量",
 		optionSoundQuality,
 		qualityItem
 	};
@@ -303,7 +302,7 @@ class CustomSystemOptionView : public SystemOptionView
 		nullptr,
 		[this](TextMenuItem &, View &, Input::Event e)
 		{
-			auto biosSelectMenu = makeViewWithName<BiosSelectMenu>("Disk System BIOS", &::fdsBiosPath,
+			auto biosSelectMenu = makeViewWithName<BiosSelectMenu>("磁盘系统BIOS", &::fdsBiosPath,
 				[this]()
 				{
 					logMsg("set fds bios %s", ::fdsBiosPath.data());
@@ -316,7 +315,7 @@ class CustomSystemOptionView : public SystemOptionView
 
 	static std::array<char, 256> makeBiosMenuEntryStr()
 	{
-		return string_makePrintf<256>("Disk System BIOS: %s", strlen(::fdsBiosPath.data()) ? FS::basename(::fdsBiosPath).data() : "None set");
+		return string_makePrintf<256>("磁盘系统BIOS: %s", strlen(::fdsBiosPath.data()) ? FS::basename(::fdsBiosPath).data() : "未设置");
 	}
 
 public:
@@ -385,7 +384,7 @@ public:
 	FDSControlView(ViewAttachParams attach):
 		TableView
 		{
-			"FDS Control",
+			"FDS控制器",
 			attach,
 			[this](const TableView &)
 			{
@@ -425,26 +424,26 @@ private:
 				pushAndShow(makeView<FDSControlView>(), e);
 			}
 			else
-				EmuApp::postMessage(2, false, "Disk System not in use");
+				EmuApp::postMessage(2, false, "磁盘系统未使用");
 		}
 	};
 
 	void refreshFDSItem()
 	{
 		fdsControl.setActive(isFDS);
-		char diskLabel[sizeof("FDS Control (Disk 1:A)")+2]{};
+		char diskLabel[sizeof("FDS控制器 (磁盘 1:A)")+2]{};
 		if(!isFDS)
-			strcpy(diskLabel, "FDS Control");
+			strcpy(diskLabel, "FDS控制器");
 		else if(!FCEU_FDSInserted())
-			strcpy(diskLabel, "FDS Control (No Disk)");
+			strcpy(diskLabel, "FDS控制器 (没有磁盘)");
 		else
-			sprintf(diskLabel, "FDS Control (Disk %d:%c)", (FCEU_FDSCurrentSide()>>1)+1, (FCEU_FDSCurrentSide() & 1)? 'B' : 'A');
+			sprintf(diskLabel, "FDS控制器 (磁盘 %d:%c)", (FCEU_FDSCurrentSide()>>1)+1, (FCEU_FDSCurrentSide() & 1)? 'B' : 'A');
 		fdsControl.compile(diskLabel, renderer(), projP);
 	}
 
 	TextMenuItem options
 	{
-		"Console Options",
+		"控制台选项",
 		[this](TextMenuItem &, View &, Input::Event e)
 		{
 			if(EmuSystem::gameIsRunning())
