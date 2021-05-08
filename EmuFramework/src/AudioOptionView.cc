@@ -169,7 +169,7 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 	#endif
 {
 	#ifdef CONFIG_AUDIO_MULTIPLE_SYSTEM_APIS
-	apiItem.emplace_back("Auto",
+	apiItem.emplace_back("自动",
 		[this](View &view)
 		{
 			optionAudioAPI = 0;
