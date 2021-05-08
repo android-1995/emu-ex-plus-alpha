@@ -2,6 +2,7 @@
 
 #include <emuframework/Option.hh>
 #include <fceu/driver.h>
+#include <list>
 
 class EmuAudio;
 
@@ -33,3 +34,5 @@ const char *regionToStr(int region);
 void emulateSound(EmuAudio *audio);
 void setDefaultPalette(const char *palPath);
 void setRegion(int region, int defaultRegion, int detectedRegion);
+
+void setCheatListForAiWu(std::list<std::string> cheats);

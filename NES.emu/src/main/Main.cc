@@ -465,3 +465,10 @@ EmuSystem::Error EmuSystem::onInit()
 	}
 	return {};
 }
+
+//region爱吾
+void EmuSystem::setCheatListAiWu(std::list<std::string> cheats)
+{
+    setCheatListForAiWu(cheats);
+}
+//endregion
