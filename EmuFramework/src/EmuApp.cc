@@ -625,7 +625,7 @@ void EmuApp::promptSystemReloadDueToSetOption(ViewAttachParams attach, Input::Ev
 	if(!EmuSystem::gameIsRunning())
 		return;
 	auto ynAlertView = std::make_unique<YesNoAlertView>(attach,
-		"This option takes effect next time the system starts. Restart it now?");
+		"该选项在系统下次启动时生效。现在重启吗？");
 	ynAlertView->setOnYes(
 		[=]()
 		{

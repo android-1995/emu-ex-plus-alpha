@@ -62,7 +62,7 @@ BiosSelectMenu::BiosSelectMenu(NameString name, ViewAttachParams attach, FS::Pat
 	},
 	selectFile
 	{
-		"Select File",
+		"选择文件",
 		[this](Input::Event e)
 		{
 			auto startPath = strlen(biosPathStr->data()) ? FS::dirname(*biosPathStr) : lastLoadPath;
@@ -80,7 +80,7 @@ BiosSelectMenu::BiosSelectMenu(NameString name, ViewAttachParams attach, FS::Pat
 	},
 	unset
 	{
-		"Unset",
+		"未设置",
 		[this]()
 		{
 			strcpy(biosPathStr->data(), "");
