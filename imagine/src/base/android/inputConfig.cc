@@ -560,19 +560,21 @@ static void aiWuInit()
     JNINativeMethod method[]
             {
                     {
-                            "onKeyPress", "(I)V",
-                            (void*)(void (*)(JNIEnv*, jobject, jint))
-                                    ([](JNIEnv* env, jobject thiz, jint keyCode)
+                            "onKeyPress", "(II)V",
+                            (void*)(void (*)(JNIEnv*, jobject, jint, jint))
+                                    ([](JNIEnv* env, jobject thiz, jint keyCode, jint player)
                                     {
-                                        Base::onKeyPress(Base::bit(keyCode));
+                                        uint playerMask = player << 8;
+                                        Base::onKeyPress(Base::bit(keyCode) | playerMask);
                                     })
                     },
                     {
-                            "onKeyRelease", "(I)V",
-                            (void*)(void (*)(JNIEnv*, jobject, jint))
-                                    ([](JNIEnv* env, jobject thiz, jint keyCode)
+                            "onKeyRelease", "(II)V",
+                            (void*)(void (*)(JNIEnv*, jobject, jint, jint))
+                                    ([](JNIEnv* env, jobject thiz, jint keyCode, jint player)
                                     {
-                                        Base::onKeyRelease(Base::bit(keyCode));
+                                        uint playerMask = player << 8;
+                                        Base::onKeyRelease(Base::bit(keyCode) | playerMask);
                                     })
                     },
                     {
