@@ -90,14 +90,14 @@ jobs:
         make -f $EMUFRAMEWORK_PATH/android-release.mk config -j2
         make -f $EMUFRAMEWORK_PATH/android-release.mk install V=1 -j2
 
-    - name: Build GBA.emu
-      run: |        
-        cd GBA.emu
+    - name: Build NES.emu
+      run: |
+        cd NES.emu
         make -f android-release.mk V=1 -j2
 
     - name: Copy Artifacts
       run: |
-        cp GBA.emu/target/android-release/build/outputs/apk/release/GbaEmu-release.apk EX-Emulators/GbaEmu-release.apk
+        cp NES.emu/target/android-release/build/outputs/apk/release/NesEmu-release.apk EX-Emulators/NesEmu-release.apk
         
     - name: Upload Artifacts
       uses: actions/upload-artifact@v2
@@ -105,8 +105,8 @@ jobs:
         name: EX-Emulators
         path: EX-Emulators/
 
-    - name: Upload GBA.emu Artifact
+    - name: Upload NES.emu Artifact
       uses: actions/upload-artifact@v2
-      with: 
-        name: GBAemu
-        path: ${{ github.workspace }}/GBA.emu/target/android-release/build/outputs/apk/release/GbaEmu-release.apk
+      with:
+        name: NESemu
+        path: ${{ github.workspace }}/NES.emu/target/android-release/build/outputs/apk/release/NesEmu-release.apk
