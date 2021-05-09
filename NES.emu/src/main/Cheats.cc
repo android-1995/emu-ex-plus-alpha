@@ -430,7 +430,7 @@ void EmuCheatsView::loadCheatItems()
 
 //region爱吾
 
-static std::vector<string> split(std::string s,char ch)
+static std::vector<std::string> split(std::string s,char ch)
 {
     int start=0;
     int len=0;
