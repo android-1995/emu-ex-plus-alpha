@@ -337,7 +337,7 @@ bool FSPicker::isAtRoot() const
 void FSPicker::pushFileLocationsView(Input::Event e)
 {
 	rootLocation = Base::rootFileLocations();
-	auto view = makeViewWithName<TextTableView>("File Locations", rootLocation.size() + 2);
+	auto view = makeViewWithName<TextTableView>("文件位置", rootLocation.size() + 2);
 	for(auto &loc : rootLocation)
 	{
 		view->appendItem(loc.description.data(),
@@ -348,17 +348,17 @@ void FSPicker::pushFileLocationsView(Input::Event e)
 				view.dismiss();
 			});
 	}
-	view->appendItem("Root Filesystem",
+	view->appendItem("文件系统根目录",
 		[this](View &view, Input::Event e)
 		{
 			changeDirByInput("/", {}, true, e);
 			view.dismiss();
 		});
-	view->appendItem("Custom Path",
+	view->appendItem("自定义路径",
 		[this](Input::Event e)
 		{
 			auto textInputView = makeView<CollectTextInputView>(
-				"Input a directory path", currPath.data(), nullptr,
+				"输入文件夹路径", currPath.data(), nullptr,
 				[this](CollectTextInputView &view, const char *str)
 				{
 					if(!str || !strlen(str))
