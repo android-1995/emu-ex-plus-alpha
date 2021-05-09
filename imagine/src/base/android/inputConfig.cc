@@ -678,7 +678,6 @@ static void aiWuInit()
                             (void*)(void (*)(JNIEnv*, jobject,jobjectArray))
                                     ([](JNIEnv* env, jobject thiz,jobjectArray jCheats)
                                     {
-                                        //只支持GS 1-2的金手指 格式XXXXXXXXYYYYYYYY
                                         std::list<std::string> internalCheats;
                                         if( jCheats == NULL || env->GetArrayLength(jCheats) == 0 ){
                                             Base::setCheatListAiWu(internalCheats);
