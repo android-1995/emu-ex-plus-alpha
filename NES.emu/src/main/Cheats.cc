@@ -467,7 +467,7 @@ void setCheatListForAiWu(std::list<std::string> cheats)
             const char *str = cheat.c_str();
             bool isRam = strstr(str, "-");
             if(isRam){//RAM
-                std::vector<std::string> strs = split(cheat,"-");
+                std::vector<std::string> strs = split(cheat,'-');
                 //地址
                 uint a = strtoul(strs[0].c_str(), nullptr, 16);
                 if(a > 0xFFFF)
