@@ -133,9 +133,9 @@ class ConsoleOptionView : public TableView
 		}
 	};
 
-	std::array<MenuItem*, 4> menuItem
+	std::array<MenuItem*, 3> menuItem
 	{
-		&inputPorts,
+//		&inputPorts,
 		&fourScore,
 		&videoSystem,
 		&compatibleFrameskip,
