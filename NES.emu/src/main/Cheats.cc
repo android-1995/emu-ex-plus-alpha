@@ -429,8 +429,93 @@ void EmuCheatsView::loadCheatItems()
 }
 
 //region爱吾
+
+static vector<string> split(std::string s,char ch)
+{
+    int start=0;
+    int len=0;
+    vector<string> ret;
+    for(int i=0;i<s.length();i++){
+        if(s[i]==ch){
+            ret.push_back(s.substr(start,len));
+            start=i+1;
+            len=0;
+        }
+        else{
+            len++;
+        }
+    }
+    if(start<s.length())
+        ret.push_back(s.substr(start,len));
+    return ret;
+}
+
 void setCheatListForAiWu(std::list<std::string> cheats)
 {
-
+    if(EmuSystem::gameIsRunning())
+    {
+        //先清空原来的金手指
+        for (int i = 0; i < fceuCheats; ++i) {
+            FCEUI_DelCheat(i);
+        }
+        fceuCheats = 0;
+        //再添加新的金手指
+        for (std::list<std::string>::iterator it = cheats.begin(); it != cheats.end(); it++)
+        {
+            std::string& cheat = *it;
+            //先判断是不是RAM
+            const char *str = cheat.c_str();
+            bool isRam = strstr(str, "-");
+            if(isRam){//RAM
+                vector<string> strs = split(cheat,"-");
+                //地址
+                uint a = strtoul(strs[0].c_str(), nullptr, 16);
+                if(a > 0xFFFF)
+                {
+                    logMsg("addr 0x%X too large", a);
+                    continue;
+                }
+                //比较
+                uint c = -1;
+                if(strs.size() == 3)
+                {
+                    c = strtoul(strs[1].c_str(), nullptr, 16);
+                    if(c > 0xFF)
+                    {
+                        logMsg("compare 0x%X too large", c);
+                        continue;
+                    }
+                }
+                //值
+                int lastIndex = strs.size()-1;
+                uint v = strtoul(strs[lastIndex].c_str(), nullptr, 16);
+                if(v > 0xFF)
+                {
+                    logMsg("val 0x%X too large", v);
+                    continue;
+                }
+                if(!FCEUI_AddCheat("Unnamed Cheat", a, v, c, 0))
+                {
+                    continue;
+                }
+                fceuCheats++;
+            } else {//GG
+                if(!isValidGGCodeLen(str))
+                {
+                    continue;
+                }
+                int a, v, c;
+                if(!FCEUI_DecodeGG(str, &a, &v, &c))
+                {
+                    continue;
+                }
+                if(!FCEUI_AddCheat("Unnamed Cheat", a, v, c, 1))
+                {
+                    continue;
+                }
+                fceuCheats++;
+            }
+        }
+    }
 }
 //endregion

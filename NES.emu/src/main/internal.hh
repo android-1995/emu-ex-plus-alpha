@@ -3,6 +3,7 @@
 #include <emuframework/Option.hh>
 #include <fceu/driver.h>
 #include <list>
+#include <vector>
 
 class EmuAudio;
 
