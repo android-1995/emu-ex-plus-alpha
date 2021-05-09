@@ -430,11 +430,11 @@ void EmuCheatsView::loadCheatItems()
 
 //region爱吾
 
-static vector<string> split(std::string s,char ch)
+static std::vector<string> split(std::string s,char ch)
 {
     int start=0;
     int len=0;
-    vector<string> ret;
+    std::vector<std::string> ret;
     for(int i=0;i<s.length();i++){
         if(s[i]==ch){
             ret.push_back(s.substr(start,len));
@@ -467,7 +467,7 @@ void setCheatListForAiWu(std::list<std::string> cheats)
             const char *str = cheat.c_str();
             bool isRam = strstr(str, "-");
             if(isRam){//RAM
-                vector<string> strs = split(cheat,"-");
+                std::vector<std::string> strs = split(cheat,"-");
                 //地址
                 uint a = strtoul(strs[0].c_str(), nullptr, 16);
                 if(a > 0xFFFF)
