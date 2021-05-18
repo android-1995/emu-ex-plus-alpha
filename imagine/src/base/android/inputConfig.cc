@@ -26,6 +26,8 @@
 #include "AndroidInputDevice.hh"
 #include <sys/inotify.h>
 #include <optional>
+#include <codecvt>
+#include <locale>
 
 #ifdef ANDROID_COMPAT_API
 static float (*AMotionEvent_getAxisValueFunc)(const AInputEvent* motion_event, int32_t axis, size_t pointer_index){};
@@ -554,6 +556,23 @@ static jboolean JNICALL isSoundEnabledClass(JNIEnv* env, jobject thiz)
 {
     return Base::isSoundEnabledAiWu();
 }
+
+static std::string UTF16ToUTF8(std::u16string_view input)
+{
+    std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
+    return converter.to_bytes(input.data(), input.data() + input.size());
+}
+
+static std::string GetJString(JNIEnv* env, jstring jstr)
+{
+    const jchar* jchars = env->GetStringChars(jstr, nullptr);
+    const jsize length = env->GetStringLength(jstr);
+    const std::u16string_view string_view(reinterpret_cast<const char16_t*>(jchars), length);
+    const std::string converted_string = UTF16ToUTF8(string_view);
+    env->ReleaseStringChars(jstr, jchars);
+    return converted_string;
+}
+
 static void aiWuInit()
 {
     auto env = Base::jEnvForThread();
@@ -685,7 +704,7 @@ static void aiWuInit()
                                         jsize cheatCount = env->GetArrayLength(jCheats);
                                         for (int i = 0; i < cheatCount; ++i) {
                                             jstring code = (jstring) (env->GetObjectArrayElement(jCheats, i));
-                                            std::string codeString = env->GetStringUTFChars(code, JNI_FALSE);
+                                            const std::string codeString = GetJString(env,code);
                                             internalCheats.push_back(codeString);
                                         }
                                         Base::setCheatListAiWu(internalCheats);
