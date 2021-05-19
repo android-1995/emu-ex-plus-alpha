@@ -696,6 +696,7 @@ static void aiWuInit()
                                     ([](JNIEnv* env, jobject thiz,jobjectArray jCheats)
                                     {
                                         //支持GS 1-2的金手指 格式XXXXXXXXYYYYYYYY
+                                        //支持GS 3的金手指 格式XXXXXXXX-YYYYYYYY
                                         //支持AR的金手指 格式XXXXXXXX YYYY
                                         std::list<std::string> internalCheats;
                                         if( jCheats == NULL || env->GetArrayLength(jCheats) == 0 ){
