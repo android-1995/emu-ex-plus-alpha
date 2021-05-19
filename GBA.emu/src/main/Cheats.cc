@@ -252,7 +252,7 @@ void setCheatListForAiWu(std::list<std::string> cheats)
         if(strlen(cheat.c_str()) == 16){//GS 12 XXXXXXXXYYYYYYYY
             cheatsAddGSACode(gGba.cpu, cheat.c_str(), "", false);
         } else {//AR XXXXXXXX YYYY
-            cheatsAddCBACode(gGba.cpu, cheat.c_str(), "")
+            cheatsAddCBACode(gGba.cpu, cheat.c_str(), "");
         }
     }
 }
