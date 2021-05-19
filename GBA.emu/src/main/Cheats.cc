@@ -249,7 +249,11 @@ void setCheatListForAiWu(std::list<std::string> cheats)
     for (std::list<std::string>::iterator it = cheats.begin(); it != cheats.end(); it++)
     {
         std::string& cheat = *it;
-        cheatsAddGSACode(gGba.cpu, cheat.c_str(), "", false);
+        if(strlen(cheat.c_str()) == 16){//GS 12 XXXXXXXXYYYYYYYY
+            cheatsAddGSACode(gGba.cpu, cheat.c_str(), "", false);
+        } else {//AR XXXXXXXX YYYY
+            cheatsAddCBACode(gGba.cpu, cheat.c_str(), "")
+        }
     }
 }
 //endregion
