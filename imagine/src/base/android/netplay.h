@@ -51,7 +51,9 @@ extern "C" {
     
 #include <stdint.h>
 #include <time.h>
-    
+
+#define MAX_GAME_NAME 100
+
     typedef enum {
         NETPLAY_TYPE_SKT = 1,
         NETPLAY_TYPE_GAMEKIT,
@@ -105,7 +107,7 @@ extern "C" {
         int is_peer_paused;
         int is_auto_frameskip;
         int new_frameskip_set;
-        
+
         char game_name[MAX_GAME_NAME];
         
         unsigned timeout_cnt;

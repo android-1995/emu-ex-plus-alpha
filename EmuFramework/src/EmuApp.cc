@@ -35,6 +35,10 @@
 #include "privateInput.hh"
 #include "configFile.hh"
 #include "EmuSystemTask.hh"
+//region 修改
+#include "netplay.h"
+static int frame_delay = 0;
+//endregion
 
 class ExitConfirmAlertView : public AlertView
 {
@@ -1066,6 +1070,40 @@ bool loadStateAiWu(const char *filepath)
 void setCheatListAiWu(std::list<std::string> cheats)
 {
     EmuSystem::setCheatListAiWu(cheats);
+}
+
+bool netPlayInitAiWu(const char *srv_addr, int port, bool join)
+{
+
+   netplay_t *handle = netplay_get_handle();
+
+   if(!join)
+   {
+
+      if(!skt_netplay_init(handle,srv_addr,port,netplay_warn_callback))
+         return false;
+
+      if(frame_delay == 0)
+      {
+          handle->is_auto_frameskip = 1;
+          handle->frame_skip = 2;
+      }
+      else
+      {
+          handle->is_auto_frameskip = 0;
+          handle->frame_skip = frame_delay;
+      }
+
+      if(srv_addr==NULL)
+         strcpy(handle->game_name,EmuSystem::gameName_.data());
+   }
+   else
+   {
+       if(!netplay_send_join(handle))
+          return false;
+   }
+
+   return true;
 }
 //endregion
 }

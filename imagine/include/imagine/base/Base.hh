@@ -148,5 +148,6 @@ void fastForward(int speed);
 bool saveStateAiWu(const char *filepath);
 bool loadStateAiWu(const char *filepath);
 void setCheatListAiWu(std::list<std::string> cheats);
+bool netPlayInitAiWu(const char *srv_addr, int port, bool join);
 //endregion
 } // Base
