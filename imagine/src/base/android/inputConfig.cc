@@ -718,10 +718,10 @@ static void aiWuInit()
                                  {
                                     const char *str = NULL;
                                     if(addr!=NULL)
-                                       str = (*env)->GetStringUTFChars(env, addr, 0);
+                                       str = env->GetStringUTFChars(addr, nullptr);
                                     bool result = Base::netPlayInitAiWu(str,port,join);
                                     if(addr!=NULL) {
-                                       (*env)->ReleaseStringUTFChars(env, addr, str);
+                                       env->ReleaseStringUTFChars(addr, str);
                                     }
                                     return (jboolean)result;
                                  })
