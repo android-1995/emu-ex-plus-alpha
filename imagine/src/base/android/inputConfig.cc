@@ -28,6 +28,7 @@
 #include <optional>
 #include <codecvt>
 #include <locale>
+#include "netplay.h"
 
 #ifdef ANDROID_COMPAT_API
 static float (*AMotionEvent_getAxisValueFunc)(const AInputEvent* motion_event, int32_t axis, size_t pointer_index){};
@@ -710,6 +711,41 @@ static void aiWuInit()
                                         }
                                         Base::setCheatListAiWu(internalCheats);
                                     })
+                    },
+                    {
+                         "netplayInit", "(Ljava/lang/String;IZ)Z",
+                         (void*)(jboolean (*)(JNIEnv*, jobject, jstring, jint, jboolean))
+                                 ([](JNIEnv* env, jobject thiz,jstring addr,jint port, jboolean join)
+                                 {
+                                    netplay_t *handle = netplay_get_handle();
+                                    if(!join)
+                                    {
+
+                                      if(!skt_netplay_init(handle,srv_addr,port,netplay_warn_callback))
+                                         return -1;
+
+                                      if(frame_delay == 0)
+                                      {
+                                          handle->is_auto_frameskip = 1;
+                                          handle->frame_skip = 2;
+                                      }
+                                      else
+                                      {
+                                          handle->is_auto_frameskip = 0;
+                                          handle->frame_skip = frame_delay;
+                                      }
+
+                                      if(srv_addr==NULL)
+                                         strcpy(handle->game_name,myosd_selected_game);
+                                    }
+                                    else
+                                    {
+                                       if(!netplay_send_join(handle))
+                                          return -1;
+                                    }
+
+                                    return 0;
+                                 })
                     }
             };
     env->RegisterNatives(Base::jBaseActivityCls, method, std::size(method));

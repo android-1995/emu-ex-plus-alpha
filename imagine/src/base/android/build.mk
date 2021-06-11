@@ -29,7 +29,9 @@ base/common/eventloop/FDCustomEvent.cc \
 base/common/PosixPipe.cc \
 base/common/EGLContextBase.cc \
 base/common/SimpleFrameTimer.cc \
-util/jni.cc
+util/jni.cc \
+base/android/netplay.c \
+base/android/skt_netplay.c
 
 LDLIBS += -landroid
 
