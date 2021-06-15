@@ -411,7 +411,7 @@ static std::string GetJString(JNIEnv* env, jstring jstr)
     return converted_string;
 }
 
-void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
+static void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
 {
     JNINativeMethod method[]
             {
@@ -420,7 +420,7 @@ void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
                             (void*)(void (*)(JNIEnv*, jobject, jint))
                                     ([](JNIEnv* env, jobject thiz, jint keyCode)
                                     {
-                                        application().onKeyPress(IG::bit(keyCode));
+                                        Application::onKeyPress(IG::bit(keyCode));
                                     })
                     },
                     {
@@ -428,7 +428,7 @@ void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
                             (void*)(void (*)(JNIEnv*, jobject, jint))
                                     ([](JNIEnv* env, jobject thiz, jint keyCode)
                                     {
-                                        application().onKeyRelease(IG::bit(keyCode));
+                                        Application::onKeyRelease(IG::bit(keyCode));
                                     })
                     },
                     {
@@ -436,7 +436,7 @@ void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
                             (void*)(void (*)(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint, jint,jlong))
                                     ([](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint x, jint y, jint pointerId, jint pointerCount, jlong eventTime)
                                     {
-                                        application().processMotionEventAiWu(source,action,deviceId,x,y,pointerId,pointerCount,eventTime,*Base::deviceWindow());
+                                        Application::processMotionEventAiWu(source,action,deviceId,x,y,pointerId,pointerCount,eventTime,*Base::deviceWindow());
                                     })
                     },
                     {
@@ -444,7 +444,7 @@ void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
                             (void*)(void (*)(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint,jlong))
                                     ([](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint keyCode, jint repeatCount, jint metaState, jlong eventTime)
                                     {
-                                        application().processKeyEventAiWu(source,action,deviceId,keyCode,repeatCount,metaState,eventTime,*Base::deviceWindow());
+                                        Application::processKeyEventAiWu(source,action,deviceId,keyCode,repeatCount,metaState,eventTime,*Base::deviceWindow());
                                     })
                     },
                     {
@@ -452,7 +452,7 @@ void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
                             (void*)(void (*)(JNIEnv*, jobject))
                                     ([](JNIEnv* env, jobject thiz)
                                     {
-                                        application().showSetting();
+                                        Application::showSetting();
                                     })
                     },
                     {
@@ -460,7 +460,7 @@ void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
                             (void*)(void (*)(JNIEnv*, jobject,jboolean))
                                     ([](JNIEnv* env, jobject thiz,jboolean pause)
                                     {
-                                        application().changeEmulatorState(pause);
+                                        Application::changeEmulatorState(pause);
                                     })
                     },
                     {
@@ -468,7 +468,7 @@ void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
                             (void*)(void (*)(JNIEnv*, jobject))
                                     ([](JNIEnv* env, jobject thiz)
                                     {
-                                        application().reset();
+                                        Application::reset();
                                     })
                     },
                     {
@@ -476,7 +476,7 @@ void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
                             (void*)(void (*)(JNIEnv*, jobject))
                                     ([](JNIEnv* env, jobject thiz)
                                     {
-                                        application().exit();
+                                        Application::exit();
                                     })
                     },
                     {
@@ -484,7 +484,7 @@ void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
                             (void *)(jboolean (*)(JNIEnv*, jobject))
                                     ([](JNIEnv* env, jobject thiz)
                                     {
-                                        return application().isSoundEnabledAiWu();
+                                        return Application::isSoundEnabledAiWu();
                                     })
                     },
                     {
@@ -492,7 +492,7 @@ void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
                             (void*)(void (*)(JNIEnv*, jobject,jboolean))
                                     ([](JNIEnv* env, jobject thiz,jboolean enabled)
                                     {
-                                        application().setSoundEnabledAiWu(enabled);
+                                        Application::setSoundEnabledAiWu(enabled);
                                     })
                     },
                     {
@@ -501,7 +501,7 @@ void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
                                     ([](JNIEnv* env, jobject thiz,jstring jPath)
                                     {
                                         auto path = javaStringCopy<FS::PathString>(env, jPath);
-                                        application().screenshot(path.data());
+                                        Application::screenshot(path.data());
                                     })
                     },
                     {
@@ -509,7 +509,7 @@ void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
                             (void*)(void (*)(JNIEnv*, jobject,jint))
                                     ([](JNIEnv* env, jobject thiz,jint jSpeed)
                                     {
-                                        application().fastForward(jSpeed);
+                                        Application::fastForward(jSpeed);
                                     })
                     },
                     {
@@ -518,7 +518,7 @@ void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
                                     ([](JNIEnv* env, jobject thiz,jstring jPath)
                                     {
                                         const char *path = env->GetStringUTFChars(jPath, nullptr);
-                                        application().saveStateAiWu(path);
+                                        Application::saveStateAiWu(path);
                                         env->ReleaseStringUTFChars(jPath, path);
                                     })
                     },
@@ -528,7 +528,7 @@ void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
                                     ([](JNIEnv* env, jobject thiz,jstring jPath)
                                     {
                                         const char *path = env->GetStringUTFChars(jPath, nullptr);
-                                        application().loadStateAiWu(path);
+                                        Application::loadStateAiWu(path);
                                         env->ReleaseStringUTFChars(jPath, path);
                                     })
                     },
@@ -542,7 +542,7 @@ void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
                                         //支持AR的金手指 格式XXXXXXXX YYYY
                                         std::list<std::string> internalCheats;
                                         if( jCheats == NULL || env->GetArrayLength(jCheats) == 0 ){
-                                            application().setCheatListAiWu(internalCheats);
+                                            Application::setCheatListAiWu(internalCheats);
                                             return;
                                         }
                                         jsize cheatCount = env->GetArrayLength(jCheats);
@@ -551,7 +551,7 @@ void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
                                             const std::string codeString = GetJString(env,code);
                                             internalCheats.push_back(codeString);
                                         }
-                                        application().setCheatListAiWu(internalCheats);
+                                        Application::setCheatListAiWu(internalCheats);
                                     })
                     }
             };
