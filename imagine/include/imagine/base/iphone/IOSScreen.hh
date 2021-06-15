@@ -17,6 +17,7 @@
 
 #include <imagine/config/defs.hh>
 #include <imagine/time/Time.hh>
+#include <imagine/base/baseDefs.hh>
 #include <compare>
 
 #ifdef __OBJC__
@@ -27,20 +28,28 @@
 namespace Base
 {
 
+class ApplicationContext;
+
 class IOSScreen
 {
 public:
-	void *uiScreen_ = nullptr; // UIScreen in ObjC
-	void *displayLink_ = nullptr; // CADisplayLink in ObjC
-	IG::FloatSeconds frameTime_{};
-	bool displayLinkActive = false;
+	struct InitParams
+	{
+		void *uiScreen;
+	};
 
 	constexpr IOSScreen() {}
+	IOSScreen(ApplicationContext, InitParams);
 	~IOSScreen();
 
-	bool operator ==(IOSScreen const &rhs) const
+	constexpr bool operator ==(IOSScreen const &rhs) const
 	{
 		return uiScreen_ == rhs.uiScreen_;
+	}
+
+	constexpr bool operator ==(ScreenId uiScreen) const
+	{
+		return uiScreen_ == uiScreen;
 	}
 
 	explicit operator bool() const
@@ -53,6 +62,12 @@ public:
 	UIScreen *uiScreen() const { return (__bridge UIScreen*)uiScreen_; }
 	CADisplayLink *displayLink() const { return (__bridge CADisplayLink*)displayLink_; }
 	#endif
+
+protected:
+	void *uiScreen_{}; // UIScreen in ObjC
+	void *displayLink_{}; // CADisplayLink in ObjC
+	IG::FloatSeconds frameTime_{};
+	bool displayLinkActive{};
 };
 
 using ScreenImpl = IOSScreen;

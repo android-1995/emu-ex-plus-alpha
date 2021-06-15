@@ -14,16 +14,37 @@
 	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <emuframework/EmuApp.hh>
-#include "EmuOptions.hh"
 #include <emuframework/FileUtils.hh>
-#include <imagine/base/Base.hh>
-#include <imagine/base/platformExtras.hh>
-#include <imagine/io/FileIO.hh>
+#include "EmuOptions.hh"
 #include "privateInput.hh"
 #include "configFile.hh"
+#include <imagine/base/ApplicationContext.hh>
+#include <imagine/io/FileIO.hh>
+#include <imagine/input/config.hh>
 
-static constexpr uint KEY_CONFIGS_HARD_LIMIT = 256;
-static constexpr uint INPUT_DEVICE_CONFIGS_HARD_LIMIT = 256;
+static constexpr unsigned KEY_CONFIGS_HARD_LIMIT = 256;
+static constexpr unsigned INPUT_DEVICE_CONFIGS_HARD_LIMIT = 256;
+
+static bool windowPixelFormatIsValid(uint8_t val)
+{
+	switch(val)
+	{
+		case IG::PIXEL_RGB565:
+		case IG::PIXEL_RGBA8888:
+			return true;
+		default: return false;
+	}
+}
+
+static bool renderPixelFormatIsValid(IG::PixelFormat val)
+{
+	return windowPixelFormatIsValid(val);
+}
+
+static bool colorSpaceIsValid(Gfx::ColorSpace val)
+{
+	return val == Gfx::ColorSpace::SRGB;
+}
 
 static bool readKeyConfig(IO &io, uint16_t &size)
 {
@@ -159,12 +180,8 @@ static OptionBase *cfgFileOption[] =
 	&optionTouchDpadDiagonalSensitivity,
 	&optionTouchCtrlBoundingBoxes,
 	&optionTouchCtrlShowOnTouch,
-		#ifdef __ANDROID__
-		&optionTouchCtrlScaledCoordinates,
-		#endif
 	#endif
 	&optionVControllerLayoutPos,
-	&optionSwappedGamepadConfirm,
 	#ifdef __ANDROID__
 	&optionConsumeUnboundGamepadKeys,
 	#endif
@@ -188,9 +205,6 @@ static OptionBase *cfgFileOption[] =
 	&optionTitleBar,
 	&optionIdleDisplayPowerSave,
 	&optionHideStatusBar,
-	#ifdef __ANDROID__
-	&optionBackNavigation,
-	#endif
 	&optionSystemActionsIsDefaultMenu,
 	&optionTextureBufferMode,
 	#if defined __ANDROID__
@@ -207,20 +221,14 @@ static OptionBase *cfgFileOption[] =
 	#endif
 	&optionSoundBuffers,
 	&optionAddSoundBuffersOnUnderrun,
-	#ifdef CONFIG_AUDIO_MANAGER_SOLO_MIX
-	&optionAudioSoloMix,
-	#endif
 	#ifdef CONFIG_AUDIO_MULTIPLE_SYSTEM_APIS
 	&optionAudioAPI,
-	#endif
-	#ifdef EMU_FRAMEWORK_WINDOW_PIXEL_FORMAT_OPTION
-	&optionWindowPixelFormat,
 	#endif
 	&optionShowBundledGames,
 	&optionCheckSavePathWriteAccess
 };
 
-static void writeConfig2(IO &io)
+void EmuApp::saveConfigFile(IO &io)
 {
 	if(!io)
 	{
@@ -238,6 +246,14 @@ static void writeConfig2(IO &io)
 		}
 	}
 
+	writeOptionValue(io, CFGKEY_BACK_NAVIGATION, viewManager.needsBackControlOption());
+	writeOptionValue(io, CFGKEY_TOUCH_CONTROL_SCALED_COORDINATES, vController.usesScaledCoordinatesOption());
+	writeOptionValue(io, CFGKEY_SWAPPED_GAMEPAD_CONFIM, swappedConfirmKeysOption());
+	writeOptionValue(io, CFGKEY_AUDIO_SOLO_MIX, audioManager().soloMixOption());
+	writeOptionValue(io, CFGKEY_WINDOW_PIXEL_FORMAT, windowDrawablePixelFormatOption());
+	writeOptionValue(io, CFGKEY_VIDEO_COLOR_SPACE, windowDrawableColorSpaceOption());
+	writeOptionValue(io, CFGKEY_RENDER_PIXEL_FORMAT, renderPixelFormatOption());
+
 	if(customKeyConfig.size())
 	{
 		bool writeCategory[customKeyConfig.size()][EmuControls::categories];
@@ -245,7 +261,7 @@ static void writeConfig2(IO &io)
 		std::fill_n(writeCategories, customKeyConfig.size(), 0);
 		// compute total size
 		static_assert(sizeof(KeyConfig::name) <= 255, "key config name array is too large");
-		uint bytes = 2; // config key size
+		unsigned bytes = 2; // config key size
 		uint8_t configs = 0;
 		bytes += 1; // number of configs
 		for(auto &e : customKeyConfig)
@@ -317,7 +333,7 @@ static void writeConfig2(IO &io)
 
 		// compute total size
 		static_assert(sizeof(InputDeviceSavedConfig::name) <= 255, "input device config name array is too large");
-		uint bytes = 2; // config key size
+		unsigned bytes = 2; // config key size
 		bytes += 1; // number of configs
 		for(auto &e : savedInputDevList)
 		{
@@ -371,19 +387,19 @@ static void writeConfig2(IO &io)
 		}
 	}
 
-	optionLastLoadPath.writeToIO(io);
+	writeStringOptionValue(io, CFGKEY_LAST_DIR, mediaSearchPath());
 	optionSavePath.writeToIO(io);
 
 	EmuSystem::writeConfig(io);
 }
 
-void loadConfigFile()
+EmuApp::ConfigParams EmuApp::loadConfigFile(Base::ApplicationContext ctx)
 {
-	auto configFilePath = FS::makePathStringPrintf("%s/config", EmuApp::supportPath().data());
+	auto configFilePath = FS::makePathStringPrintf("%s/config", ctx.supportPath().data());
 	// move config files from old locations
 	if(Config::envIsLinux)
 	{
-		auto oldConfigFilePath = FS::makePathStringPrintf("%s/config", EmuApp::assetPath().data());
+		auto oldConfigFilePath = FS::makePathStringPrintf("%s/config", ctx.assetPath().data());
 		if(FS::exists(oldConfigFilePath))
 		{
 			logMsg("moving config file from app path to support path");
@@ -391,20 +407,20 @@ void loadConfigFile()
 		}
 	}
 	#ifdef CONFIG_BASE_IOS
-	if(Base::isSystemApp())
+	if(ctx.isSystemApp())
 	{
 		const char *oldConfigDir = "/User/Library/Preferences/explusalpha.com";
 		auto oldConfigFilePath = FS::makePathStringPrintf("%s/%s", oldConfigDir, EmuSystem::configFilename);
 		if(FS::exists(oldConfigFilePath))
 		{
 			logMsg("moving config file from prefs path to support path");
-			fixFilePermissions(oldConfigFilePath);
+			fixFilePermissions(ctx, oldConfigFilePath);
 			FS::rename(oldConfigFilePath, configFilePath);
 		}
 		if(!FS::directoryItems(oldConfigDir))
 		{
 			logMsg("removing old empty config directory");
-			fixFilePermissions(oldConfigDir);
+			fixFilePermissions(ctx, oldConfigDir);
 			FS::remove(oldConfigDir);
 		}
 	}
@@ -414,10 +430,12 @@ void loadConfigFile()
 		ec)
 	{
 		logMsg("no config file");
-		return;
+		return {};
 	}
+	ConfigParams appConfig{};
+	Gfx::DrawableConfig pendingWindowDrawableConf{};
 	readConfigKeys(configFile,
-		[](uint16_t key, uint16_t size, IO &io)
+		[&](uint16_t key, uint16_t size, IO &io)
 		{
 			switch(key)
 			{
@@ -425,7 +443,7 @@ void loadConfigFile()
 				{
 					if(!EmuSystem::readConfig(io, key, size))
 					{
-						logMsg("skipping unknown key %u", (uint)key);
+						logMsg("skipping unknown key %u", (unsigned)key);
 					}
 				}
 				bcase CFGKEY_SOUND: optionSound.readFromIO(io, size);
@@ -444,9 +462,7 @@ void loadConfigFile()
 				bcase CFGKEY_TOUCH_CONTROL_EXTRA_Y_BTN_SIZE_MULTI_ROW: optionTouchCtrlExtraYBtnSizeMultiRow.readFromIO(io, size);
 				bcase CFGKEY_TOUCH_CONTROL_BOUNDING_BOXES: optionTouchCtrlBoundingBoxes.readFromIO(io, size);
 				bcase CFGKEY_TOUCH_CONTROL_SHOW_ON_TOUCH: optionTouchCtrlShowOnTouch.readFromIO(io, size);
-					#ifdef __ANDROID__
-					bcase CFGKEY_TOUCH_CONTROL_SCALED_COORDINATES: optionTouchCtrlScaledCoordinates.readFromIO(io, size);
-					#endif
+				bcase CFGKEY_TOUCH_CONTROL_SCALED_COORDINATES: vController.setUsesScaledCoordinates(readOptionValue<bool>(io, size));
 				#endif
 				bcase CFGKEY_VCONTROLLER_LAYOUT_POS: optionVControllerLayoutPos.readFromIO(io, size);
 				bcase CFGKEY_AUTO_SAVE_STATE: optionAutoSaveState.readFromIO(io, size);
@@ -457,7 +473,7 @@ void loadConfigFile()
 				bcase CFGKEY_SKIP_LATE_FRAMES: optionSkipLateFrames.readFromIO(io, size);
 				bcase CFGKEY_FRAME_RATE: optionFrameRate.readFromIO(io, size);
 				bcase CFGKEY_FRAME_RATE_PAL: optionFrameRatePAL.readFromIO(io, size);
-				bcase CFGKEY_LAST_DIR: optionLastLoadPath.readFromIO(io, size);
+				bcase CFGKEY_LAST_DIR: setMediaSearchPath(readStringOptionValue<FS::PathString>(io, size));
 				bcase CFGKEY_FONT_Y_SIZE: optionFontSize.readFromIO(io, size);
 				bcase CFGKEY_GAME_ORIENTATION: optionGameOrientation.readFromIO(io, size);
 				bcase CFGKEY_MENU_ORIENTATION: optionMenuOrientation.readFromIO(io, size);
@@ -472,19 +488,20 @@ void loadConfigFile()
 				bcase CFGKEY_IMAGE_EFFECT: optionImgEffect.readFromIO(io, size);
 				bcase CFGKEY_IMAGE_EFFECT_PIXEL_FORMAT: optionImageEffectPixelFormat.readFromIO(io, size);
 				#endif
+				bcase CFGKEY_RENDER_PIXEL_FORMAT: setRenderPixelFormat(readOptionValue<IG::PixelFormat>(io, size, renderPixelFormatIsValid));
 				bcase CFGKEY_VIDEO_IMAGE_BUFFERS: optionVideoImageBuffers.readFromIO(io, size);
 				bcase CFGKEY_OVERLAY_EFFECT: optionOverlayEffect.readFromIO(io, size);
 				bcase CFGKEY_OVERLAY_EFFECT_LEVEL: optionOverlayEffectLevel.readFromIO(io, size);
 				bcase CFGKEY_TOUCH_CONTROL_VIRBRATE: optionVibrateOnPush.readFromIO(io, size);
-				bcase CFGKEY_RECENT_GAMES: optionRecentGames.readFromIO(io, size);
-				bcase CFGKEY_SWAPPED_GAMEPAD_CONFIM: optionSwappedGamepadConfirm.readFromIO(io, size);
+				bcase CFGKEY_RECENT_GAMES: optionRecentGames.readFromIO(ctx, io, size);
+				bcase CFGKEY_SWAPPED_GAMEPAD_CONFIM: setSwappedConfirmKeys(readOptionValue<bool>(io, size));
 				#ifdef __ANDROID__
 				bcase CFGKEY_CONSUME_UNBOUND_GAMEPAD_KEYS: optionConsumeUnboundGamepadKeys.readFromIO(io, size);
 				#endif
 				bcase CFGKEY_PAUSE_UNFOCUSED: optionPauseUnfocused.readFromIO(io, size);
 				bcase CFGKEY_NOTIFICATION_ICON: optionNotificationIcon.readFromIO(io, size);
 				bcase CFGKEY_TITLE_BAR: optionTitleBar.readFromIO(io, size);
-				bcase CFGKEY_BACK_NAVIGATION: optionBackNavigation.readFromIO(io, size);
+				bcase CFGKEY_BACK_NAVIGATION: appConfig.setBackNavigation(readOptionValue<bool>(io, size));
 				bcase CFGKEY_SYSTEM_ACTIONS_IS_DEFAULT_MENU: optionSystemActionsIsDefaultMenu.readFromIO(io, size);
 				bcase CFGKEY_IDLE_DISPLAY_POWER_SAVE: optionIdleDisplayPowerSave.readFromIO(io, size);
 				bcase CFGKEY_HIDE_STATUS_BAR: optionHideStatusBar.readFromIO(io, size);
@@ -513,9 +530,7 @@ void loadConfigFile()
 				bcase CFGKEY_SOUND_BUFFERS: optionSoundBuffers.readFromIO(io, size);
 				bcase CFGKEY_SOUND_VOLUME: optionSoundVolume.readFromIO(io, size);
 				bcase CFGKEY_ADD_SOUND_BUFFERS_ON_UNDERRUN: optionAddSoundBuffersOnUnderrun.readFromIO(io, size);
-				#ifdef CONFIG_AUDIO_MANAGER_SOLO_MIX
-				bcase CFGKEY_AUDIO_SOLO_MIX: optionAudioSoloMix.readFromIO(io, size);
-				#endif
+				bcase CFGKEY_AUDIO_SOLO_MIX: audioManager().setSoloMix(readOptionValue<bool>(io, size));
 				#ifdef CONFIG_AUDIO_MULTIPLE_SYSTEM_APIS
 				bcase CFGKEY_AUDIO_API: optionAudioAPI.readFromIO(io, size);
 				#endif
@@ -526,9 +541,8 @@ void loadConfigFile()
 					if(EmuSystem::hasBundledGames)
 						optionShowBundledGames.readFromIO(io, size);
 				}
-				#ifdef EMU_FRAMEWORK_WINDOW_PIXEL_FORMAT_OPTION
-				bcase CFGKEY_WINDOW_PIXEL_FORMAT: optionWindowPixelFormat.readFromIO(io, size);
-				#endif
+				bcase CFGKEY_WINDOW_PIXEL_FORMAT: pendingWindowDrawableConf.pixelFormat = readOptionValue<IG::PixelFormat>(io, size, windowPixelFormatIsValid).value_or(IG::PixelFormat{});
+				bcase CFGKEY_VIDEO_COLOR_SPACE: pendingWindowDrawableConf.colorSpace = readOptionValue<Gfx::ColorSpace>(io, size, colorSpaceIsValid).value_or(Gfx::ColorSpace{});
 				bcase CFGKEY_INPUT_KEY_CONFIGS:
 				{
 					if(!readKeyConfig(io, size))
@@ -633,7 +647,7 @@ void loadConfigFile()
 
 							if(!devConf.keyConf) // check built-in configs after user-defined ones
 							{
-								uint defaultConfs = 0;
+								unsigned defaultConfs = 0;
 								auto defaultConf = KeyConfig::defaultConfigsForInputMap(keyConfMap, defaultConfs);
 								iterateTimes(defaultConfs, c)
 								{
@@ -664,16 +678,23 @@ void loadConfigFile()
 				}
 			}
 		});
+
+	// apply any pending read options
+	if(pendingWindowDrawableConf.colorSpace != Gfx::ColorSpace{} && pendingWindowDrawableConf.pixelFormat != IG::PIXEL_RGBA8888)
+		pendingWindowDrawableConf.colorSpace = {};
+	windowDrawableConf = pendingWindowDrawableConf;
+
+	return appConfig;
 }
 
-void saveConfigFile()
+void EmuApp::saveConfigFile(Base::ApplicationContext ctx)
 {
-	auto configFilePath = FS::makePathStringPrintf("%s/config", EmuApp::supportPath().data());
+	auto configFilePath = FS::makePathStringPrintf("%s/config", ctx.supportPath().data());
 	if(Config::envIsIOS)
 	{
-		fixFilePermissions(EmuApp::supportPath().data());
+		fixFilePermissions(ctx, ctx.supportPath().data());
 	}
 	FileIO configFile;
 	configFile.create(configFilePath.data());
-	writeConfig2(configFile);
+	saveConfigFile(configFile);
 }

@@ -9,6 +9,7 @@ extern "C"
 	#include <blueMSX/Board/Board.h>
 }
 
+class EmuApp;
 struct Mixer;
 
 extern bool canInstallCBIOS;
@@ -21,7 +22,7 @@ extern PathOption optionMachineName;
 extern FS::FileString hdName[4];
 extern FS::FileString cartName[2];
 extern FS::FileString diskName[2];
-extern uint activeBoardType;
+extern unsigned activeBoardType;
 extern BoardInfo boardInfo;
 extern bool fdcActive;
 extern Mixer *mixer;
@@ -37,22 +38,22 @@ static const char *installFirmwareFilesMessage =
 	"Install the C-BIOS BlueMSX machine files to Machines directory?";
 	#endif
 
-void installFirmwareFiles();
+void installFirmwareFiles(Base::ApplicationContext);
 HdType boardGetHdType(int hdIndex);
-FS::PathString makeMachineBasePath(FS::PathString customPath);
+FS::PathString makeMachineBasePath(Base::ApplicationContext, FS::PathString customPath);
 bool hasMSXTapeExtension(const char *name);
 bool hasMSXDiskExtension(const char *name);
 bool hasMSXROMExtension(const char *name);
-bool insertROM(const char *name, uint slot = 0);
-bool insertDisk(const char *name, uint slot = 0);
+bool insertROM(EmuApp &, const char *name, unsigned slot = 0);
+bool insertDisk(EmuApp &, const char *name, unsigned slot = 0);
 bool zipStartWrite(const char *fileName);
 void zipEndWrite();
 const char *machineBasePathStr();
-void setupVKeyboardMap(uint boardType);
+void setupVKeyboardMap(EmuApp &, unsigned boardType);
 IG::Pixmap frameBufferPixmap();
 bool setDefaultMachineName(const char *name);
 const char *currentMachineName();
-EmuSystem::Error setCurrentMachineName(const char *machineName, bool insertMediaFiles = true);
+EmuSystem::Error setCurrentMachineName(EmuApp &, const char *machineName, bool insertMediaFiles = true);
 bool mixerEnableOption(MixerAudioType type);
 void setMixerEnableOption(MixerAudioType type, bool on);
 uint8_t mixerVolumeOption(MixerAudioType type);

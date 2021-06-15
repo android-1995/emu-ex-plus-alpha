@@ -39,6 +39,7 @@ bool detectedRtcGame = 0;
 const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2012-2021\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nVBA-m Team\nvba-m.com";
 bool EmuSystem::hasBundledGames = true;
 bool EmuSystem::hasCheats = true;
+static constexpr IG::WP lcdSize{240, 160};
 
 EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter =
 	[](const char *name)
@@ -47,7 +48,7 @@ EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter =
 	};
 EmuSystem::NameFilterFunc EmuSystem::defaultBenchmarkFsFilter = defaultFsFilter;
 
-const BundledGameInfo &EmuSystem::bundledGameInfo(uint idx)
+const BundledGameInfo &EmuSystem::bundledGameInfo(unsigned idx)
 {
 	static const BundledGameInfo info[]
 	{
@@ -66,21 +67,6 @@ const char *EmuSystem::systemName()
 {
 	return "Game Boy Advance";
 }
-
-#define USE_PIX_RGB565
-#ifdef USE_PIX_RGB565
-static constexpr auto pixFmt = IG::PIXEL_FMT_RGB565;
-int systemColorDepth = 16;
-int systemRedShift = 11;
-int systemGreenShift = 6;
-int systemBlueShift = 0;//1;
-#else
-static const PixelFormatDesc *pixFmt = &PixelFormatBGRA8888;
-int systemColorDepth = 32;
-int systemRedShift = 19;
-int systemGreenShift = 11;
-int systemBlueShift = 3;
-#endif
 
 void EmuSystem::reset(ResetMode mode)
 {
@@ -207,22 +193,37 @@ EmuSystem::Error EmuSystem::loadGame(IO &io, EmuSystemCreateParams, OnLoadProgre
 	return {};
 }
 
-void EmuSystem::onPrepareVideo(EmuVideo &video)
+void EmuSystem::onVideoRenderFormatChange(EmuVideo &video, IG::PixelFormat fmt)
 {
-	video.setFormat({{240, 160}, pixFmt});
+	if(!video.setFormat({lcdSize, fmt}))
+		return;
+	logMsg("updating system color maps");
+	if(fmt == IG::PIXEL_RGB565)
+		utilUpdateSystemColorMaps(16, 11, 6, 0);
+	else if(fmt == IG::PIXEL_BGRA8888)
+		utilUpdateSystemColorMaps(32, 19, 11, 3);
+	else
+		utilUpdateSystemColorMaps(32, 3, 11, 19);
+}
+
+void EmuSystem::renderFramebuffer(EmuVideo &video)
+{
+	systemDrawScreen({}, video);
 }
 
 void systemDrawScreen(EmuSystemTask *task, EmuVideo &video)
 {
 	auto img = video.startFrame(task);
-	IG::Pixmap framePix{{{240, 160}, IG::PIXEL_RGB565}, gGba.lcd.pix};
-	if(!directColorLookup)
+	IG::Pixmap framePix{{lcdSize, IG::PIXEL_RGB565}, gGba.lcd.pix};
+	assumeExpr(img.pixmap().size() == framePix.size());
+	if(img.pixmap().format() == IG::PIXEL_FMT_RGB565)
 	{
 		img.pixmap().writeTransformed([](uint16_t p){ return systemColorMap.map16[p]; }, framePix);
 	}
 	else
 	{
-		img.pixmap().write(framePix);
+		assumeExpr(img.pixmap().format().bytesPerPixel() == 4);
+		img.pixmap().writeTransformed([](uint16_t p){ return systemColorMap.map32[p]; }, framePix);
 	}
 	img.endFrame();
 }
@@ -261,9 +262,8 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 	view.setBackgroundGradient(navViewGrad);
 }
 
-EmuSystem::Error EmuSystem::onInit()
+EmuSystem::Error EmuSystem::onInit(Base::ApplicationContext)
 {
-	utilUpdateSystemColorMaps(0);
 	return {};
 }
 

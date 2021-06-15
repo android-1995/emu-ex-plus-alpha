@@ -33,13 +33,13 @@ SurfaceTextureStorage::SurfaceTextureStorage(RendererTask &r, TextureConfig conf
 	auto setErrorPtr = IG::scopeGuard(
 		[&]()
 		{
-			if(unlikely(err && errorPtr))
+			if(err && errorPtr) [[unlikely]]
 			{
 				*errorPtr = err;
 			}
 		});
 	config = baseInit(r, config);
-	if(unlikely(!renderer().support.hasExternalEGLImages))
+	if(!renderer().support.hasExternalEGLImages) [[unlikely]]
 	{
 		logErr("can't init without OES_EGL_image_external extension");
 		err = {ENOTSUP};
@@ -49,24 +49,24 @@ SurfaceTextureStorage::SurfaceTextureStorage(RendererTask &r, TextureConfig conf
 	task().runSync(
 		[=, this](GLTask::TaskContext ctx)
 		{
-			auto env = jEnvForThread();
+			auto env = task().appContext().thisThreadJniEnv();
 			glGenTextures(1, &texName_);
-			auto surfaceTex = makeSurfaceTexture(jEnvForThread(), texName_, makeSingleBuffered);
+			auto surfaceTex = makeSurfaceTexture(renderer().appContext(), env, texName_, makeSingleBuffered);
 			singleBuffered = makeSingleBuffered;
 			if(!surfaceTex && makeSingleBuffered)
 			{
 				// fall back to buffered mode
-				surfaceTex = makeSurfaceTexture(jEnvForThread(), texName_, false);
+				surfaceTex = makeSurfaceTexture(renderer().appContext(), env, texName_, false);
 				singleBuffered = false;
 			}
-			if(unlikely(!surfaceTex))
+			if(!surfaceTex) [[unlikely]]
 				return;
 			updateSurfaceTextureImage(env, surfaceTex); // set the initial display & context
 			this->surfaceTex = env->NewGlobalRef(surfaceTex);
 			ctx.notifySemaphore();
 			setSamplerParamsInGL(renderer(), samplerParams, GL_TEXTURE_EXTERNAL_OES);
 		});
-	if(unlikely(!surfaceTex))
+	if(!surfaceTex) [[unlikely]]
 	{
 		logErr("SurfaceTexture ctor failed");
 		err = {EINVAL};
@@ -74,9 +74,9 @@ SurfaceTextureStorage::SurfaceTextureStorage(RendererTask &r, TextureConfig conf
 	}
 	logMsg("made%sSurfaceTexture with texture:0x%X",
 		singleBuffered ? " " : " buffered ", texName_);
-	auto env = jEnvForThread();
+	auto env = r.appContext().mainThreadJniEnv();
 	auto localSurface = makeSurface(env, surfaceTex);
-	if(unlikely(!localSurface))
+	if(!localSurface) [[unlikely]]
 	{
 		logErr("Surface ctor failed");
 		err = {EINVAL};
@@ -85,7 +85,7 @@ SurfaceTextureStorage::SurfaceTextureStorage(RendererTask &r, TextureConfig conf
 	}
 	surface = env->NewGlobalRef(localSurface);
 	nativeWin = ANativeWindow_fromSurface(env, localSurface);
-	if(unlikely(!nativeWin))
+	if(!nativeWin) [[unlikely]]
 	{
 		logErr("ANativeWindow_fromSurface failed");
 		err = {EINVAL};
@@ -93,7 +93,7 @@ SurfaceTextureStorage::SurfaceTextureStorage(RendererTask &r, TextureConfig conf
 		return;
 	}
 	logMsg("native window:%p from Surface:%p%s", nativeWin, localSurface, singleBuffered ? " (single-buffered)" : "");
-	err = setFormat(config.pixmapDesc(), config.compatSampler());
+	err = setFormat(config.pixmapDesc(), config.colorSpace(), config.compatSampler());
 }
 
 SurfaceTextureStorage::SurfaceTextureStorage(SurfaceTextureStorage &&o)
@@ -126,7 +126,7 @@ void SurfaceTextureStorage::deinit()
 		logMsg("deinit SurfaceTexture, releasing window:%p", nativeWin);
 		ANativeWindow_release(std::exchange(nativeWin, {}));
 	}
-	auto env = jEnvForThread();
+	auto env = task().appContext().mainThreadJniEnv();
 	if(surface)
 	{
 		releaseSurface(env, surface);
@@ -139,16 +139,16 @@ void SurfaceTextureStorage::deinit()
 	}
 }
 
-IG::ErrorCode SurfaceTextureStorage::setFormat(IG::PixmapDesc desc, const TextureSampler *)
+IG::ErrorCode SurfaceTextureStorage::setFormat(IG::PixmapDesc desc, ColorSpace colorSpace, const TextureSampler *)
 {
 	logMsg("setting size:%dx%d format:%s", desc.w(), desc.h(), desc.format().name());
 	int winFormat = Base::toAHardwareBufferFormat(desc.format());
-	if(unlikely(!winFormat))
+	if(!winFormat) [[unlikely]]
 	{
 		logErr("pixel format not usable");
 		return {EINVAL};
 	}
-	if(unlikely(ANativeWindow_setBuffersGeometry(nativeWin, desc.w(), desc.h(), winFormat) < 0))
+	if(ANativeWindow_setBuffersGeometry(nativeWin, desc.w(), desc.h(), winFormat) < 0) [[unlikely]]
 	{
 		logErr("ANativeWindow_setBuffersGeometry failed");
 		return {EINVAL};
@@ -161,7 +161,7 @@ IG::ErrorCode SurfaceTextureStorage::setFormat(IG::PixmapDesc desc, const Textur
 LockedTextureBuffer SurfaceTextureStorage::lock(uint32_t bufferFlags)
 {
 	using namespace Base;
-	if(unlikely(!nativeWin))
+	if(!nativeWin) [[unlikely]]
 	{
 		logErr("called lock when uninitialized");
 		return {};
@@ -169,9 +169,9 @@ LockedTextureBuffer SurfaceTextureStorage::lock(uint32_t bufferFlags)
 	if(singleBuffered)
 	{
 		task().runSync(
-			[tex = surfaceTex]()
+			[tex = surfaceTex, app = task().appContext()]()
 			{
-				releaseSurfaceTextureImage(jEnvForThread(), tex);
+				releaseSurfaceTextureImage(app.thisThreadJniEnv(), tex);
 			});
 	}
 	ANativeWindow_Buffer winBuffer;
@@ -198,16 +198,16 @@ LockedTextureBuffer SurfaceTextureStorage::lock(uint32_t bufferFlags)
 void SurfaceTextureStorage::unlock(LockedTextureBuffer, uint32_t)
 {
 	using namespace Base;
-	if(unlikely(!nativeWin))
+	if(!nativeWin) [[unlikely]]
 	{
 		logErr("called unlock when uninitialized");
 		return;
 	}
 	ANativeWindow_unlockAndPost(nativeWin);
 	task().run(
-		[tex = surfaceTex]()
+		[tex = surfaceTex, app = task().appContext()]()
 		{
-			Base::updateSurfaceTextureImage(Base::jEnvForThread(), tex);
+			Base::updateSurfaceTextureImage(app.thisThreadJniEnv(), tex);
 		});
 }
 

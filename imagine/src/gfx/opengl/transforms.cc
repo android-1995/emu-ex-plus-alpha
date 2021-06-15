@@ -24,7 +24,7 @@
 namespace Gfx
 {
 
-void GLRenderer::setGLProjectionMatrix(RendererCommands &cmds, Mat4 mat)
+void GLRenderer::setGLProjectionMatrix(RendererCommands &cmds, Mat4 mat) const
 {
 	#ifdef CONFIG_GFX_OPENGL_FIXED_FUNCTION_PIPELINE
 	if(support.useFixedFunctionPipeline)
@@ -72,7 +72,7 @@ void Renderer::animateProjectionMatrixRotation(Base::Window &win, Angle srcAngle
 
 void RendererCommands::setTransformTarget(TransformTargetEnum target)
 {
-	rTask->verifyCurrentContext(glDpy);
+	rTask->verifyCurrentContext();
 	#ifdef CONFIG_GFX_OPENGL_FIXED_FUNCTION_PIPELINE
 	if(renderer().support.useFixedFunctionPipeline)
 		glcMatrixMode(target == TARGET_TEXTURE ? GL_TEXTURE : GL_MODELVIEW);
@@ -87,7 +87,7 @@ void RendererCommands::setTransformTarget(TransformTargetEnum target)
 
 void RendererCommands::loadTransform(Mat4 mat)
 {
-	rTask->verifyCurrentContext(glDpy);
+	rTask->verifyCurrentContext();
 	#ifdef CONFIG_GFX_OPENGL_FIXED_FUNCTION_PIPELINE
 	if(renderer().support.useFixedFunctionPipeline)
 	{
@@ -97,7 +97,7 @@ void RendererCommands::loadTransform(Mat4 mat)
 	#endif
 	#ifdef CONFIG_GFX_OPENGL_SHADER_PIPELINE
 	modelMat = mat;
-	if(likely(currProgram.glProgram()))
+	if(currProgram.glProgram()) [[likely]]
 	{
 		auto mvpMat = projectionMat.mult(mat);
 		glUniformMatrix4fv(currProgram.modelViewProjectionUniform(), 1, GL_FALSE, &mvpMat[0][0]);

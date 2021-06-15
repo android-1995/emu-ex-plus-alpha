@@ -85,8 +85,7 @@ bool BluezBluetoothAdapter::openDefault()
 						return 1;
 					}
 					logMsg("got bluetooth adapter status delegate message");
-					auto bta = BluetoothAdapter::defaultAdapter();
-					bta->onScanStatus()(*bta, msg.type, msg.arg);
+					onScanStatus()(*this, msg.type, msg.arg);
 				}
 				return 1;
 			});
@@ -116,7 +115,7 @@ void BluezBluetoothAdapter::close()
 	statusPipe.detach();
 }
 
-BluezBluetoothAdapter *BluezBluetoothAdapter::defaultAdapter()
+BluezBluetoothAdapter *BluezBluetoothAdapter::defaultAdapter(Base::ApplicationContext)
 {
 	if(defaultBluezAdapter.openDefault())
 		return &defaultBluezAdapter;
@@ -354,7 +353,7 @@ void BluetoothPendingSocket::requestName(BluetoothAdapter::OnScanDeviceNameDeleg
 	defaultBluezAdapter.requestName(*this, onDeviceName);
 }
 
-IG::ErrorCode BluezBluetoothSocket::open(BluetoothPendingSocket &pending)
+IG::ErrorCode BluezBluetoothSocket::open(BluetoothAdapter &, BluetoothPendingSocket &pending)
 {
 	assert(pending);
 	logMsg("accepting connection from fd %d", pending.fd);
@@ -398,7 +397,7 @@ int BluezBluetoothSocket::readPendingData(int events)
 		{
 			//auto len = read(fd, buff, IG::min((size_t)bytesToRead, sizeof buff));
 			auto len = read(fd, buff, sizeof buff);
-			if(unlikely(len <= 0))
+			if(len <= 0) [[unlikely]]
 			{
 				logMsg("error %d reading packet from socket %d", len == -1 ? errno : 0, fd);
 				onStatusD(*this, STATUS_READ_ERROR);
@@ -431,7 +430,7 @@ void BluezBluetoothSocket::setupFDEvents(int events)
 		Base::POLLEV_OUT};
 }
 
-IG::ErrorCode BluezBluetoothSocket::openRfcomm(BluetoothAddr bdaddr, uint32_t channel)
+IG::ErrorCode BluezBluetoothSocket::openRfcomm(BluetoothAdapter &, BluetoothAddr bdaddr, uint32_t channel)
 {
 	struct sockaddr_rc addr{};
 	addr.rc_family = AF_BLUETOOTH;
@@ -459,7 +458,7 @@ IG::ErrorCode BluezBluetoothSocket::openRfcomm(BluetoothAddr bdaddr, uint32_t ch
 	return {};
 }
 
-IG::ErrorCode BluezBluetoothSocket::openL2cap(BluetoothAddr bdaddr, uint32_t psm)
+IG::ErrorCode BluezBluetoothSocket::openL2cap(BluetoothAdapter &, BluetoothAddr bdaddr, uint32_t psm)
 {
 	struct sockaddr_l2 addr{};
 	addr.l2_family = AF_BLUETOOTH;

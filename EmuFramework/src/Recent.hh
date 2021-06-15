@@ -17,7 +17,6 @@
 
 #include <imagine/fs/FS.hh>
 #include <imagine/util/string.h>
-#include <imagine/input/Input.hh>
 #include <imagine/util/container/ArrayList.hh>
 
 class TextMenuItem;
@@ -26,7 +25,7 @@ struct RecentGameInfo
 {
 	FS::PathString path{};
 	FS::FileString name{};
-	static constexpr uint MAX_RECENT = 10;
+	static constexpr unsigned MAX_RECENT = 10;
 
 	constexpr RecentGameInfo() {}
 

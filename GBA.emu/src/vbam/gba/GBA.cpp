@@ -1590,7 +1590,7 @@ void CPUUpdateRender(GBASys &gba)
   	static const GBALCD::RenderLineFunc all[8] =
 			{ mode0RenderLineAll, mode1RenderLineAll, mode2RenderLineAll, mode3RenderLineAll, mode4RenderLineAll, mode5RenderLineAll,
 			blankLine };
-  	uint mode = gba.mem.ioMem.DISPCNT & 7;
+  	unsigned mode = gba.mem.ioMem.DISPCNT & 7;
   	gba.lcd.renderLine = ((!gba.lcd.fxOn && !gba.lcd.windowOn && !(gba.lcd.layerEnable & 0x8000)) || cpuDisableSfx) ? norm[mode] :
   			(gba.lcd.fxOn && !gba.lcd.windowOn && !(gba.lcd.layerEnable & 0x8000)) ? noWin[mode] :
   			all[mode];
@@ -3408,7 +3408,7 @@ void CPULoop(GBASys &gba, EmuSystemTask *task, EmuVideo *video, EmuAudio *audio)
             CPUCompareVCOUNT(cpu);
 
           } else {
-            if(video)
+            if(video) [[likely]]
             {
             	/*if(trackOAM)
             	{
@@ -3421,48 +3421,9 @@ void CPULoop(GBASys &gba, EmuSystemTask *task, EmuVideo *video, EmuAudio *audio)
             	else
             	{
             	}*/
-
               (*gba.lcd.renderLine)(gba.lcd.lineMix, gba.lcd, ioMem);
-              /*switch(systemColorDepth) {
-				#ifdef SUPPORT_PIX_16BIT
-                case 16:
-                {
-                	if(!directColorLookup)
-                	{
-										for(int x = 0; x < 240; x++)
-										{
-											//lineMix[x] = systemColorMap.map16[lineMix[x]];
-										}
-                	}
-                }
-                break;
-				#endif
-				#ifdef SUPPORT_PIX_32BIT
-                case 24:
-                {
-                  u8 *dest = (u8 *)pix + 240 * VCOUNT * 3;
-                  for(int x = 0; x < 240;) {
-                	for(int i = 0; i < 16; i++) {
-                      *((u32 *)dest) = systemColorMap32[lineMix[x++] & 0xFFFF];
-                      dest += 3;
-                	}
-                  }
-                }
-                break;
-                case 32:
-                {
-                  u32 *dest = (u32 *)pix + 240 * (VCOUNT);
-                  for(int x = 0; x < 240; ) {
-                	for(int i = 0; i < 16; i++)
-                      *dest++ = systemColorMap32[lineMix[x++] & 0xFFFF];
-
-                  }
-                }
-                break;
-				#endif
-              }*/
             }
-            if(ioMem.VCOUNT == 159 && likely(video))
+            if(ioMem.VCOUNT == 159 && video)
             {
             	systemDrawScreen(task, *video);
             }

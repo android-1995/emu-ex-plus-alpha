@@ -24,7 +24,16 @@
 #ifndef _RENDER_H_
 #define _RENDER_H_
 
-#include <imagine/pixmap/Pixmap.hh>
+#include <type_traits>
+
+namespace IG
+{
+class Pixmap;
+class PixelFormat;
+}
+
+static constexpr unsigned RENDER_BPP = 32;
+using Pixel = std::conditional_t<RENDER_BPP == 32, uint32_t, uint16_t>;
 
 /* Global variables */
 extern uint8 object_count;
@@ -36,6 +45,7 @@ extern void render_reset(void);
 extern void render_line(int line, IG::Pixmap pix);
 extern void blank_line(int line, int offset, int width);
 extern void remap_line(int line, IG::Pixmap pix);
+extern void remapPixmap(IG::Pixmap dest, IG::Pixmap src);
 extern void window_clip(unsigned int data, unsigned int sw);
 extern void render_bg_m4(int line, int width);
 extern void render_bg_m5(int line, int width);
@@ -53,6 +63,8 @@ extern void update_bg_pattern_cache_m4(int index);
 extern void update_bg_pattern_cache_m5(int index);
 extern void color_update_m4(int index, unsigned int data);
 extern void color_update_m5(int index, unsigned int data);
+void setFramebufferRenderFormat(IG::PixelFormat);
+IG::PixelFormat framebufferRenderFormat();
 
 /* Function pointers */
 extern void (*render_bg)(int line, int width);

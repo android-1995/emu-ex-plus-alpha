@@ -55,19 +55,37 @@ static void fill(C &c)
 }
 
 template <class C, class UnaryPredicate>
-static auto find_if(C &c, UnaryPredicate pred)
+static auto find_if(C &&c, UnaryPredicate pred)
 {
 	return std::find_if(std::begin(c), std::end(c), pred);
 }
 
 template <class C, class V>
-static bool contains(const C &c, const V& val)
+static int findIndex(C &&c, const V& val)
+{
+	auto it = std::find(std::begin(c), std::end(c), val);
+	if(it == c.end())
+		return -1;
+	return std::distance(std::begin(c), it);
+}
+
+template <class C, class UnaryPredicate>
+static int findIndexIf(C &&c, UnaryPredicate pred)
+{
+	auto it = std::find_if(std::begin(c), std::end(c), pred);
+	if(it == c.end())
+		return -1;
+	return std::distance(std::begin(c), it);
+}
+
+template <class C, class V>
+static bool contains(C &&c, const V& val)
 {
 	return std::find(std::begin(c), std::end(c), val) != c.end();
 }
 
 template <class C, class UnaryPredicate>
-static bool containsIf(const C &c, UnaryPredicate pred)
+static bool containsIf(C &&c, UnaryPredicate pred)
 {
 	return std::find_if(std::begin(c), std::end(c), pred) != c.end();
 }
@@ -96,6 +114,13 @@ static typename C::value_type moveOutIf(C &c, UnaryPredicate pred)
 	{
 		return {};
 	}
+}
+
+template<typename InputIt, class Size, typename OutputIt, typename UnaryOperation>
+OutputIt transformN(InputIt first, Size count,
+	OutputIt result, UnaryOperation unary_op)
+{
+	return std::transform(first, first + count, result, unary_op);
 }
 
 // wrapper functions for iterators to non-overlapping memory regions

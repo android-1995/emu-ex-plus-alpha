@@ -30,17 +30,21 @@ import java.lang.reflect.*;
 class TextEntry
 {
 	private static final String logTag = "TextEntry";
+	private static native void textInputEnded(long nativeUserData, String text, boolean processText, boolean isDoingDismiss);
 	
-	static final class TextEntryPopupWindow extends Dialog
+	final class TextEntryPopupWindow extends Dialog
 	implements DialogInterface.OnDismissListener, TextView.OnEditorActionListener
 	{
 		private static final int PROCESS_TEXT_ON_DISMISS = 0;
 		private static final int SKIP_TEXT_ON_DISMISS = 1;
 		private EditText editBox;
+		private long nativeUserData;
 		
-		public TextEntryPopupWindow(Activity act, String initialText, String promptText, int x, int y, int width, int height, int fontSize)
+		public TextEntryPopupWindow(Activity act, String initialText, String promptText,
+			int x, int y, int width, int height, int fontSize, long nativeUserData)
 		{
 			super(act/*, 0x7f030000*/);
+			this.nativeUserData = nativeUserData;
 			editBox = new EditText(act);
 			editBox.setId(PROCESS_TEXT_ON_DISMISS);
 			editBox.setTextSize(TypedValue.COMPLEX_UNIT_PX, fontSize);
@@ -84,7 +88,7 @@ class TextEntry
 			//editBox.setImeActionLabel(null, 0);
 			dismissedDialog();
 			boolean processText = editBox.getId() == PROCESS_TEXT_ON_DISMISS; // check if text already processed in onEditorAction
-			BaseActivity.endSysTextInput(null, processText, true);
+			endTextInput(nativeUserData, null, processText, true);
 		}
 
 		/*@Override public boolean onTouchEvent(MotionEvent event)
@@ -105,40 +109,41 @@ class TextEntry
 			//Log.i(logTag, "got editor action " + actionId);
 			String content = editBox.getText().toString();
 			editBox.setId(SKIP_TEXT_ON_DISMISS);
-			BaseActivity.endSysTextInput(content, true, false);
+			endTextInput(nativeUserData, content, true, false);
 			dismiss();
 			return false;
 		}
 	}
 	
-	private static TextEntryPopupWindow popup = null;
+	private TextEntryPopupWindow popup = null;
 
-	static void startSysTextInput(Activity act, String initialText, String promptText, int x, int y, int width, int height, int fontSize)
+	TextEntry(Activity act, String initialText, String promptText,
+		int x, int y, int width, int height, int fontSize, long nativeUserData)
 	{
-		if(popup != null)
-		{
-			finishSysTextInput(true);
-		}
-		popup = new TextEntryPopupWindow(act, initialText, promptText, x, y, width, height, fontSize);
+		popup = new TextEntryPopupWindow(act, initialText, promptText, x, y, width, height, fontSize, nativeUserData);
 		popup.show();
 	}
-	
-	static void dismissedDialog()
-	{
-		popup = null;
-	}
-	
-	static void finishSysTextInput(boolean canceled)
+
+	void finish(boolean canceled)
 	{
 		if(popup == null) return;
 		popup.dismiss();
 	}
-	
-	static void placeSysTextInput(int x, int y, int width, int height)
+
+	void place(int x, int y, int width, int height)
 	{
 		if(popup == null) return;
 		popup.updateRect(x, y, width, height);
 		popup.requestLayout();
 	}
-	
+
+	private void dismissedDialog()
+	{
+		popup = null;
+	}
+
+	private void endTextInput(long nativeUserData, String text, boolean processText, boolean isDoingDismiss)
+	{
+		textInputEnded(nativeUserData, text, processText, isDoingDismiss);
+	}
 }

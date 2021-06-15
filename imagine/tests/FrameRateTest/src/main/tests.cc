@@ -20,7 +20,6 @@
 #include <imagine/gfx/RendererCommands.hh>
 #include <imagine/util/algorithm.h>
 #include <imagine/util/string.h>
-#include <imagine/base/Base.hh>
 #include <imagine/base/Window.hh>
 #include <imagine/base/Screen.hh>
 #include <imagine/logger/logger.h>
@@ -38,11 +37,12 @@ const char *testIDToStr(TestID id)
 	}
 }
 
-void TestFramework::init(Gfx::Renderer &r, IG::WP pixmapSize, Gfx::TextureBufferMode bufferMode)
+void TestFramework::init(Base::ApplicationContext app, Gfx::Renderer &r,
+	Gfx::GlyphTextureSet &face, IG::WP pixmapSize, Gfx::TextureBufferMode bufferMode)
 {
-	cpuStatsText = {&View::defaultFace};
-	frameStatsText = {&View::defaultFace};
-	initTest(r, pixmapSize, bufferMode);
+	cpuStatsText = {&face};
+	frameStatsText = {&face};
+	initTest(app, r, pixmapSize, bufferMode);
 }
 
 void TestFramework::setCPUFreqText(const char *str)
@@ -166,7 +166,7 @@ void TestFramework::prepareDraw(Gfx::Renderer &r)
 	frameStatsText.makeGlyphs(r);
 }
 
-void TestFramework::draw(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds)
+void TestFramework::draw(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds, Gfx::GC xIndent)
 {
 	using namespace Gfx;
 	cmds.loadTransform(projP.makeTranslate());
@@ -180,7 +180,7 @@ void TestFramework::draw(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds)
 		GeomRect::draw(cmds, cpuStatsRect);
 		cmds.setColor(1., 1., 1., 1.);
 		cmds.setCommonProgram(CommonProgram::TEX_ALPHA);
-		cpuStatsText.draw(cmds, projP.alignXToPixel(cpuStatsRect.x + TableView::globalXIndent),
+		cpuStatsText.draw(cmds, projP.alignXToPixel(cpuStatsRect.x + xIndent),
 			projP.alignYToPixel(cpuStatsRect.yCenter()), LC2DO, projP);
 	}
 	if(frameStatsText.isVisible())
@@ -191,7 +191,7 @@ void TestFramework::draw(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds)
 		GeomRect::draw(cmds, frameStatsRect);
 		cmds.setColor(1., 1., 1., 1.);
 		cmds.setCommonProgram(CommonProgram::TEX_ALPHA);
-		frameStatsText.draw(cmds, projP.alignXToPixel(frameStatsRect.x + TableView::globalXIndent),
+		frameStatsText.draw(cmds, projP.alignXToPixel(frameStatsRect.x + xIndent),
 			projP.alignYToPixel(frameStatsRect.yCenter()), LC2DO, projP);
 	}
 }
@@ -229,7 +229,7 @@ void ClearTest::drawTest(Gfx::RendererCommands &cmds, Gfx::ClipRect)
 	}
 }
 
-void DrawTest::initTest(Gfx::Renderer &r, IG::WP pixmapSize, Gfx::TextureBufferMode bufferMode)
+void DrawTest::initTest(Base::ApplicationContext app, Gfx::Renderer &r, IG::WP pixmapSize, Gfx::TextureBufferMode bufferMode)
 {
 	IG::PixmapDesc pixmapDesc = {pixmapSize, IG::PIXEL_FMT_RGB565};
 	Gfx::TextureConfig texConf{pixmapDesc};
@@ -238,7 +238,7 @@ void DrawTest::initTest(Gfx::Renderer &r, IG::WP pixmapSize, Gfx::TextureBufferM
 	texture = r.makePixmapBufferTexture(texConf, bufferMode, canSingleBuffer);
 	if(!texture)
 	{
-		Base::exitWithErrorMessagePrintf(-1, "Can't init test texture");
+		app.exitWithErrorMessagePrintf(-1, "Can't init test texture");
 		return;
 	}
 	auto lockedBuff = texture.lock();
@@ -290,7 +290,7 @@ void WriteTest::frameUpdateTest(Gfx::RendererTask &rendererTask, Base::Screen &s
 	IG::Pixmap pix = lockedBuff.pixmap();
 	if(flash)
 	{
-		uint writeColor;
+		uint16_t writeColor;
 		if(!droppedFrames)
 			writeColor = IG::PIXEL_DESC_RGB565.build(.7, .7, .7, 1.);
 		else if(droppedFrames % 2 == 0)

@@ -18,12 +18,13 @@
 #include <imagine/gui/AlertView.hh>
 #include <imagine/gfx/GeomRect.hh>
 #include <imagine/gfx/RendererCommands.hh>
+#include <imagine/input/Input.hh>
 #include <imagine/logger/logger.h>
 #include <imagine/util/math/int.hh>
 
 BaseAlertView::BaseAlertView(ViewAttachParams attach, const char *label, TableView::ItemsDelegate items, TableView::ItemDelegate item):
 	View{attach},
-	text{label, &View::defaultFace},
+	text{label, &attach.viewManager().defaultFace()},
 	menu
 	{
 		attach,
@@ -83,13 +84,10 @@ void BaseAlertView::place()
 
 bool BaseAlertView::inputEvent(Input::Event e)
 {
-	if(e.state() == Input::PUSHED)
+	if(e.pushed() && e.isDefaultCancelButton())
 	{
-		if(e.isDefaultCancelButton())
-		{
-			dismiss();
-			return true;
-		}
+		dismiss();
+		return true;
 	}
 	return menu.inputEvent(e);
 }
@@ -136,7 +134,7 @@ AlertView::AlertView(ViewAttachParams attach, const char *label, uint32_t menuIt
 void AlertView::setItem(uint32_t idx, const char *name, TextMenuItem::SelectDelegate del)
 {
 	assert(idx < item.size());
-	item[idx].setName(name, &View::defaultFace);
+	item[idx].setName(name, &manager().defaultFace());
 	item[idx].setOnSelect(del);
 }
 
@@ -151,8 +149,8 @@ YesNoAlertView::YesNoAlertView(ViewAttachParams attach, const char *label, const
 		{
 			return idx == 0 ? yes : no;
 		}),
-	yes{yesStr ? yesStr : "确定", onYes ? onYes : makeDefaultSelectDelegate()},
-	no{noStr ? noStr : "取消", onNo ? onNo : makeDefaultSelectDelegate()}
+	yes{yesStr ? yesStr : "确定", &defaultFace(), onYes ? onYes : makeDefaultSelectDelegate()},
+	no{noStr ? noStr : "取消", &defaultFace(), onNo ? onNo : makeDefaultSelectDelegate()}
 {}
 
 void YesNoAlertView::setOnYes(TextMenuItem::SelectDelegate del)

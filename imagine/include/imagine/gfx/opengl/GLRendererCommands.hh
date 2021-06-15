@@ -27,6 +27,11 @@ namespace IG
 class Semaphore;
 }
 
+namespace Base
+{
+class GLContext;
+}
+
 namespace Gfx
 {
 
@@ -39,8 +44,8 @@ class GLRendererCommands
 {
 public:
 	constexpr GLRendererCommands() {}
-	GLRendererCommands(RendererTask &rTask, Base::Window *winPtr, DrawableHolder &drawableHolder, Base::GLDisplay glDpy,
-		IG::Semaphore *drawCompleteSemPtr);
+	GLRendererCommands(RendererTask &rTask, Base::Window *winPtr, Drawable drawable, Base::GLDisplay glDpy,
+		const Base::GLContext &glCtx, IG::Semaphore *drawCompleteSemPtr);
 	void discardTemporaryData();
 	void bindGLArrayBuffer(GLuint vbo);
 	#ifdef CONFIG_GFX_OPENGL_FIXED_FUNCTION_PIPELINE
@@ -78,13 +83,14 @@ protected:
 	void doPresent();
 	void notifyDrawComplete();
 	void notifyPresentComplete();
+	const Base::GLContext &glContext() const;
 
 	RendererTask *rTask{};
 	Renderer *r{};
 	IG::Semaphore *drawCompleteSemPtr{};
 	Base::Window *winPtr{};
-	DrawableHolder *drawableHolderPtr{};
-	Base::GLDisplay glDpy{};
+	[[no_unique_address]] Base::GLDisplay glDpy{};
+	const Base::GLContext *glContextPtr{};
 	Drawable drawable{};
 	Viewport currViewport{};
 	GLuint currSamplerName{};
@@ -98,7 +104,6 @@ protected:
 	Color texEnvColor{}; // color when using shader pipeline
 	GLuint arrayBuffer = 0;
 	bool arrayBufferIsSet = false;
-	IG_enableMemberIf(Config::DEBUG_BUILD, bool, drawableWasPresented){};
 };
 
 using RendererCommandsImpl = GLRendererCommands;

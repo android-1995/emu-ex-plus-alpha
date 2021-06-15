@@ -28,7 +28,12 @@
 #include <assert.h>
 #include <imagine/util/mayAliasInt.h>
 
-template <uint S>
+namespace IG
+{
+class Pixmap;
+}
+
+template <unsigned S>
 union RamU
 {
 	uint8 b[S];
@@ -36,14 +41,14 @@ union RamU
 	uint32 l[S/4];
 
 	// TODO: try using GCC 4.7's __builtin_assume_aligned & memcpy
-	uint32a &getL(uint byteAddr) __attribute__ ((always_inline))
+	uint32a &getL(unsigned byteAddr) __attribute__ ((always_inline))
 	{
 		//assert((byteAddr & 0x3) == 0);
 		return *((uint32a*)&b[byteAddr]);
 		//return l[byteAddr >> 2];
 	}
 
-	uint16a &getS(uint byteAddr) __attribute__ ((always_inline))
+	uint16a &getS(unsigned byteAddr) __attribute__ ((always_inline))
 	{
 		//assert((byteAddr & 0x1) == 0);
 		return *((uint16a*)&b[byteAddr]);
@@ -100,8 +105,6 @@ unsigned int (*vdp_z80_data_r)(void);
 };
 
 extern VDP vdp;
-
-extern IG::Pixmap gPixmap;
 
 static auto &reg = vdp.reg;
 static auto &sat = vdp.sat;
@@ -165,5 +168,8 @@ extern void vdp_test_w(unsigned int data);
 #else
 	extern int vdp_68k_irq_ack(M68KCPU &m68ki_cpu, int int_level);
 #endif
+
+IG::Pixmap framebufferPixmap();
+IG::Pixmap framebufferRenderFormatPixmap();
 
 #endif /* _VDP_H_ */

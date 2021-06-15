@@ -18,13 +18,17 @@
 #include <imagine/config/defs.hh>
 #include <imagine/gfx/defs.hh>
 #include <imagine/gfx/TextureConfig.hh>
-#include <imagine/pixmap/Pixmap.hh>
 
 #ifdef CONFIG_GFX_OPENGL
 #include <imagine/gfx/opengl/GLPixmapTexture.hh>
 #endif
 
 class GfxImageSource;
+
+namespace IG
+{
+class PixmapDesc;
+}
 
 namespace Gfx
 {
@@ -38,7 +42,7 @@ public:
 	using PixmapTextureImpl::PixmapTextureImpl;
 	PixmapTexture(RendererTask &, TextureConfig config, IG::ErrorCode *errorPtr = nullptr);
 	PixmapTexture(RendererTask &, GfxImageSource &img, const TextureSampler *compatSampler, bool makeMipmaps, IG::ErrorCode *errorPtr = nullptr);
-	IG::ErrorCode setFormat(IG::PixmapDesc desc, uint8_t levels, const TextureSampler *compatSampler = {});
+	IG::ErrorCode setFormat(IG::PixmapDesc desc, uint8_t levels, ColorSpace c = {}, const TextureSampler *compatSampler = {});
 	GTexCRect uvBounds() const;
 	IG::PixmapDesc usedPixmapDesc() const;
 	operator TextureSpan() const;

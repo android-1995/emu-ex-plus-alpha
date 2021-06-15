@@ -1,6 +1,6 @@
 #pragma once
 
-#include <imagine/io/IO.hh>
+#include <imagine/fs/FSDefs.hh>
 
-uint hasROMExtension(const char *name);
-int loadArchive(void *buff, uint bytes, const char *path, FS::FileString &nameInArchive);
+unsigned hasROMExtension(const char *name);
+int loadArchive(void *buff, unsigned bytes, const char *path, FS::FileString &nameInArchive);

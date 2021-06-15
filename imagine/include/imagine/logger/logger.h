@@ -1,7 +1,6 @@
 #pragma once
 
 #include <imagine/config/build.h>
-#include <imagine/config/imagineTypes.h>
 #include <imagine/util/builtins.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -14,7 +13,7 @@ extern uint8_t loggerVerbosity;
 
 typedef uint8_t LoggerSeverity;
 
-CLINK void logger_init() __attribute__((cold));
+CLINK void logger_setLogDirectoryPrefix(const char *dirStr) __attribute__((cold));
 CLINK void logger_setEnabled(bool enable);
 CLINK bool logger_isEnabled();
 CLINK void logger_printf(LoggerSeverity severity, const char* msg, ...) __attribute__((format (printf, 2, 3)));

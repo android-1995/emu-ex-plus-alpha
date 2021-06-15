@@ -18,8 +18,14 @@
 #include <imagine/audio/OutputStream.hh>
 #include <imagine/time/Time.hh>
 #include <imagine/vmem/RingBuffer.hh>
+#include <imagine/base/ApplicationContext.hh>
 #include <memory>
 #include <atomic>
+
+namespace IG::Audio
+{
+class Manager;
+}
 
 class EmuAudio
 {
@@ -32,8 +38,10 @@ public:
 		MULTI_UNDERRUN
 	};
 
-	constexpr EmuAudio() {}
-	void open(IG::Audio::Api api);
+	constexpr EmuAudio(const IG::Audio::Manager &audioManager):
+		audioManagerPtr{&audioManager}
+	{}
+	void open(IG::Audio::Api);
 	void start(IG::Microseconds targetBufferFillUSecs, IG::Microseconds bufferIncrementUSecs);
 	void stop();
 	void close();
@@ -49,11 +57,12 @@ public:
 
 protected:
 	std::unique_ptr<IG::Audio::OutputStream> audioStream{};
+	const IG::Audio::Manager *audioManagerPtr{};
 	IG::RingBuffer rBuff{};
 	IG::Time lastUnderrunTime{};
 	uint32_t targetBufferFillBytes = 0;
 	uint32_t bufferIncrementBytes = 0;
-	uint32_t rate{44100};
+	uint32_t rate{};
 	float volume = 1.0;
 	std::atomic<AudioWriteState> audioWriteState = AudioWriteState::BUFFER;
 	bool addSoundBuffersOnUnderrun = false;
@@ -65,4 +74,5 @@ protected:
 	uint32_t framesCapacity() const;
 	bool shouldStartAudioWrites(uint32_t bytesToWrite = 0) const;
 	void resizeAudioBuffer(uint32_t targetBufferFillBytes);
+	const IG::Audio::Manager &audioManager() const;
 };

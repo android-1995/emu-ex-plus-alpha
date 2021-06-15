@@ -15,14 +15,19 @@
 	You should have received a copy of the GNU General Public License
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <imagine/gfx/Viewport.hh>
 #include <imagine/base/baseDefs.hh>
 #include <imagine/util/Interpolator.hh>
+#include <array>
+
+namespace Base
+{
+class Window;
+};
 
 namespace Gfx
 {
 
-class Window;
+class Viewport;
 
 class AnimatedViewport
 {
@@ -35,7 +40,7 @@ public:
 	Gfx::Viewport viewport() const;
 
 protected:
-	IG::InterpolatorValue<int, IG::FrameTime, IG::InterpolatorType::EASEINOUTQUAD> animator[4]{};
+	std::array<IG::InterpolatorValue<int, IG::FrameTime, IG::InterpolatorType::EASEINOUTQUAD>, 4> animator{};
 	Base::OnFrameDelegate animate{};
 	Base::Window *win{};
 };

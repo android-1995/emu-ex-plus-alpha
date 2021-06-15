@@ -89,7 +89,7 @@ static GN_Surface sdlSurf;
 static FS::PathString datafilePath{};
 static const int FBResX = 352;
 // start image on y 16, x 24, size 304x224, 48 pixel padding on the right
-static IG::Pixmap srcPix{{{304, 224}, pixFmt}, (char*)screenBuff + (16*FBResX*2) + (24*2), {FBResX, IG::Pixmap::PIXEL_UNITS}};
+static constexpr IG::Pixmap srcPix{{{304, 224}, pixFmt}, screenBuff + (16*FBResX) + (24), {FBResX, IG::Pixmap::PIXEL_UNITS}};
 static EmuSystem::OnLoadProgressDelegate onLoadProgress{};
 
 CLINK void main_frame(void *emuTaskPtr, void *emuVideoPtr);
@@ -189,7 +189,7 @@ static void reverseSwapCPUMemForDump(bool swappedBIOS)
 
 #endif
 
-void gn_init_pbar(uint action,int size)
+void gn_init_pbar(unsigned action,int size)
 {
 	using namespace Base;
 	logMsg("init pbar %d, %d", action, size);
@@ -214,6 +214,7 @@ void gn_init_pbar(uint action,int size)
 		onLoadProgress(0, size, str);
 	}
 }
+
 void gn_update_pbar(int pos)
 {
 	using namespace Base;
@@ -224,19 +225,19 @@ void gn_update_pbar(int pos)
 	}
 }
 
-static auto openGngeoDataIO(const char *filename)
+static auto openGngeoDataIO(Base::ApplicationContext ctx, const char *filename)
 {
 	#ifdef __ANDROID__
-	return EmuApp::openAppAssetIO(filename, IO::AccessHint::ALL);
+	return ctx.openAsset(filename, IO::AccessHint::ALL);
 	#else
 	return FS::fileFromArchive(datafilePath.data(), filename);
 	#endif
 }
 
-CLINK ROM_DEF *res_load_drv(const char *name)
+CLINK ROM_DEF *res_load_drv(void *contextPtr, const char *name)
 {
 	auto drvFilename = string_makePrintf<32>(DATAFILE_PREFIX "rom/%s.drv", name);
-	auto io = openGngeoDataIO(drvFilename.data());
+	auto io = openGngeoDataIO(*((Base::ApplicationContext*)contextPtr), drvFilename.data());
 	if(!io)
 	{
 		logErr("Can't open driver %s", name);
@@ -264,9 +265,9 @@ CLINK ROM_DEF *res_load_drv(const char *name)
 	return drv;
 }
 
-CLINK void *res_load_data(const char *name)
+CLINK void *res_load_data(void *contextPtr, const char *name)
 {
-	auto io = openGngeoDataIO(name);
+	auto io = openGngeoDataIO(*((Base::ApplicationContext*)contextPtr), name);
 	if(!io)
 	{
 		logErr("Can't data file %s", name);
@@ -278,11 +279,11 @@ CLINK void *res_load_data(const char *name)
 	return buffer;
 }
 
-EmuSystem::Error EmuSystem::loadGame(IO &, EmuSystemCreateParams, OnLoadProgressDelegate onLoadProgressFunc)
+EmuSystem::Error EmuSystem::loadGame(Base::ApplicationContext ctx, IO &, EmuSystemCreateParams, OnLoadProgressDelegate onLoadProgressFunc)
 {
 	onLoadProgress = onLoadProgressFunc;
 	auto resetOnLoadProgress = IG::scopeGuard([&](){ onLoadProgress = {}; });
-	ROM_DEF *drv = res_load_drv(gameName().data());
+	ROM_DEF *drv = res_load_drv(&ctx, gameName().data());
 	if(!drv)
 	{
 		return makeError("This game isn't recognized");
@@ -295,7 +296,7 @@ EmuSystem::Error EmuSystem::loadGame(IO &, EmuSystemCreateParams, OnLoadProgress
 	{
 		logMsg("loading .gno file");
 		char errorStr[1024];
-		if(!init_game(gnoFilename.data(), errorStr))
+		if(!init_game(&ctx, gnoFilename.data(), errorStr))
 		{
 			return makeError("%s", errorStr);
 		}
@@ -303,7 +304,7 @@ EmuSystem::Error EmuSystem::loadGame(IO &, EmuSystemCreateParams, OnLoadProgress
 	else
 	{
 		char errorStr[1024];
-		if(!init_game(drv->name, errorStr))
+		if(!init_game(&ctx, drv->name, errorStr))
 		{
 			return makeError("%s", errorStr);
 		}
@@ -333,11 +334,6 @@ EmuSystem::Error EmuSystem::loadGame(IO &, EmuSystemCreateParams, OnLoadProgress
 	return {};
 }
 
-void EmuSystem::onPrepareVideo(EmuVideo &video)
-{
-	video.setFormat(srcPix);
-}
-
 void EmuSystem::configAudioRate(IG::FloatSeconds frameTime, uint32_t rate)
 {
 	conf.sample_rate = std::round(rate * ((60./1.001) * frameTime.count()));
@@ -348,14 +344,19 @@ void EmuSystem::configAudioRate(IG::FloatSeconds frameTime, uint32_t rate)
 	}
 }
 
+void EmuSystem::renderFramebuffer(EmuVideo &video)
+{
+	video.startFrameWithAltFormat({}, srcPix);
+}
+
 CLINK void screen_update(void *emuTaskPtr, void *emuVideoPtr)
 {
 	auto task = (EmuSystemTask*)emuTaskPtr;
 	auto emuVideo = (EmuVideo*)emuVideoPtr;
-	if(likely(emuVideo))
+	if(emuVideo) [[likely]]
 	{
 		//logMsg("screen render");
-		emuVideo->startFrame(task, srcPix);
+		emuVideo->startFrameWithAltFormat(task, srcPix);
 	}
 	else
 	{
@@ -378,10 +379,10 @@ void EmuSystem::runFrame(EmuSystemTask *task, EmuVideo *video, EmuAudio *audio)
 	}
 }
 
-FS::FileString EmuSystem::fullGameNameForPath(const char *path)
+FS::FileString EmuSystem::fullGameNameForPath(Base::ApplicationContext ctx, const char *path)
 {
 	auto gameName = fullGameNameForPathDefaultImpl(path);
-	ROM_DEF *drv = res_load_drv(gameName.data());
+	ROM_DEF *drv = res_load_drv(&ctx, gameName.data());
 	if(!drv)
 		return gameName;
 	auto freeDrv = IG::scopeGuard([&](){ free(drv); });
@@ -401,7 +402,7 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 	view.setBackgroundGradient(navViewGrad);
 }
 
-EmuSystem::Error EmuSystem::onInit()
+EmuSystem::Error EmuSystem::onInit(Base::ApplicationContext ctx)
 {
 	visible_area.x = 0;//16;
 	visible_area.y = 16;
@@ -412,10 +413,11 @@ EmuSystem::Error EmuSystem::onInit()
 	sdlSurf.pixels = screenBuff;
 	buffer = &sdlSurf;
 	conf.sound = 1;
+	conf.sample_rate = 44100; // must be initialized to any valid value for YM2610Init()
 	strcpy(rompathConfItem.data.dt_str.str, ".");
 	if(!Config::envIsAndroid)
 	{
-		string_printf(datafilePath, "%s/gngeo_data.zip", EmuApp::assetPath().data());
+		string_printf(datafilePath, "%s/gngeo_data.zip", EmuApp::assetPath(ctx).data());
 	}
 	return {};
 }

@@ -22,6 +22,9 @@
 #include <imagine/gfx/SyncFence.hh>
 #include <imagine/time/Time.hh>
 #include <imagine/thread/Semaphore.hh>
+#include <imagine/base/ApplicationContext.hh>
+
+class ViewAttachParams;
 
 enum TestID
 {
@@ -68,9 +71,9 @@ public:
 	using TestFinishedDelegate = DelegateFunc<void (TestFramework &test)>;
 	bool started{};
 	bool shouldEndTest{};
-	uint frames{};
-	uint droppedFrames{};
-	uint continuousFrames{};
+	unsigned frames{};
+	unsigned droppedFrames{};
+	unsigned continuousFrames{};
 	IG::FrameTime startTime{}, endTime{};
 	TestFinishedDelegate onTestFinished;
 	FramePresentTime lastFramePresentTime;
@@ -78,16 +81,16 @@ public:
 
 	TestFramework() {}
 	virtual ~TestFramework() {}
-	virtual void initTest(Gfx::Renderer &r, IG::WP pixmapSize, Gfx::TextureBufferMode bufferMode) {}
+	virtual void initTest(Base::ApplicationContext, Gfx::Renderer &, IG::WP pixmapSize, Gfx::TextureBufferMode) {}
 	virtual void placeTest(const Gfx::GCRect &testRect) {}
 	virtual void frameUpdateTest(Gfx::RendererTask &rendererTask, Base::Screen &screen, IG::FrameTime frameTime) = 0;
 	virtual void drawTest(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds) = 0;
 	virtual void presentedTest(Gfx::RendererCommands &cmds) {}
-	void init(Gfx::Renderer &r, IG::WP pixmapSize, Gfx::TextureBufferMode bufferMode);
+	void init(Base::ApplicationContext, Gfx::Renderer &, Gfx::GlyphTextureSet &face, IG::WP pixmapSize, Gfx::TextureBufferMode);
 	void place(Gfx::Renderer &r, const Gfx::ProjectionPlane &projP, const Gfx::GCRect &testRect);
 	void frameUpdate(Gfx::RendererTask &rTask, Base::Window &win, Base::FrameParams frameParams);
 	void prepareDraw(Gfx::Renderer &r);
-	void draw(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds);
+	void draw(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds, Gfx::GC xIndent);
 	void finish(Gfx::RendererTask &task, IG::FrameTime frameTime);
 	void setCPUFreqText(const char *str);
 	void setCPUUseText(const char *str);
@@ -102,7 +105,7 @@ protected:
 	std::array<char, 256> skippedFrameStr{};
 	std::array<char, 256> statsStr{};
 	Gfx::ProjectionPlane projP;
-	uint lostFrameProcessTime = 0;
+	unsigned lostFrameProcessTime = 0;
 
 	void placeCPUStatsText(Gfx::Renderer &r);
 	void placeFrameStatsText(Gfx::Renderer &r);
@@ -130,7 +133,7 @@ protected:
 public:
 	DrawTest() {}
 
-	void initTest(Gfx::Renderer &r, IG::WP pixmapSize, Gfx::TextureBufferMode bufferMode) override;
+	void initTest(Base::ApplicationContext, Gfx::Renderer &, IG::WP pixmapSize, Gfx::TextureBufferMode) override;
 	void placeTest(const Gfx::GCRect &rect) override;
 	void frameUpdateTest(Gfx::RendererTask &rendererTask, Base::Screen &screen, IG::FrameTime frameTime) override;
 	void drawTest(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds) override;
@@ -146,5 +149,4 @@ public:
 	void drawTest(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds) override;
 };
 
-TestFramework *startTest(Base::Window &win, Gfx::Renderer &r, const TestParams &t);
 const char *testIDToStr(TestID id);

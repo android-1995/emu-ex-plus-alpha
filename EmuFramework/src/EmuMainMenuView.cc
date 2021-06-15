@@ -13,9 +13,6 @@
 	You should have received a copy of the GNU General Public License
 	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <imagine/gui/AlertView.hh>
-#include <imagine/gui/TextEntry.hh>
-#include <imagine/base/Base.hh>
 #include <emuframework/EmuMainMenuView.hh>
 #include <emuframework/EmuSystemActionsView.hh>
 #include <emuframework/EmuApp.hh>
@@ -29,8 +26,10 @@
 #include <emuframework/TouchConfigView.hh>
 #include <emuframework/BundledGamesView.hh>
 #include "private.hh"
-#include "privateInput.hh"
 #include "RecentGameView.hh"
+#include <imagine/gui/AlertView.hh>
+#include <imagine/gui/TextEntry.hh>
+#include <imagine/base/ApplicationContext.hh>
 #ifdef CONFIG_BLUETOOTH
 #include <imagine/bluetooth/sys.hh>
 #include <imagine/bluetooth/BluetoothInputDevScanner.hh>
@@ -41,7 +40,7 @@ extern BluetoothAdapter *bta;
 
 #ifdef CONFIG_BLUETOOTH
 
-static bool initBTAdapter()
+static bool initBTAdapter(Base::ApplicationContext ctx)
 {
 	if(bta)
 	{
@@ -49,12 +48,11 @@ static bool initBTAdapter()
 	}
 
 	logMsg("initializing Bluetooth");
-	bta = BluetoothAdapter::defaultAdapter();
+	bta = BluetoothAdapter::defaultAdapter(ctx);
 	return bta;
 }
 
-static auto onScanStatus =
-	[](BluetoothAdapter &, uint status, int arg)
+static void onScanStatus(EmuApp &app, unsigned status, int arg)
 	{
 		switch(status)
 		{
@@ -62,57 +60,58 @@ static auto onScanStatus =
 			{
 				if(Config::envIsIOS)
 				{
-					EmuApp::postErrorMessage("BTstack power on failed, make sure the iOS Bluetooth stack is not active");
+					app.postErrorMessage("BTstack power on failed, make sure the iOS Bluetooth stack is not active");
 				}
 			}
 			bcase BluetoothAdapter::SCAN_FAILED:
 			{
-				EmuApp::postErrorMessage("Scan failed");
+				app.postErrorMessage("Scan failed");
 			}
 			bcase BluetoothAdapter::SCAN_NO_DEVS:
 			{
-				EmuApp::postMessage("No devices found");
+				app.postMessage("No devices found");
 			}
 			bcase BluetoothAdapter::SCAN_PROCESSING:
 			{
-				EmuApp::printfMessage(2, 0, "Checking %d device(s)...", arg);
+				app.printfMessage(2, 0, "Checking %d device(s)...", arg);
 			}
 			bcase BluetoothAdapter::SCAN_NAME_FAILED:
 			{
-				EmuApp::postErrorMessage("Failed reading a device name");
+				app.postErrorMessage("Failed reading a device name");
 			}
 			bcase BluetoothAdapter::SCAN_COMPLETE:
 			{
 				int devs = Bluetooth::pendingDevs();
 				if(devs)
 				{
-					EmuApp::printfMessage(2, 0, "Connecting to %d device(s)...", devs);
+					app.printfMessage(2, 0, "Connecting to %d device(s)...", devs);
 					Bluetooth::connectPendingDevs(bta);
 				}
 				else
 				{
-					EmuApp::postMessage("Scan complete, no recognized devices");
+					app.postMessage("Scan complete, no recognized devices");
 				}
 			}
 			/*bcase BluetoothAdapter::SOCKET_OPEN_FAILED:
 			{
-				EmuApp::postErrorMessage("Failed opening a Bluetooth connection");
+				app.postErrorMessage("Failed opening a Bluetooth connection");
 			}*/
 		}
 	};
 
-static void handledFailedBTAdapterInit(View &view, ViewAttachParams attach, Input::Event e)
+template <class ViewT>
+static void handledFailedBTAdapterInit(ViewT &view, ViewAttachParams attach, Input::Event e)
 {
-	EmuApp::postErrorMessage("Unable to initialize Bluetooth adapter");
+	view.app().postErrorMessage("Unable to initialize Bluetooth adapter");
 	#ifdef CONFIG_BLUETOOTH_BTSTACK
 	if(!FS::exists("/var/lib/dpkg/info/ch.ringwald.btstack.list"))
 	{
 		auto ynAlertView = std::make_unique<YesNoAlertView>(attach, "BTstack not found, open Cydia and install?");
 		ynAlertView->setOnYes(
-			[]()
+			[](View &v)
 			{
 				logMsg("launching Cydia");
-				Base::openURL("cydia://package/ch.ringwald.btstack");
+				v.appContext().openURL("cydia://package/ch.ringwald.btstack");
 			});
 		view.pushAndShowModal(std::move(ynAlertView), e, false);
 	}
@@ -146,8 +145,8 @@ void EmuMainMenuView::loadFileBrowserItems()
 void EmuMainMenuView::loadStandardItems()
 {
 	item.emplace_back(&systemActions);
-    //去掉功能
 	item.emplace_back(&onScreenInputManager);
+    //去掉功能
 //	item.emplace_back(&inputManager);
 	item.emplace_back(&options);
 	#ifdef CONFIG_BLUETOOTH
@@ -175,7 +174,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	TableView{appViewTitle(), attach, item},
 	loadGame
 	{
-		"Load Game",
+		"Load Game", &defaultFace(),
 		[this](Input::Event e)
 		{
 			pushAndShow(EmuFilePicker::makeForLoading(attachParams(), e), e, false);
@@ -183,17 +182,17 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	},
 	systemActions
 	{
-		"系统操作",
+		"系统操作", &defaultFace(),
 		[this](Input::Event e)
 		{
 			if(!EmuSystem::gameIsRunning())
 				return;
-			pushAndShow(makeEmuView(attachParams(), EmuApp::ViewID::SYSTEM_ACTIONS), e);
+			pushAndShow(EmuApp::makeView(attachParams(), EmuApp::ViewID::SYSTEM_ACTIONS), e);
 		}
 	},
 	recentGames
 	{
-		"Recent Games",
+		"Recent Games", &defaultFace(),
 		[this](Input::Event e)
 		{
 			if(recentGameList.size())
@@ -204,7 +203,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	},
 	bundledGames
 	{
-		"Bundled Games",
+		"Bundled Games", &defaultFace(),
 		[this](Input::Event e)
 		{
 			pushAndShow(makeView<BundledGamesView>(), e);
@@ -212,7 +211,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	},
 	options
 	{
-		"设置",
+		"设置", &defaultFace(),
 		[this](Input::Event e)
 		{
 			pushAndShow(makeView<OptionCategoryView>(*audio, *videoLayer), e);
@@ -220,15 +219,15 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	},
 	onScreenInputManager
 	{
-		"屏幕按键设置",
+		"屏幕按键设置", &defaultFace(),
 		[this](Input::Event e)
 		{
-			pushAndShow(makeView<TouchConfigView>(defaultVController(), EmuSystem::inputFaceBtnName, EmuSystem::inputCenterBtnName), e);
+			pushAndShow(makeView<TouchConfigView>(app().defaultVController(), EmuSystem::inputFaceBtnName, EmuSystem::inputCenterBtnName), e);
 		}
 	},
 	inputManager
 	{
-		"Key/Gamepad Input Setup",
+		"Key/Gamepad Input Setup", &defaultFace(),
 		[this](Input::Event e)
 		{
 			pushAndShow(makeView<InputManagerView>(), e);
@@ -236,7 +235,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	},
 	benchmark
 	{
-		"游戏测试",
+		"游戏测试", &defaultFace(),
 		[this](Input::Event e)
 		{
 			pushAndShow(EmuFilePicker::makeForBenchmarking(attachParams(), e), e, false);
@@ -245,18 +244,22 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	#ifdef CONFIG_BLUETOOTH
 	scanWiimotes
 	{
-		"Scan for Wiimotes/iCP/JS1",
+		"Scan for Wiimotes/iCP/JS1", &defaultFace(),
 		[this](Input::Event e)
 		{
-			if(initBTAdapter())
+			if(initBTAdapter(appContext()))
 			{
-				if(Bluetooth::scanForDevices(*bta, onScanStatus))
+				if(Bluetooth::scanForDevices(appContext(), *bta,
+					[this](BluetoothAdapter &, unsigned status, int arg)
+					{
+						onScanStatus(app(), status, arg);
+					}))
 				{
-					EmuApp::postMessage(4, "Starting Scan...\n(see website for device-specific help)");
+					app().postMessage(4, "Starting Scan...\n(see website for device-specific help)");
 				}
 				else
 				{
-					EmuApp::postMessage(1, "Still scanning");
+					app().postMessage(1, "Still scanning");
 				}
 			}
 			else
@@ -268,7 +271,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	},
 	bluetoothDisconnect
 	{
-		"Disconnect Bluetooth",
+		"Disconnect Bluetooth", &defaultFace(),
 		[this](Input::Event e)
 		{
 			if(Bluetooth::devsConnected())
@@ -288,34 +291,34 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	#ifdef CONFIG_BLUETOOTH_SERVER
 	acceptPS3ControllerConnection
 	{
-		"Scan for PS3 Controller",
+		"Scan for PS3 Controller", &defaultFace(),
 		[this](Input::Event e)
 		{
-			if(initBTAdapter())
+			if(initBTAdapter(appContext()))
 			{
-				EmuApp::postMessage(4, "Prepare to push the PS button");
-				auto startedScan = Bluetooth::listenForDevices(*bta,
-					[this](BluetoothAdapter &bta, uint status, int arg)
+				app().postMessage(4, "Prepare to push the PS button");
+				auto startedScan = Bluetooth::listenForDevices(appContext(), *bta,
+					[this](BluetoothAdapter &bta, unsigned status, int arg)
 					{
 						switch(status)
 						{
 							bcase BluetoothAdapter::INIT_FAILED:
 							{
-								EmuApp::postErrorMessage(Config::envIsLinux ? 8 : 2,
+								app().postErrorMessage(Config::envIsLinux ? 8 : 2,
 									Config::envIsLinux ?
 										"Unable to register server, make sure this executable has cap_net_bind_service enabled and bluetoothd isn't running" :
 										"Bluetooth setup failed");
 							}
 							bcase BluetoothAdapter::SCAN_COMPLETE:
 							{
-								EmuApp::postMessage(4, "Push the PS button on your controller\n(see website for pairing help)");
+								app().postMessage(4, "Push the PS button on your controller\n(see website for pairing help)");
 							}
-							bdefault: onScanStatus(bta, status, arg);
+							bdefault: onScanStatus(app(), status, arg);
 						}
 					});
 				if(!startedScan)
 				{
-					EmuApp::postMessage(1, "Still scanning");
+					app().postMessage(1, "Still scanning");
 				}
 			}
 			else
@@ -328,7 +331,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	#endif
 	about
 	{
-		"关于",
+		"关于", &defaultFace(),
 		[this](Input::Event e)
 		{
 			pushAndShow(makeView<CreditsView>(EmuSystem::creditsViewStr), e);
@@ -336,10 +339,10 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	},
 	exitApp
 	{
-		"退出",
-		[](Input::Event e)
+		"退出", &defaultFace(),
+		[this](Input::Event e)
 		{
-			Base::exit();
+			appContext().exit();
 		}
 	}
 {
@@ -347,7 +350,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	{
 		loadFileBrowserItems();
 		loadStandardItems();
-		EmuApp::setOnMainMenuItemOptionChanged(
+		app().setOnMainMenuItemOptionChanged(
 			[this]()
 			{
 				waitForDrawFinished();
@@ -364,40 +367,40 @@ OptionCategoryView::OptionCategoryView(ViewAttachParams attach, EmuAudio &audio,
 		"设置",
 		attach,
 		[this](const TableView &) { return hasGooglePlayStoreFeatures() ? std::size(subConfig) : std::size(subConfig)-1; },
-		[this](const TableView &, uint idx) -> MenuItem& { return subConfig[idx]; }
+		[this](const TableView &, unsigned idx) -> MenuItem& { return subConfig[idx]; }
 	},
 	subConfig
 	{
 		{
-			"视频",
+			"视频", &defaultFace(),
 			[this, &videoLayer](Input::Event e)
 			{
-				auto view = makeEmuView(attachParams(), EmuApp::ViewID::VIDEO_OPTIONS);
+				auto view = EmuApp::makeView(attachParams(), EmuApp::ViewID::VIDEO_OPTIONS);
 				static_cast<VideoOptionView*>(view.get())->setEmuVideoLayer(videoLayer);
 				pushAndShow(std::move(view), e);
 			}
 		},
 		{
-			"音频",
+			"音频", &defaultFace(),
 			[this, &audio](Input::Event e)
 			{
-				auto view = makeEmuView(attachParams(), EmuApp::ViewID::AUDIO_OPTIONS);
+				auto view = EmuApp::makeView(attachParams(), EmuApp::ViewID::AUDIO_OPTIONS);
 				static_cast<AudioOptionView*>(view.get())->setEmuAudio(audio);
 				pushAndShow(std::move(view), e);
 			}
 		},
 		{
-			"系统",
+			"系统", &defaultFace(),
 			[this](Input::Event e)
 			{
-				pushAndShow(makeEmuView(attachParams(), EmuApp::ViewID::SYSTEM_OPTIONS), e);
+				pushAndShow(EmuApp::makeView(attachParams(), EmuApp::ViewID::SYSTEM_OPTIONS), e);
 			}
 		},
 		{
-			"界面UI",
+			"界面UI", &defaultFace(),
 			[this](Input::Event e)
 			{
-				pushAndShow(makeEmuView(attachParams(), EmuApp::ViewID::GUI_OPTIONS), e);
+				pushAndShow(EmuApp::makeView(attachParams(), EmuApp::ViewID::GUI_OPTIONS), e);
 			}
 		}
 	}
@@ -406,28 +409,28 @@ OptionCategoryView::OptionCategoryView(ViewAttachParams attach, EmuAudio &audio,
 	{
 		subConfig[std::size(subConfig)-1] =
 		{
-			"Beta Testing Opt-in/out",
+			"Beta Testing Opt-in/out", &defaultFace(),
 			[this]()
 			{
-				Base::openURL(string_makePrintf<96>("https://play.google.com/apps/testing/%s", appID()).data());
+				appContext().openURL(string_makePrintf<96>("https://play.google.com/apps/testing/%s", appContext().applicationId).data());
 			}
 		};
 	}
 }
 
-std::unique_ptr<View> makeEmuView(ViewAttachParams attach, EmuApp::ViewID id)
+std::unique_ptr<View> EmuApp::makeView(ViewAttachParams attach, ViewID id)
 {
-	auto view = EmuApp::makeCustomView(attach, id);
+	auto view = makeCustomView(attach, id);
 	if(view)
 		return view;
 	switch(id)
 	{
-		case EmuApp::ViewID::MAIN_MENU: return std::make_unique<EmuMainMenuView>(attach);
-		case EmuApp::ViewID::SYSTEM_ACTIONS: return std::make_unique<EmuSystemActionsView>(attach);
-		case EmuApp::ViewID::VIDEO_OPTIONS: return std::make_unique<VideoOptionView>(attach);
-		case EmuApp::ViewID::AUDIO_OPTIONS: return std::make_unique<AudioOptionView>(attach);
-		case EmuApp::ViewID::SYSTEM_OPTIONS: return std::make_unique<SystemOptionView>(attach);
-		case EmuApp::ViewID::GUI_OPTIONS: return std::make_unique<GUIOptionView>(attach);
+		case ViewID::MAIN_MENU: return std::make_unique<EmuMainMenuView>(attach);
+		case ViewID::SYSTEM_ACTIONS: return std::make_unique<EmuSystemActionsView>(attach);
+		case ViewID::VIDEO_OPTIONS: return std::make_unique<VideoOptionView>(attach);
+		case ViewID::AUDIO_OPTIONS: return std::make_unique<AudioOptionView>(attach);
+		case ViewID::SYSTEM_OPTIONS: return std::make_unique<SystemOptionView>(attach);
+		case ViewID::GUI_OPTIONS: return std::make_unique<GUIOptionView>(attach);
 		default:
 			bug_unreachable("Tried to make non-existing view ID:%d", (int)id);
 			return nullptr;

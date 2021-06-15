@@ -25,14 +25,14 @@ class ConsoleOptionView : public TableView
 {
 	TextMenuItem rtcItem[3]
 	{
-		{"自动", [](){ setRTCEmulation(RTC_EMU_AUTO); }},
-		{"关", [](){ setRTCEmulation(RTC_EMU_OFF); }},
-		{"开", [](){ setRTCEmulation(RTC_EMU_ON); }},
+		{"自动", &defaultFace(), [](){ setRTCEmulation(RTC_EMU_AUTO); }},
+		{"关", &defaultFace(), [](){ setRTCEmulation(RTC_EMU_OFF); }},
+		{"开", &defaultFace(), [](){ setRTCEmulation(RTC_EMU_ON); }},
 	};
 
 	MultiChoiceMenuItem rtc
 	{
-		"RTC模拟",
+		"RTC模拟", &defaultFace(),
 		[this](int idx, Gfx::Text &t)
 		{
 			if(idx == 0)
@@ -46,7 +46,7 @@ class ConsoleOptionView : public TableView
 		rtcItem
 	};
 
-	static void setRTCEmulation(uint val)
+	static void setRTCEmulation(unsigned val)
 	{
 		EmuSystem::sessionOptionSet();
 		optionRtcEmulation = val;
@@ -73,7 +73,7 @@ class CustomSystemActionsView : public EmuSystemActionsView
 {
 	TextMenuItem options
 	{
-		"控制台设置",
+		"控制台设置", &defaultFace(),
 		[this](TextMenuItem &, View &, Input::Event e)
 		{
 			if(EmuSystem::gameIsRunning())

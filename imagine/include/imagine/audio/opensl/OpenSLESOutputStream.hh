@@ -24,10 +24,12 @@
 namespace IG::Audio
 {
 
+class Manager;
+
 class OpenSLESOutputStream : public OutputStream
 {
 public:
-	OpenSLESOutputStream();
+	OpenSLESOutputStream(const Manager &);
 	~OpenSLESOutputStream();
 	IG::ErrorCode open(OutputStreamConfig config) final;
 	void play() final;
@@ -48,8 +50,10 @@ private:
 	std::unique_ptr<uint8_t[]> buffer{};
 	uint32_t bufferFrames = 0;
 	uint32_t bufferBytes = 0;
-	bool isPlaying_ = false;
-	bool bufferQueued = false;
+	bool isPlaying_{};
+	bool bufferQueued{};
+	bool supportsFloatFormat{};
+	uint8_t outputBuffers{};
 
 	void doBufferCallback(SLAndroidSimpleBufferQueueItf queue);
 };

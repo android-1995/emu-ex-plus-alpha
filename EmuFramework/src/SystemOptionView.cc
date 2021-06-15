@@ -17,10 +17,8 @@
 #include <emuframework/EmuApp.hh>
 #include <emuframework/FilePicker.hh>
 #include "EmuOptions.hh"
-#include <imagine/base/Base.hh>
-#include <imagine/base/platformExtras.hh>
+#include <imagine/base/ApplicationContext.hh>
 #include <imagine/gui/TextTableView.hh>
-#include "private.hh"
 
 static FS::PathString savePathStrToDescStr(char *savePathStr)
 {
@@ -51,7 +49,7 @@ BiosSelectMenu::BiosSelectMenu(NameString name, ViewAttachParams attach, FS::Pat
 		{
 			return 2;
 		},
-		[this](const TableView &, uint idx) -> MenuItem&
+		[this](const TableView &, unsigned idx) -> MenuItem&
 		{
 			switch(idx)
 			{
@@ -62,10 +60,10 @@ BiosSelectMenu::BiosSelectMenu(NameString name, ViewAttachParams attach, FS::Pat
 	},
 	selectFile
 	{
-		"Select File",
+		"Select File", &defaultFace(),
 		[this](Input::Event e)
 		{
-			auto startPath = strlen(biosPathStr->data()) ? FS::dirname(*biosPathStr) : lastLoadPath;
+			auto startPath = strlen(biosPathStr->data()) ? FS::dirname(*biosPathStr) : app().mediaSearchPath();
 			auto fPicker = makeView<EmuFilePicker>(startPath.data(), false, fsFilter, FS::RootPathInfo{}, e);
 			fPicker->setOnSelectFile(
 				[this](FSPicker &picker, const char* name, Input::Event e)
@@ -80,7 +78,7 @@ BiosSelectMenu::BiosSelectMenu(NameString name, ViewAttachParams attach, FS::Pat
 	},
 	unset
 	{
-		"Unset",
+		"Unset", &defaultFace(),
 		[this]()
 		{
 			strcpy(biosPathStr->data(), "");
@@ -96,7 +94,7 @@ BiosSelectMenu::BiosSelectMenu(NameString name, ViewAttachParams attach, FS::Pat
 	assert(biosPathStr);
 }
 
-static void setAutoSaveState(uint val)
+static void setAutoSaveState(unsigned val)
 {
 	optionAutoSaveState = val;
 	logMsg("set auto-savestate %d", optionAutoSaveState.val);
@@ -111,14 +109,14 @@ SystemOptionView::SystemOptionView(ViewAttachParams attach, bool customMenu):
 	TableView{"系统设置", attach, item},
 	autoSaveStateItem
 	{
-		{"关", [this]() { setAutoSaveState(0); }},
-		{"退出时", [this]() { setAutoSaveState(1); }},
-		{"15分钟", [this]() { setAutoSaveState(15); }},
-		{"30分钟", [this]() { setAutoSaveState(30); }}
+		{"关", &defaultFace(), [this]() { setAutoSaveState(0); }},
+		{"退出时", &defaultFace(), [this]() { setAutoSaveState(1); }},
+		{"15分钟", &defaultFace(), [this]() { setAutoSaveState(15); }},
+		{"30分钟", &defaultFace(), [this]() { setAutoSaveState(30); }}
 	},
 	autoSaveState
 	{
-		"自动存档",
+		"自动存档", &defaultFace(),
 		[]()
 		{
 			switch(optionAutoSaveState.val)
@@ -133,7 +131,7 @@ SystemOptionView::SystemOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	confirmAutoLoadState
 	{
-		"Confirm Auto-load State",
+		"Confirm Auto-load State", &defaultFace(),
 		(bool)optionConfirmAutoLoadState,
 		[this](BoolMenuItem &item, Input::Event e)
 		{
@@ -142,7 +140,7 @@ SystemOptionView::SystemOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	confirmOverwriteState
 	{
-		"Confirm Overwrite State",
+		"Confirm Overwrite State", &defaultFace(),
 		(bool)optionConfirmOverwriteState,
 		[this](BoolMenuItem &item, Input::Event e)
 		{
@@ -151,15 +149,15 @@ SystemOptionView::SystemOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	savePath
 	{
-		nullptr,
+		nullptr, &defaultFace(),
 		[this](TextMenuItem &, View &view, Input::Event e)
 		{
 			auto multiChoiceView = makeViewWithName<TextTableView>("Save Path", 3);
 			multiChoiceView->appendItem("Set Custom Path",
 				[this](Input::Event e)
 				{
-					auto startPath = strlen(optionSavePath) ? optionSavePath : optionLastLoadPath;
-					auto fPicker = makeView<EmuFilePicker>(startPath, true,
+					auto startPath = strlen(EmuSystem::savePath_.data()) ? EmuSystem::savePath_ : app().mediaSearchPath();
+					auto fPicker = makeView<EmuFilePicker>(startPath.data(), true,
 						EmuSystem::NameFilterFunc{}, FS::RootPathInfo{}, e);
 					fPicker->setOnClose(
 						[this](FSPicker &picker, Input::Event e)
@@ -192,7 +190,7 @@ SystemOptionView::SystemOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	checkSavePathWriteAccess
 	{
-		"Check Save Path Write Access",
+		"Check Save Path Write Access", &defaultFace(),
 		(bool)optionCheckSavePathWriteAccess,
 		[this](BoolMenuItem &item, Input::Event e)
 		{
@@ -201,16 +199,16 @@ SystemOptionView::SystemOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	fastForwardSpeedItem
 	{
-		{"2x", [this]() { optionFastForwardSpeed = 2; }},
-		{"3x", [this]() { optionFastForwardSpeed = 3; }},
-		{"4x", [this]() { optionFastForwardSpeed = 4; }},
-		{"5x", [this]() { optionFastForwardSpeed = 5; }},
-		{"6x", [this]() { optionFastForwardSpeed = 6; }},
-		{"7x", [this]() { optionFastForwardSpeed = 7; }},
+		{"2x", &defaultFace(), [this]() { optionFastForwardSpeed = 2; }},
+		{"3x", &defaultFace(), [this]() { optionFastForwardSpeed = 3; }},
+		{"4x", &defaultFace(), [this]() { optionFastForwardSpeed = 4; }},
+		{"5x", &defaultFace(), [this]() { optionFastForwardSpeed = 5; }},
+		{"6x", &defaultFace(), [this]() { optionFastForwardSpeed = 6; }},
+		{"7x", &defaultFace(), [this]() { optionFastForwardSpeed = 7; }},
 	},
 	fastForwardSpeed
 	{
-		"Fast Forward Speed",
+		"Fast Forward Speed", &defaultFace(),
 		[]() -> int
 		{
 			if(optionFastForwardSpeed >= MIN_FAST_FORWARD_SPEED && optionFastForwardSpeed <= 7)
@@ -224,7 +222,7 @@ SystemOptionView::SystemOptionView(ViewAttachParams attach, bool customMenu):
 	#if defined __ANDROID__
 	,performanceMode
 	{
-		"性能模式",
+		"性能模式", &defaultFace(),
 		(bool)optionSustainedPerformanceMode,
 		"正常", "持续",
 		[this](BoolMenuItem &item, Input::Event e)
@@ -261,11 +259,11 @@ void SystemOptionView::onSavePathChange(const char *path)
 {
 	if(string_equal(path, optionSavePathDefaultToken))
 	{
-		auto defaultPath = EmuSystem::baseDefaultGameSavePath();
-		EmuApp::printfMessage(4, false, "Default Save Path:\n%s", defaultPath.data());
+		auto defaultPath = EmuSystem::baseDefaultGameSavePath(appContext());
+		app().printfMessage(4, false, "Default Save Path:\n%s", defaultPath.data());
 	}
 	savePath.compile(makePathMenuEntryStr(optionSavePath).data(), renderer(), projP);
-	EmuSystem::setupGameSavePath();
+	EmuSystem::setupGameSavePath(appContext());
 	EmuSystem::savePathChanged();
 }
 
@@ -278,46 +276,46 @@ std::unique_ptr<TextTableView> SystemOptionView::makeFirmwarePathMenu(const char
 	multiChoiceView->appendItem("Set Custom Path",
 		[this](Input::Event e)
 		{
-			auto startPath =  EmuApp::firmwareSearchPath();
+			auto startPath =  app().firmwareSearchPath();
 			auto fPicker = makeView<EmuFilePicker>(startPath.data(), true,
 				EmuSystem::NameFilterFunc{}, FS::RootPathInfo{}, e);
 			fPicker->setOnClose(
 				[this](FSPicker &picker, Input::Event e)
 				{
 					auto path = picker.path();
-					EmuApp::setFirmwareSearchPath(path.data());
+					app().setFirmwareSearchPath(path.data());
 					logMsg("set firmware path:%s", path.data());
 					onFirmwarePathChange(path.data(), e);
 					dismissPrevious();
 					picker.dismiss();
 				});
-			EmuApp::pushAndShowModalView(std::move(fPicker), e);
+			app().pushAndShowModalView(std::move(fPicker), e);
 		});
 	if(allowFiles)
 	{
 		multiChoiceView->appendItem("Set Custom Archive File",
 			[this](Input::Event e)
 			{
-				auto startPath =  EmuApp::firmwareSearchPath();
+				auto startPath =  app().firmwareSearchPath();
 				auto fPicker = makeView<EmuFilePicker>(startPath.data(), false,
 					EmuSystem::NameFilterFunc{}, FS::RootPathInfo{}, e);
 				fPicker->setOnSelectFile(
 					[this](FSPicker &picker, const char *name, Input::Event e)
 					{
 						auto path = picker.makePathString(name);
-						EmuApp::setFirmwareSearchPath(path.data());
+						app().setFirmwareSearchPath(path.data());
 						logMsg("set firmware archive file:%s", path.data());
 						onFirmwarePathChange(path.data(), e);
 						dismissPrevious();
 						picker.dismiss();
 					});
-				EmuApp::pushAndShowModalView(std::move(fPicker), e);
+				app().pushAndShowModalView(std::move(fPicker), e);
 			});
 	}
 	multiChoiceView->appendItem("Default",
 		[this](View &view, Input::Event e)
 		{
-			EmuApp::setFirmwareSearchPath("");
+			app().setFirmwareSearchPath("");
 			onFirmwarePathChange("", e);
 			view.dismiss();
 		});

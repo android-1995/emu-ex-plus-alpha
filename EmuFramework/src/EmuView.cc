@@ -15,6 +15,7 @@
 
 #include <emuframework/EmuView.hh>
 #include <emuframework/EmuVideoLayer.hh>
+#include <imagine/input/Input.hh>
 #include <algorithm>
 
 EmuView::EmuView() {}
@@ -79,7 +80,7 @@ void EmuView::setLayoutInputView(EmuInputView *view)
 	inputView = view;
 }
 
-void EmuView::updateAudioStats(uint underruns, uint overruns, uint callbacks, double avgCallbackFrames, uint frames)
+void EmuView::updateAudioStats(unsigned underruns, unsigned overruns, unsigned callbacks, double avgCallbackFrames, unsigned frames)
 {
 	#ifdef CONFIG_EMUFRAMEWORK_AUDIO_STATS
 	audioStatsText.setString(string_makePrintf<512>("Underruns:%u\nOverruns:%u\nCallbacks per second:%u\nFrames per callback:%.2f\nTotal frames:%u",

@@ -15,7 +15,8 @@
 
 #define LOGTAG "Audio"
 #include <imagine/audio/defs.hh>
-#include <imagine/audio/AudioManager.hh>
+#include <imagine/audio/Manager.hh>
+#include <imagine/base/ApplicationContext.hh>
 
 #if defined __ANDROID__
 #include <imagine/audio/opensl/OpenSLESOutputStream.hh>
@@ -34,7 +35,7 @@
 namespace IG::Audio
 {
 
-std::unique_ptr<OutputStream> makeOutputStream(Api api)
+std::unique_ptr<OutputStream> Manager::makeOutputStream(Api api) const
 {
 	api = makeValidAPI(api);
 	switch(api)
@@ -46,8 +47,8 @@ std::unique_ptr<OutputStream> makeOutputStream(Api api)
 		case Api::ALSA: return std::make_unique<ALSAOutputStream>();
 		#endif
 		#ifdef __ANDROID__
-		case Api::OPENSL_ES: return std::make_unique<OpenSLESOutputStream>();
-		case Api::AAUDIO: return std::make_unique<AAudioOutputStream>();
+		case Api::OPENSL_ES: return std::make_unique<OpenSLESOutputStream>(*this);
+		case Api::AAUDIO: return std::make_unique<AAudioOutputStream>(*this);
 		#endif
 		#ifdef __APPLE__
 		case Api::COREAUDIO: return std::make_unique<CAOutputStream>();
@@ -58,12 +59,9 @@ std::unique_ptr<OutputStream> makeOutputStream(Api api)
 	}
 }
 
-Format OutputStreamConfig::format() const
+OutputStreamConfig Manager::makeNativeOutputStreamConfig() const
 {
-	if(format_)
-		return format_;
-	else
-		return AudioManager::nativeFormat();
+	return {nativeFormat()};
 }
 
 OutputStream::~OutputStream() {}

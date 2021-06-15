@@ -17,7 +17,6 @@
 
 #include <imagine/config/defs.hh>
 #include <imagine/gfx/defs.hh>
-#include <imagine/gfx/Viewport.hh>
 #include <imagine/gfx/PixmapTexture.hh>
 #include <imagine/gfx/PixmapBufferTexture.hh>
 #include <imagine/pixmap/PixelFormat.hh>
@@ -50,35 +49,41 @@ struct TextureBufferModeDesc
 
 	constexpr TextureBufferModeDesc() {}
 	constexpr TextureBufferModeDesc(const char *name, TextureBufferMode mode):name{name}, mode{mode} {}
+	constexpr bool operator ==(TextureBufferMode mode_) const { return mode == mode_; }
+
 };
 
-class RendererConfig
+struct DrawableConfig
 {
-public:
-	constexpr RendererConfig() {}
-	constexpr RendererConfig(IG::PixelFormat pixelFormat):pixelFormat_{pixelFormat} {}
-	constexpr IG::PixelFormat pixelFormat() const { return pixelFormat_; };
+	IG::PixelFormat pixelFormat;
+	ColorSpace colorSpace;
+	constexpr bool operator ==(const DrawableConfig&) const = default;
+};
 
-protected:
-	IG::PixelFormat pixelFormat_{};
+struct DrawableConfigDesc
+{
+	const char *name;
+	DrawableConfig config;
+
+	constexpr bool operator ==(const DrawableConfig &c) const { return config == c; }
 };
 
 class Renderer : public RendererImpl
 {
 public:
 	using RendererImpl::RendererImpl;
-	Renderer(Base::Window *initialWindow, Error &err);
-	Renderer(RendererConfig config, Base::Window *initialWindow, Error &err);
-	Renderer(const Renderer &o) = delete;
-	Renderer &operator=(const Renderer &o) = delete;
-	Renderer(Renderer &&o) = delete;
-	Renderer &operator=(Renderer &&o) = delete;
+	Renderer(Base::ApplicationContext, Error &errOut);
+	~Renderer();
 	void configureRenderer();
 	bool isConfigured() const;
 	const RendererTask &task() const;
 	RendererTask &task();
-	bool attachWindow(Base::Window &);
+	Base::ApplicationContext appContext() const;
+	Error initMainTask(Base::Window *initialWindow, DrawableConfig c = {});
+	bool attachWindow(Base::Window &, DrawableConfig c = {});
 	void detachWindow(Base::Window &);
+	bool setDrawableConfig(Base::Window &, DrawableConfig);
+	bool canRenderToMultiplePixelFormats() const;
 	Base::NativeWindowFormat nativeWindowFormat() const;
 	void setWindowValidOrientations(Base::Window &win, Base::Orientation validO);
 	void animateProjectionMatrixRotation(Base::Window &win, Angle srcAngle, Angle destAngle);
@@ -86,6 +91,9 @@ public:
 	bool supportsSyncFences() const;
 	void setPresentationTime(Base::Window &, IG::FrameTime time) const;
 	unsigned maxSwapChainImages() const;
+	void setCorrectnessChecks(bool on);
+	std::vector<DrawableConfigDesc> supportedDrawableConfigs() const;
+	bool hasBgraFormat(TextureBufferMode) const;
 
 	// shaders
 
@@ -111,10 +119,15 @@ public:
 	std::vector<TextureBufferModeDesc> textureBufferModes();
 	TextureBufferMode makeValidTextureBufferMode(TextureBufferMode mode = {});
 	TextureSampler makeTextureSampler(TextureSamplerConfig config);
-	TextureSampler &makeCommonTextureSampler(CommonTextureSampler sampler);
-	TextureSampler &make(CommonTextureSampler sampler) { return makeCommonTextureSampler(sampler); }
+	const TextureSampler &makeCommonTextureSampler(CommonTextureSampler sampler);
+	const TextureSampler &make(CommonTextureSampler sampler) { return makeCommonTextureSampler(sampler); }
+	const TextureSampler &commonTextureSampler(CommonTextureSampler sampler) const;
+	const TextureSampler &get(CommonTextureSampler sampler) const { return commonTextureSampler(sampler); }
 
-	void setCorrectnessChecks(bool on);
+	// color space control
+
+	bool supportsColorSpace() const;
+	bool hasSrgbColorSpaceWriteControl() const;
 };
 
 }

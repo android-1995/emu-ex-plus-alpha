@@ -5,7 +5,8 @@ include $(IMAGINE_PATH)/make/imagineAppBase.mk
 
 viceSrcPath := $(projectPath)/src/vice
 
-CFLAGS_LANG += -Werror-implicit-function-declaration
+CFLAGS_LANG += -Werror=implicit-function-declaration
+CFLAGS_WARN += -Wno-implicit-fallthrough -Wno-sign-compare
 
 ifeq ($(ENV),android)
  LDLIBS += -ldl
@@ -883,6 +884,9 @@ ifeq ($(ENV),android)
  # must link to the app's main shared object so Android resolves runtime symbols correctly
  pluginLDFlags += -llog $(targetDir)/$(targetFile)
 endif
+
+# needed to prevent miscompile when building with -Ofast
+%/resid/dac.o : CFLAGS_OPTIMIZE += -fno-finite-math-only
 
 c64_obj := $(addprefix $(objDir)/,$(c64_src:.c=.o))
 c64_obj := $(c64_obj:.cc=.o)

@@ -23,9 +23,7 @@
 #include <imagine/gfx/TextureSampler.hh>
 #include <imagine/gfx/Program.hh>
 #include <imagine/gfx/RendererTask.hh>
-#include <imagine/util/Interpolator.hh>
 #include <imagine/util/typeTraits.hh>
-#include "GLSLProgram.hh"
 #include <memory>
 #ifdef CONFIG_BASE_GL_PLATFORM_EGL
 #include <EGL/egl.h>
@@ -35,6 +33,11 @@
 namespace IG
 {
 class Semaphore;
+}
+
+namespace Base
+{
+class ApplicationContext;
 }
 
 namespace Gfx
@@ -126,23 +129,23 @@ public:
 	GLenum luminanceAlphaInternalFormat = GL_LUMINANCE8_ALPHA8;
 	GLenum alphaFormat = GL_ALPHA;
 	GLenum alphaInternalFormat = GL_ALPHA8;
-	GLenum bgrInternalFormat = GL_BGRA;
 	TextureSizeSupport textureSizeSupport{};
 	//bool hasMemoryBarrier = false;
-	bool hasBGRPixels = false;
-	bool hasVBOFuncs = false;
-	bool hasTextureSwizzle = false;
+	IG_enableMemberIfOrConstant((bool)Config::Gfx::OPENGL_ES, bool, true, hasBGRPixels){};
+	bool hasVBOFuncs{};
+	bool hasTextureSwizzle{};
 	bool hasUnpackRowLength = !Config::Gfx::OPENGL_ES;
 	bool hasSamplerObjects = !Config::Gfx::OPENGL_ES;
-	bool hasImmutableTexStorage = false;
-	bool hasPBOFuncs = false;
+	bool hasImmutableTexStorage{};
+	bool hasPBOFuncs{};
 	bool useLegacyGLSL = Config::Gfx::OPENGL_ES;
 	IG_enableMemberIf(Config::Gfx::OPENGL_DEBUG_CONTEXT, bool, hasDebugOutput){};
 	IG_enableMemberIf(!Config::Gfx::OPENGL_ES, bool, hasBufferStorage){};
 	IG_enableMemberIf(Config::envIsAndroid, bool, hasEGLImages){};
 	IG_enableMemberIf(Config::Gfx::OPENGL_TEXTURE_TARGET_EXTERNAL, bool, hasExternalEGLImages){};
 	IG_enableMemberIf(Config::Gfx::OPENGL_FIXED_FUNCTION_PIPELINE, bool, useFixedFunctionPipeline){true};
-	bool isConfigured = false;
+	bool hasSrgbWriteControl{};
+	bool isConfigured{};
 
 	bool hasDrawReadBuffers() const;
 	bool hasSyncFences() const;
@@ -186,25 +189,23 @@ class GLRenderer
 {
 public:
 	DrawContextSupport support{};
+	[[no_unique_address]] Base::GLManager glManager;
 	RendererTask mainTask;
-	Base::GLDisplay glDpy{};
-	Base::GLBufferConfig gfxBufferConfig{};
 	GLCommonPrograms commonProgram{};
 	GLCommonSamplers commonSampler{};
 	Base::CustomEvent releaseShaderCompilerEvent{Base::CustomEvent::NullInit{}};
 	IG_enableMemberIf(Config::Gfx::OPENGL_SHADER_PIPELINE, GLuint, defaultVShader){};
 
-	GLRenderer();
-	~GLRenderer();
-	void setGLProjectionMatrix(RendererCommands &cmds, Mat4 mat);
-	TextureSampler &commonTextureSampler(CommonTextureSampler sampler);
-	void useCommonProgram(RendererCommands &cmds, CommonProgram program, const Mat4 *modelMat);
+	GLRenderer(Base::ApplicationContext, Error &err);
+	void setGLProjectionMatrix(RendererCommands &cmds, Mat4 mat) const;
+	void useCommonProgram(RendererCommands &cmds, CommonProgram program, const Mat4 *modelMat) const;
+	Base::GLDisplay glDisplay() const;
+	bool makeWindowDrawable(RendererTask &task, Base::Window &, Base::GLBufferConfig, Base::GLColorSpace);
 
 protected:
-	void addEventHandlers(RendererTask &task);
-	std::optional<Base::GLBufferConfig> makeGLBufferConfig(IG::PixelFormat pixelFormat);
-	void finishContextCreation(Base::GLContext ctx);
-	void setCurrentDrawable(Base::GLDisplay dpy, Base::GLContext ctx, Drawable win);
+	void addEventHandlers(Base::ApplicationContext, RendererTask &);
+	std::optional<Base::GLBufferConfig> makeGLBufferConfig(Base::ApplicationContext, IG::PixelFormat, const Base::Window * = {});
+	void setCurrentDrawable(Base::GLDisplay, Base::GLContext, Drawable);
 	void setupNonPow2Textures();
 	void setupNonPow2MipmapTextures();
 	void setupNonPow2MipmapRepeatTextures();
@@ -226,7 +227,8 @@ protected:
 	void checkExtensionString(const char *extStr, bool &useFBOFuncs);
 	void checkFullExtensionString(const char *fullExtStr);
 	const Program &commonProgramRef(CommonProgram program) const;
-	void deinit();
+	bool attachWindow(Base::Window &, Base::GLBufferConfig, Base::GLColorSpace);
+	Base::NativeWindowFormat nativeWindowFormat(Base::GLBufferConfig) const;
 };
 
 using RendererImpl = GLRenderer;

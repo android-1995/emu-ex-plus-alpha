@@ -16,8 +16,8 @@
 #define LOGTAG "EmuAudio"
 #include <emuframework/EmuAudio.hh>
 #include <emuframework/EmuSystem.hh>
-#include "private.hh"
-#include <imagine/audio/AudioManager.hh>
+#include <imagine/audio/Manager.hh>
+#include <imagine/util/algorithm.h>
 #include <imagine/logger/logger.h>
 
 struct AudioStats
@@ -95,7 +95,7 @@ static void simpleResample(T * __restrict__ dest, unsigned destFrames, const T *
 	iterateTimes(destFrames, i)
 	{
 		unsigned srcPos = round(i * ratio);
-		if(unlikely(srcPos > srcFrames))
+		if(srcPos > srcFrames) [[unlikely]]
 		{
 			logMsg("resample pos %u too high", srcPos);
 			srcPos = srcFrames-1;
@@ -141,7 +141,7 @@ void EmuAudio::resizeAudioBuffer(uint32_t targetBufferFillBytes)
 void EmuAudio::open(IG::Audio::Api api)
 {
 	close();
-	audioStream = IG::Audio::makeOutputStream(api);
+	audioStream = audioManager().makeOutputStream(api);
 }
 
 void EmuAudio::start(IG::Microseconds targetBufferFillUSecs, IG::Microseconds bufferIncrementUSecs)
@@ -159,7 +159,7 @@ void EmuAudio::start(IG::Microseconds targetBufferFillUSecs, IG::Microseconds bu
 	{
 		resizeAudioBuffer(targetBufferFillBytes);
 		audioWriteState = AudioWriteState::BUFFER;
-		IG::Audio::Format outputFormat{inputFormat.rate, IG::AudioManager::nativeSampleFormat(), inputFormat.channels};
+		IG::Audio::Format outputFormat{inputFormat.rate, audioManager().nativeSampleFormat(), inputFormat.channels};
 		IG::Audio::OutputStreamConfig outputConf
 		{
 			outputFormat,
@@ -177,7 +177,7 @@ void EmuAudio::start(IG::Microseconds targetBufferFillUSecs, IG::Microseconds bu
 					auto const framesToRead = std::min(frames, framesReady);
 					auto frameEndAddr = (char*)outputFormat.copyFrames(samples, rBuff.readAddr(), framesToRead, inputFormat, volume);
 					rBuff.commitRead(inputFormat.framesToBytes(framesToRead));
-					if(unlikely(framesToRead < frames))
+					if(framesToRead < frames) [[unlikely]]
 					{
 						auto padFrames = frames - framesToRead;
 						std::fill_n(frameEndAddr, outputFormat.framesToBytes(padFrames), 0);
@@ -245,7 +245,7 @@ void EmuAudio::close()
 
 void EmuAudio::flush()
 {
-	if(unlikely(!audioStream))
+	if(!audioStream) [[unlikely]]
 		return;
 	stopAudioStats();
 	audioWriteState = AudioWriteState::BUFFER;
@@ -276,7 +276,7 @@ void EmuAudio::writeFrames(const void *samples, uint32_t framesToWrite)
 		break;
 	}
 	const uint32_t sampleFrames = framesToWrite;
-	if(unlikely(speedMultiplier > 1))
+	if(speedMultiplier > 1) [[unlikely]]
 	{
 		framesToWrite = std::ceil((double)framesToWrite / speedMultiplier);
 		framesToWrite = std::max(framesToWrite, 1u);
@@ -320,7 +320,10 @@ void EmuAudio::setRate(uint32_t newRate)
 {
 	if(rate == newRate)
 		return;
-	logMsg("rate changed:%u -> %u", rate, newRate);
+	if(rate)
+		logMsg("set rate:%u -> %u", rate, newRate);
+	else
+		logMsg("set rate:%u", newRate);
 	rate = newRate;
 	stop();
 }
@@ -359,10 +362,16 @@ void EmuAudio::setVolume(uint8_t vol)
 
 IG::Audio::Format EmuAudio::format() const
 {
+	assumeExpr(rate);
 	return {rate, EmuSystem::audioSampleFormat, channels};
 }
 
 EmuAudio::operator bool() const
 {
 	return (bool)rBuff;
+}
+
+const IG::Audio::Manager &EmuAudio::audioManager() const
+{
+	return *audioManagerPtr;
 }

@@ -17,10 +17,9 @@
 
 #include <imagine/config/defs.hh>
 #include <imagine/gfx/defs.hh>
-#include <imagine/gfx/ProjectionPlane.hh>
-#include <float.h>
 #include <imagine/util/2DOrigin.h>
 #include <vector>
+#include <limits>
 
 namespace Gfx
 {
@@ -28,14 +27,14 @@ namespace Gfx
 class Renderer;
 class RendererCommands;
 class GlyphTextureSet;
-class ProjectionPlane;
 class TexVertex;
+class ProjectionPlane;
 
 class Text
 {
 public:
-	static constexpr uint16_t NO_MAX_LINES = 0-1;
-	static constexpr GC NO_MAX_LINE_SIZE = FLT_MAX;
+	static constexpr uint16_t NO_MAX_LINES = std::numeric_limits<uint16_t>::max();
+	static constexpr GC NO_MAX_LINE_SIZE = std::numeric_limits<GC>::max();
 
 	Text();
 	Text(GlyphTextureSet *face);
@@ -48,10 +47,7 @@ public:
 	void makeGlyphs(Renderer &r);
 	bool compile(Renderer &r, ProjectionPlane projP);
 	void draw(RendererCommands &cmds, GC xPos, GC yPos, _2DOrigin o, ProjectionPlane projP) const;
-	void draw(RendererCommands &cmds, GP p, _2DOrigin o, ProjectionPlane projP) const
-	{
-		draw(cmds, p.x, p.y, o, projP);
-	}
+	void draw(RendererCommands &cmds, GP p, _2DOrigin o, ProjectionPlane projP) const;
 	void setMaxLineSize(GC size);
 	void setMaxLines(uint16_t lines);
 	GC width() const;
@@ -88,6 +84,7 @@ protected:
 	uint16_t maxLines = NO_MAX_LINES;
 
 	void drawSpan(RendererCommands &cmds, GC xPos, GC yPos, ProjectionPlane projP, TextStringView strView, std::array<TexVertex, 4> &vArr) const;
+	bool hasText() const;
 };
 
 }

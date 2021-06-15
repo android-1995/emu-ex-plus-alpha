@@ -15,55 +15,59 @@
 
 #define LOGTAG "Base"
 #include <imagine/logger/logger.h>
-#include <imagine/base/Base.hh>
+#include <imagine/base/ApplicationContext.hh>
+#include <imagine/base/Application.hh>
+#include <imagine/base/EventLoop.hh>
 #include <imagine/fs/FS.hh>
 #include <imagine/util/ScopeGuard.hh>
 #include <imagine/util/string.h>
-#include "dbus.hh"
-#include "../common/basePrivate.hh"
-#include "../x11/x11.hh"
-#ifdef CONFIG_INPUT_EVDEV
-#include "../../input/evdev/evdev.hh"
-#endif
 #include <sys/stat.h>
 #include <cstring>
 
 namespace Base
 {
 
-static FS::PathString appPath{};
-
 constexpr mode_t defaultDirMode = S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH;
 
-static void cleanup()
+LinuxApplication::LinuxApplication(ApplicationInitParams initParams):
+	BaseApplication{*initParams.ctxPtr}
+{
+	setAppPath(FS::makeAppPathFromLaunchCommand(initParams.argv[0]));
+	#ifdef CONFIG_BASE_DBUS
+	initDBus();
+	#endif
+	#ifdef CONFIG_INPUT_EVDEV
+	initEvdev(initParams.eventLoop);
+	#endif
+}
+
+LinuxApplication::~LinuxApplication()
 {
 	#ifdef CONFIG_BASE_DBUS
 	deinitDBus();
 	#endif
 }
 
-void exit(int returnVal)
+void ApplicationContext::exit(int returnVal)
 {
-	setExitingActivityState();
+	application().setExitingActivityState();
 	dispatchOnExit(false);
-	cleanup();
+	delete static_cast<BaseApplication*>(appPtr);
 	::exit(returnVal);
 }
 
-void abort() { ::abort(); }
-
-void openURL(const char *url)
+void ApplicationContext::openURL(const char *url) const
 {
 	logMsg("opening url:%s", url);
 	auto ret = system(FS::makePathStringPrintf("xdg-open %s", url).data());
 }
 
-FS::PathString assetPath(const char *)
+FS::PathString ApplicationContext::assetPath(const char *) const
 {
-	return appPath;
+	return application().appPath();
 }
 
-FS::PathString supportPath(const char *appName)
+FS::PathString ApplicationContext::supportPath(const char *appName) const
 {
 	if(auto home = getenv("XDG_DATA_HOME");
 		home)
@@ -83,7 +87,7 @@ FS::PathString supportPath(const char *appName)
 	return {};
 }
 
-FS::PathString cachePath(const char *appName)
+FS::PathString ApplicationContext::cachePath(const char *appName) const
 {
 	if(auto home = getenv("XDG_CACHE_HOME");
 		home)
@@ -103,7 +107,7 @@ FS::PathString cachePath(const char *appName)
 	return {};
 }
 
-FS::PathString sharedStoragePath()
+FS::PathString ApplicationContext::sharedStoragePath() const
 {
 	if(Config::MACHINE_IS_PANDORA)
 	{
@@ -127,14 +131,14 @@ FS::PathString sharedStoragePath()
 	return {};
 }
 
-FS::PathLocation sharedStoragePathLocation()
+FS::PathLocation ApplicationContext::sharedStoragePathLocation() const
 {
 	auto path = sharedStoragePath();
 	auto name = Config::MACHINE_IS_PANDORA ? FS::makeFileString("Media") : FS::makeFileString("Home");
 	return {path, name, {name, strlen(path.data())}};
 }
 
-std::vector<FS::PathLocation> rootFileLocations()
+std::vector<FS::PathLocation> ApplicationContext::rootFileLocations() const
 {
 	std::vector<FS::PathLocation> path;
 	path.reserve(1);
@@ -146,84 +150,41 @@ std::vector<FS::PathLocation> rootFileLocations()
 	return path;
 }
 
-FS::PathString libPath(const char *)
+FS::PathString ApplicationContext::libPath(const char *) const
 {
-	return appPath;
+	return application().appPath();
 }
 
-void setDeviceOrientationChangeSensor(bool on) {}
-
-void setOnDeviceOrientationChanged(DeviceOrientationChangedDelegate del) {}
-
-void setSystemOrientation(Orientation o) {}
-
-Orientation defaultSystemOrientations()
+FS::PathString LinuxApplication::appPath() const
 {
-	return VIEW_ROTATE_ALL;
+	return appPath_;
 }
 
-void setOnSystemOrientationChanged(SystemOrientationChangedDelegate del) {}
-
-bool usesPermission(Permission p)
+void LinuxApplication::setAppPath(FS::PathString path)
 {
-	return false;
+	appPath_ = path;
 }
 
-bool requestPermission(Permission p)
-{
-	return false;
-}
-
-#ifndef CONFIG_BASE_DBUS
-void setIdleDisplayPowerSave(bool on) {}
-
-void endIdleByUserActivity() {}
-
-void registerInstance(const char *appID, int argc, char** argv) {}
-
-void setAcceptIPC(const char *appID, bool on) {}
-#endif
-
-void addNotification(const char *onShow, const char *title, const char *message) {}
-
-void addLauncherIcon(const char *name, const char *path) {}
-
-bool hasVibrator() { return false; }
-
-void vibrate(uint32_t ms) {}
-
-void exitWithErrorMessageVPrintf(int exitVal, const char *format, va_list args)
+void ApplicationContext::exitWithErrorMessageVPrintf(int exitVal, const char *format, va_list args)
 {
 	std::array<char, 512> msg{};
 	auto result = vsnprintf(msg.data(), msg.size(), format, args);
 	auto cmd = string_makePrintf<1024>("zenity --warning --title='Exited with error' --text='%s'", msg.data());
 	auto cmdResult = system(cmd.data());
-	exit(exitVal);
+	::exit(exitVal);
 }
 
 }
 
 int main(int argc, char** argv)
 {
-	using namespace Base;
-	logger_init();
-	engineInit();
-	appPath = FS::makeAppPathFromLaunchCommand(argv[0]);
-	auto eventLoop = EventLoop::makeForThread();
-	#ifdef CONFIG_BASE_X11
-	auto xDpy = initX11(eventLoop);
-	if(!xDpy)
-	{
-		return -1;
-	}
-	FDEventSource x11Src{makeAttachedX11EventSource(xDpy, eventLoop)};
-	#endif
-	#ifdef CONFIG_INPUT_EVDEV
-	Input::initEvdev(eventLoop);
-	#endif
-	onInit(argc, argv);
-	setRunningActivityState();
-	dispatchOnResume(true);
+	logger_setLogDirectoryPrefix(".");
+	auto eventLoop = Base::EventLoop::makeForThread();
+	Base::ApplicationContext ctx{};
+	Base::ApplicationInitParams initParams{eventLoop, &ctx, argc, argv};
+	ctx.onInit(initParams);
+	ctx.application().setRunningActivityState();
+	ctx.dispatchOnResume(true);
 	bool eventLoopRunning = true;
 	eventLoop.run(eventLoopRunning);
 	return 0;

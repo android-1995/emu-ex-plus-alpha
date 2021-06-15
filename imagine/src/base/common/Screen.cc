@@ -14,38 +14,21 @@
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
 #define LOGTAG "Screen"
-#include <imagine/base/Base.hh>
+#include <imagine/base/ApplicationContext.hh>
 #include <imagine/base/Screen.hh>
 #include <imagine/logger/logger.h>
 #include <imagine/time/Time.hh>
 #include <imagine/util/utility.h>
 #include <imagine/util/algorithm.h>
 #include <imagine/util/math/int.hh>
-#include "windowPrivate.hh"
-#include "basePrivate.hh"
 
 namespace Base
 {
 
-#ifdef CONFIG_BASE_MULTI_SCREEN
-std::vector<std::unique_ptr<Screen>> screen_;
-#else
-static std::array<std::unique_ptr<Screen>, 1> screen_;
-#endif
-
-Screen::ChangeDelegate Screen::onChange;
-
-[[gnu::weak]] bool logDroppedFrames = false;
-
-void Screen::setOnChange(ChangeDelegate del)
-{
-	onChange = del;
-}
-
-Screen &mainScreen()
-{
-	return *Screen::screen(0);
-}
+Screen::Screen(ApplicationContext ctx, InitParams params):
+	ScreenImpl{ctx, params},
+	ctx{ctx}
+{}
 
 bool Screen::addOnFrame(OnFrameDelegate del, int priority)
 {
@@ -55,11 +38,6 @@ bool Screen::addOnFrame(OnFrameDelegate del, int priority)
 
 bool Screen::removeOnFrame(OnFrameDelegate del)
 {
-	if(unlikely(appIsExiting()))
-	{
-		// Screen destructor may have run already
-		return false;
-	}
 	bool removed = onFrameDelegate.remove(del);
 	if(!onFrameDelegate.size())
 	{
@@ -68,7 +46,7 @@ bool Screen::removeOnFrame(OnFrameDelegate del)
 	return removed;
 }
 
-bool Screen::containsOnFrame(OnFrameDelegate del)
+bool Screen::containsOnFrame(OnFrameDelegate del) const
 {
 	return onFrameDelegate.contains(del);
 }
@@ -87,30 +65,26 @@ void Screen::runOnFrameDelegates(FrameTime timestamp)
 	}
 }
 
-uint32_t Screen::onFrameDelegates()
+uint32_t Screen::onFrameDelegates() const
 {
 	return onFrameDelegate.size();
 }
 
-bool Screen::runningOnFrameDelegates()
-{
-	return inFrameHandler;
-}
-
-bool Screen::isPosted()
+bool Screen::isPosted() const
 {
 	return framePosted;
 }
 
-void Screen::frameUpdate(FrameTime timestamp)
+bool Screen::frameUpdate(FrameTime timestamp)
 {
 	assert(timestamp.count());
 	assert(isActive);
 	framePosted = false;
-	inFrameHandler = true;
+	if(!onFrameDelegate.size())
+		return false;
 	runOnFrameDelegates(timestamp);
-	inFrameHandler = false;
 	//logMsg("%s", isPosted() ? "drawing next frame" : "stopping at this frame");
+	return true;
 }
 
 void Screen::setActive(bool active)
@@ -130,82 +104,32 @@ void Screen::setActive(bool active)
 	}
 }
 
-uint32_t Screen::screens()
-{
-	return screen_.size();
-}
-
-Screen *Screen::screen(uint32_t idx)
-{
-	if(idx >= screen_.size())
-		return nullptr;
-	return screen_[idx].get();
-}
-
-Screen &Screen::addScreen(std::unique_ptr<Screen> s)
-{
-	#ifdef CONFIG_BASE_MULTI_SCREEN
-	screen_.emplace_back(std::move(s));
-	return *screen_.back();
-	#else
-	assert(!screen_[0]);
-	screen_[0] = std::move(s);
-	return *screen_[0];
-	#endif
-}
-
-void Screen::setActiveAll(bool active)
-{
-	for(auto &screen : screen_)
-	{
-		screen->setActive(active);
-	}
-}
-
-bool Screen::screensArePosted()
-{
-	for(auto &screen : screen_)
-	{
-		if(screen->isPosted())
-			return true;
-	}
-	return false;
-}
-
 FrameParams Screen::makeFrameParams(FrameTime timestamp) const
 {
 	return {timestamp, frameTime()};
 }
 
-void Screen::startDebugFrameStats(FrameTime timestamp)
+void Screen::postFrame()
 {
-#if 0
-	if constexpr(!Config::DEBUG_BUILD)
-		return;
-	FrameTime timeSinceCurrentFrame = IG::steadyClockTimestamp() - timestamp;
-	FrameTime diffFromLastFrame = timestamp - prevFrameTimestamp;
-	/*logMsg("frame at %f, %f since then, %f since last frame",
-		frameTimeBaseToSDec(frameTime),
-		frameTimeBaseToSDec(timeSinceCurrentFrame),
-		frameTimeBaseToSDec(diffFromLastFrame));*/
-	auto elapsed = makeFrameParams(timestamp).elapsedFrames();
-	if(elapsed > 1)
+	if(!isActive) [[unlikely]]
 	{
-		if(logDroppedFrames)
-			logDMsg("Lost %u frame(s) after %u continuous, at time %f (%f since last frame)",
-				elapsed - 1, (unsigned)continuousFrames,
-				IG::FloatSeconds(timestamp).count(),
-				IG::FloatSeconds(diffFromLastFrame).count());
-		continuousFrames = 0;
+		logMsg("skipped posting inactive screen:%p", this);
+		return;
 	}
-#endif
+	if(framePosted)
+		return;
+	//logMsg("posting frame");
+	framePosted = true;
+	postFrameTimer();
 }
 
-void Screen::endDebugFrameStats()
+void Screen::unpostFrame()
 {
-	if constexpr(!Config::DEBUG_BUILD)
+	if(!framePosted)
 		return;
-	continuousFrames = isPosted() ? continuousFrames + 1 : 0;
+	framePosted = false;
+	unpostFrameTimer();
 }
+
 
 }

@@ -24,16 +24,10 @@
 #import <GameKit/GameKit.h>
 #endif
 
-#define IPHONE_VKEYBOARD
-
 @interface MainUIApp : UIApplication {}
 @end
 
 @interface MainApp : NSObject <UIApplicationDelegate
-#ifdef IPHONE_VKEYBOARD
-, UITextFieldDelegate
-//, UITextViewDelegate
-#endif
 #ifdef IPHONE_IMG_PICKER
 , UINavigationControllerDelegate, UIImagePickerControllerDelegate
 #endif
@@ -45,8 +39,3 @@
 #endif
 > {}
 @end
-
-namespace Base
-{
-void updateWindowSizeAndContentRect(Base::Window &win, int width, int height, UIApplication *sharedApp);
-}

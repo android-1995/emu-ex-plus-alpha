@@ -32,19 +32,20 @@ void Pixmap::write(Pixmap pixmap)
 	{
 		// whole block
 		//logDMsg("copying whole block");
-		memcpy(data_, pixmap.data_, pixmap.pixelBytes());
+		memcpy(data_, pixmap.data_, pixmap.unpaddedBytes());
 	}
 	else
 	{
 		// line at a time
 		auto srcData = pixmap.data();
 		auto destData = data();
+		auto destPitch = pitch;
 		uint32_t lineBytes = format().pixelBytes(pixmap.w());
 		iterateTimes(pixmap.h(), i)
 		{
 			memcpy(destData, srcData, lineBytes);
 			srcData += pixmap.pitch;
-			destData += pitch;
+			destData += destPitch;
 		}
 	}
 }
@@ -54,17 +55,30 @@ void Pixmap::write(Pixmap pixmap, WP destPos)
 	subView(destPos, size() - destPos).write(pixmap);
 }
 
+static void invalidFormatConversion(Pixmap dest, Pixmap src)
+{
+	logErr("unimplemented conversion:%s -> %s", src.format().name(), dest.format().name());
+}
+
+template <bool BGR_SWAP = false>
 static void convertRGB888ToRGBX8888(Pixmap dest, Pixmap src)
 {
 	dest.writeTransformedDirect<ByteArray<3>, uint32_t>(
 		[](auto p)
 		{
+			if constexpr(BGR_SWAP) { std::swap(p[0], p[2]); }
 			return p[0] << 16 |
 					p[1] << 8 |
 					p[2];
 		}, src);
 }
 
+static void convertRGB888ToBGRX8888(Pixmap dest, Pixmap src)
+{
+	convertRGB888ToRGBX8888<true>(dest, src);
+}
+
+template <bool BGR_SWAP = false>
 static void convertRGB565ToRGBX8888(Pixmap dest, Pixmap src)
 {
 	dest.writeTransformed(
@@ -73,12 +87,19 @@ static void convertRGB565ToRGBX8888(Pixmap dest, Pixmap src)
 			unsigned b = p       & 0x1F;
 			unsigned g = p >>  5 & 0x3F;
 			unsigned r = p >> 11 & 0x1F;
-			return ((r * 255 + 15) / 31) << 16 |
+			if constexpr(BGR_SWAP) { std::swap(r, b); }
+			return ((b * 255 + 15) / 31) << 16 |
 					((g * 255 + 31) / 63) << 8 |
-					((b * 255 + 15) / 31);
+					((r * 255 + 15) / 31);
 		}, src);
 }
 
+static void convertRGB565ToBGRX8888(Pixmap dest, Pixmap src)
+{
+	return convertRGB565ToRGBX8888<true>(dest, src);
+}
+
+template <bool BGR_SWAP = false>
 static void convertRGBX8888ToRGB888(Pixmap dest, Pixmap src)
 {
 	dest.writeTransformedDirect<uint32_t, ByteArray<3>>(
@@ -87,6 +108,7 @@ static void convertRGBX8888ToRGB888(Pixmap dest, Pixmap src)
 			unsigned r = p       & 0xFF;
 			unsigned g = p >>  8 & 0xFF;
 			unsigned b = p >> 16 & 0xFF;
+			if constexpr(BGR_SWAP) { std::swap(r, b); }
 			return ByteArray<3>
 				{
 					(uint8_t)r,
@@ -94,6 +116,11 @@ static void convertRGBX8888ToRGB888(Pixmap dest, Pixmap src)
 					(uint8_t)b
 				};
 		}, src);
+}
+
+static void convertBGRX8888ToRGB888(Pixmap dest, Pixmap src)
+{
+	convertRGBX8888ToRGB888<true>(dest, src);
 }
 
 static void convertRGB565ToRGB888(Pixmap dest, Pixmap src)
@@ -127,6 +154,7 @@ static void convertRGB888ToRGB565(Pixmap dest, Pixmap src)
 		}, src);
 }
 
+template <bool BGR_SWAP = false>
 static void convertRGBX8888ToRGB565(Pixmap dest, Pixmap src)
 {
 	dest.writeTransformed(
@@ -135,15 +163,25 @@ static void convertRGBX8888ToRGB565(Pixmap dest, Pixmap src)
 			unsigned r = p       & 0xFF;
 			unsigned g = p >>  8 & 0xFF;
 			unsigned b = p >> 16 & 0xFF;
+			if constexpr(BGR_SWAP) { std::swap(r, b); }
 			return ((r * (31 * 2) + 255) / (255 * 2)) << 11 |
 					((g * 63 + 127) / 255) << 5 |
 					((b * 31 + 127) / 255);
 		}, src);
 }
 
-static void invalidFormatConversion(Pixmap dest, Pixmap src)
+static void convertRGBA8888ToBGRA8888(Pixmap dest, Pixmap src)
 {
-	logErr("unimplemented conversion:%s -> %s", src.format().name(), dest.format().name());
+	dest.writeTransformed(
+		[](uint32_t p)
+		{
+			return (p & 0xFF000000) | ((p & 0xFF0000) >> 16) | (p & 0x00FF00) | ((p & 0x0000FF) << 16);
+		}, src);
+}
+
+static void convertBGRX8888ToRGB565(Pixmap dest, Pixmap src)
+{
+	return convertRGBX8888ToRGB565<true>(dest, src);
 }
 
 void Pixmap::writeConverted(Pixmap pixmap)
@@ -156,31 +194,40 @@ void Pixmap::writeConverted(Pixmap pixmap)
 	auto srcFormatID = pixmap.format().id();
 	switch(format().id())
 	{
-		bcase PIXEL_RGBX8888:
+		case PIXEL_RGBA8888:
 			switch(srcFormatID)
 			{
-				bcase PIXEL_RGB888: convertRGB888ToRGBX8888(*this, pixmap);
-				bcase PIXEL_RGB565: convertRGB565ToRGBX8888(*this, pixmap);
-				bdefault: invalidFormatConversion(*this, pixmap);
+				case PIXEL_BGRA8888: return convertRGBA8888ToBGRA8888(*this, pixmap);
+				case PIXEL_RGB565: return convertRGB565ToRGBX8888(*this, pixmap);
+				case PIXEL_RGB888: return convertRGB888ToRGBX8888(*this, pixmap);
+				default: return invalidFormatConversion(*this, pixmap);
 			}
-		bcase PIXEL_RGB888:
+		case PIXEL_BGRA8888:
 			switch(srcFormatID)
 			{
-				bcase PIXEL_RGBX8888: convertRGBX8888ToRGB888(*this, pixmap);
-				bcase PIXEL_RGBA8888: convertRGBX8888ToRGB888(*this, pixmap);
-				bcase PIXEL_RGB565: convertRGB565ToRGB888(*this, pixmap);
-				bdefault: invalidFormatConversion(*this, pixmap);
+				case PIXEL_RGBA8888: return convertRGBA8888ToBGRA8888(*this, pixmap);
+				case PIXEL_RGB565: return convertRGB565ToBGRX8888(*this, pixmap);
+				case PIXEL_RGB888: return convertRGB888ToBGRX8888(*this, pixmap);
+				default: return invalidFormatConversion(*this, pixmap);
 			}
-		bcase PIXEL_RGB565:
+		case PIXEL_RGB888:
 			switch(srcFormatID)
 			{
-				bcase PIXEL_RGB888: convertRGB888ToRGB565(*this, pixmap);
-				bcase PIXEL_RGBX8888: convertRGBX8888ToRGB565(*this, pixmap);
-				bcase PIXEL_RGBA8888: convertRGBX8888ToRGB565(*this, pixmap);
-				bdefault: invalidFormatConversion(*this, pixmap);
+				case PIXEL_BGRA8888: return convertBGRX8888ToRGB888(*this, pixmap);
+				case PIXEL_RGBA8888: return convertRGBX8888ToRGB888(*this, pixmap);
+				case PIXEL_RGB565: return convertRGB565ToRGB888(*this, pixmap);
+				default: return invalidFormatConversion(*this, pixmap);
 			}
-		bdefault:
-			invalidFormatConversion(*this, pixmap);
+		case PIXEL_RGB565:
+			switch(srcFormatID)
+			{
+				case PIXEL_RGBA8888: return convertRGBX8888ToRGB565(*this, pixmap);
+				case PIXEL_BGRA8888: return convertBGRX8888ToRGB565(*this, pixmap);
+				case PIXEL_RGB888: return convertRGB888ToRGB565(*this, pixmap);
+				default: return invalidFormatConversion(*this, pixmap);
+			}
+		default:
+			return invalidFormatConversion(*this, pixmap);
 	}
 }
 
@@ -214,7 +261,7 @@ void Pixmap::clear()
 
 MemPixmap::MemPixmap(PixmapDesc desc):
 	PixmapDesc{desc},
-	buffer{new uint8_t[desc.format().pixelBytes(desc.w() * desc.h())]}
+	buffer{new uint8_t[desc.bytes()]}
 {
 	//logDMsg("allocated memory pixmap data:%p", data);
 }
@@ -226,7 +273,7 @@ MemPixmap::operator bool() const
 
 Pixmap MemPixmap::view() const
 {
-	return Pixmap{{size(), format()}, buffer.get()};
+	return Pixmap{static_cast<PixmapDesc>(*this), buffer.get()};
 }
 
 Pixmap MemPixmap::subView(WP pos, WP size) const

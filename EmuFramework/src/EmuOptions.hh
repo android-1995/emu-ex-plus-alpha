@@ -18,19 +18,17 @@
 #include <emuframework/Option.hh>
 #include <emuframework/EmuSystem.hh>
 #include <imagine/bluetooth/BluetoothAdapter.hh>
-#include <imagine/audio/AudioManager.hh>
 #include <imagine/audio/defs.hh>
 #include <imagine/gui/View.hh>
 #include <imagine/gfx/PixmapBufferTexture.hh>
+#include <imagine/input/Input.hh>
+
+namespace Base
+{
+class ApplicationContext;
+}
 
 class VController;
-
-using OptionBackNavigation = Option<OptionMethodRef<bool, View::needsBackControl>, uint8_t>;
-using OptionSwappedGamepadConfirm = Option<OptionMethodFunc<bool, Input::swappedGamepadConfirm, Input::setSwappedGamepadConfirm>, uint8_t>;
-
-bool vControllerUseScaledCoordinates();
-void setVControllerUseScaledCoordinates(bool on);
-using OptionTouchCtrlScaledCoordinates = Option<OptionMethodFunc<bool, vControllerUseScaledCoordinates, setVControllerUseScaledCoordinates>, uint8_t>;
 
 #ifdef CONFIG_BLUETOOTH_SCAN_CACHE_USAGE
 using OptionBlueToothScanCache = Option<OptionMethodFunc<bool, BluetoothAdapter::scanCacheUsage, BluetoothAdapter::setScanCacheUsage>, uint8_t>;
@@ -79,7 +77,8 @@ enum { CFGKEY_SOUND = 0, CFGKEY_TOUCH_CONTROL_DISPLAY = 1,
 	CFGKEY_SUSTAINED_PERFORMANCE_MODE = 80, CFGKEY_SHOW_BLUETOOTH_SCAN = 81,
 	CFGKEY_ADD_SOUND_BUFFERS_ON_UNDERRUN = 82, CFGKEY_VIDEO_IMAGE_BUFFERS = 83,
 	CFGKEY_AUDIO_API = 84, CFGKEY_SOUND_VOLUME = 85,
-	CFGKEY_CONSUME_UNBOUND_GAMEPAD_KEYS = 86
+	CFGKEY_CONSUME_UNBOUND_GAMEPAD_KEYS = 86, CFGKEY_VIDEO_COLOR_SPACE = 87,
+	CFGKEY_RENDER_PIXEL_FORMAT = 88
 	// 256+ is reserved
 };
 
@@ -89,8 +88,8 @@ struct OptionRecentGames : public OptionBase
 
 	bool isDefault() const override;
 	bool writeToIO(IO &io) override;
-	bool readFromIO(IO &io, uint readSize_);
-	uint ioSize() const override;
+	bool readFromIO(Base::ApplicationContext, IO &, unsigned readSize_);
+	unsigned ioSize() const override;
 };
 
 struct OptionVControllerLayoutPosition : public OptionBase
@@ -101,8 +100,8 @@ struct OptionVControllerLayoutPosition : public OptionBase
 	constexpr OptionVControllerLayoutPosition() {}
 	bool isDefault() const final;
 	bool writeToIO(IO &io) final;
-	bool readFromIO(IO &io, uint readSize_);
-	uint ioSize() const final;
+	bool readFromIO(IO &io, unsigned readSize_);
+	unsigned ioSize() const final;
 	void setVController(VController &);
 };
 
@@ -112,10 +111,6 @@ extern Byte1Option optionSound;
 extern Byte1Option optionSoundVolume;
 extern Byte1Option optionSoundBuffers;
 extern Byte1Option optionAddSoundBuffersOnUnderrun;
-#ifdef CONFIG_AUDIO_MANAGER_SOLO_MIX
-using OptionAudioSoloMix = Option<OptionMethodFunc<bool, IG::AudioManager::soloMix, IG::AudioManager::setSoloMix>, uint8_t>;
-extern OptionAudioSoloMix optionAudioSoloMix;
-#endif
 #ifdef CONFIG_AUDIO_MULTIPLE_SYSTEM_APIS
 extern Byte1Option optionAudioAPI;
 #endif
@@ -125,13 +120,11 @@ extern Byte1Option optionVibrateOnPush;
 extern Byte1Option optionPauseUnfocused;
 extern Byte1Option optionNotificationIcon;
 extern Byte1Option optionTitleBar;
-extern OptionBackNavigation optionBackNavigation;
 extern Byte1Option optionSystemActionsIsDefaultMenu;
 extern Byte1Option optionLowProfileOSNav;
 extern Byte1Option optionHideOSNav;
 extern Byte1Option optionIdleDisplayPowerSave;
 extern Byte1Option optionHideStatusBar;
-extern OptionSwappedGamepadConfirm optionSwappedGamepadConfirm;
 extern Byte1Option optionConsumeUnboundGamepadKeys;
 extern Byte1Option optionConfirmOverwriteState;
 extern Byte1Option optionFastForwardSpeed;
@@ -160,7 +153,7 @@ extern Byte1Option optionOverlayEffect;
 extern Byte1Option optionOverlayEffectLevel;
 
 #if 0
-static const uint optionRelPointerDecelLow = 500, optionRelPointerDecelMed = 250, optionRelPointerDecelHigh = 125;
+static const unsigned optionRelPointerDecelLow = 500, optionRelPointerDecelMed = 250, optionRelPointerDecelHigh = 125;
 extern Byte4Option optionRelPointerDecel;
 #endif
 
@@ -180,9 +173,6 @@ extern Byte4s2Option optionTouchCtrlExtraYBtnSize;
 extern Byte4s2Option optionTouchCtrlExtraYBtnSizeMultiRow;
 extern Byte1Option optionTouchCtrlBoundingBoxes;
 extern Byte1Option optionTouchCtrlShowOnTouch;
-	#if defined(CONFIG_BASE_ANDROID)
-	extern OptionTouchCtrlScaledCoordinates optionTouchCtrlScaledCoordinates;
-	#endif
 #endif
 extern Byte1Option optionTouchCtrlAlpha;
 extern OptionVControllerLayoutPosition optionVControllerLayoutPos;
@@ -195,7 +185,7 @@ extern DoubleOption optionFrameRate;
 extern DoubleOption optionFrameRatePAL;
 extern DoubleOption optionRefreshRateOverride;
 
-static const uint optionImageZoomIntegerOnly = 255, optionImageZoomIntegerOnlyY = 254;
+static const unsigned optionImageZoomIntegerOnly = 255, optionImageZoomIntegerOnlyY = 254;
 extern Byte1Option optionImageZoom;
 extern Byte1Option optionViewportZoom;
 extern Byte1Option optionShowOnSecondScreen;
@@ -207,14 +197,10 @@ extern Byte1Option optionTextureBufferMode;
 extern Byte1Option optionSustainedPerformanceMode;
 #endif
 
-#ifdef EMU_FRAMEWORK_WINDOW_PIXEL_FORMAT_OPTION
-extern Byte1Option optionWindowPixelFormat;
-#endif
 extern Byte1Option optionVideoImageBuffers;
 
 static const char *optionSavePathDefaultToken = ":DEFAULT:";
 extern PathOption optionSavePath;
-extern PathOption optionLastLoadPath;
 extern Byte1Option optionCheckSavePathWriteAccess;
 
 extern Byte1Option optionShowBundledGames;
@@ -222,8 +208,7 @@ extern Byte1Option optionShowBundledGames;
 // Common options handled per-emulator backend
 extern PathOption optionFirmwarePath;
 
-void initOptions();
-void setupFont(Gfx::Renderer &r, Base::Window &win);
+void setupFont(ViewManager &manager, Gfx::Renderer &r, Base::Window &win);
 bool soundIsEnabled();
 void setSoundEnabled(bool on);
 bool soundDuringFastForwardIsEnabled();

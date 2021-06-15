@@ -17,7 +17,7 @@
 
 #include <imagine/gui/MenuItem.hh>
 #include <imagine/gui/TableView.hh>
-#include <cstddef>
+#include <utility>
 #include <vector>
 
 class TextTableView : public TableView
@@ -31,7 +31,7 @@ public:
 	TextMenuItem &item(uint32_t idx);
 	void setItems(uint32_t items);
 	void onAddedToController(ViewController *c, Input::Event e) override;
-	void drawElement(Gfx::RendererCommands &cmds, uint32_t i, MenuItem &item, Gfx::GCRect rect) const override;
+	void drawElement(Gfx::RendererCommands &cmds, uint32_t i, MenuItem &item, Gfx::GCRect rect, Gfx::GC xIndent) const override;
 
 	template<class Func>
 	void appendItem(const char *name, Func &&func)

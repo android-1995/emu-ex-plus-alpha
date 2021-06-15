@@ -15,26 +15,40 @@
 
 package com.imagine;
 
-import android.widget.*;
-import android.app.*;
-import android.content.*;
-import android.content.DialogInterface.*;
-import android.view.inputmethod.*;
-import android.graphics.drawable.*;
-import android.view.View.*;
-import android.os.*;
-import android.view.*;
-import android.graphics.*;
-import android.util.*;
-import android.hardware.*;
-import android.media.*;
-import android.net.*;
-import android.content.res.*;
+import android.widget.TextView;
+import android.widget.PopupWindow;
+import android.app.NativeActivity;
+import android.content.Intent;
+import android.content.Context;
+import android.graphics.drawable.Icon;
+import android.os.Vibrator;
+import android.os.Bundle;
+import android.os.Environment;
+import android.os.Build;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.ViewConfiguration;
+import android.view.Window;
+import android.view.WindowManager;
+import android.view.Display;
+import android.view.InputDevice;
+import android.view.Gravity;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.PixelFormat;
+import android.util.DisplayMetrics;
+import android.media.AudioManager;
+import android.net.Uri;
+import android.content.res.AssetManager;
 import android.view.inputmethod.InputMethodManager;
-import android.bluetooth.*;
-import android.content.pm.*;
-import java.lang.reflect.*;
-import java.io.*;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothSocket;
+import android.content.pm.Signature;
+import android.content.pm.PackageManager;
+import android.content.pm.ShortcutManager;
+import android.content.pm.ShortcutInfo;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import android.support.v4.content.ContextCompat;
 import android.support.v4.app.ActivityCompat;
 
@@ -43,41 +57,28 @@ import android.support.v4.app.ActivityCompat;
 public final class BaseActivity extends NativeActivity implements AudioManager.OnAudioFocusChangeListener
 {
 	private static final String logTag = "BaseActivity";
-	static native void onContentRectChanged(long windowAddr,
+	static native void onContentRectChanged(long nativeUserData,
 		int left, int top, int right, int bottom, int windowWidth, int windowHeight);
-	native void displayEnumerated(Display dpy, int id, float refreshRate, int rotation, DisplayMetrics metrics);
-	private static final Method setSystemUiVisibility =
-		android.os.Build.VERSION.SDK_INT >= 11 ? Util.getMethod(View.class, "setSystemUiVisibility", new Class[] { int.class }) : null;
+	static native void displayEnumerated(long nativeUserData, Display dpy, int id,
+		float refreshRate, int rotation, DisplayMetrics metrics);
+	static native void inputDeviceEnumerated(long nativeUserData,
+		int devID, InputDevice dev, String name, int src, int kbType,
+		int jsAxisBits, boolean isPowerButton);
+	static native void documentTreeOpened(long nativeUserData, String path);
 	private static final int commonUILayoutFlags = View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
 		| View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
 	private Display defaultDpy;
+	private long activityResultNativeUserData;
+	private static final int REQUEST_OPEN_DOCUMENT_TREE = 1;
+	private static final int REQUEST_BT_ON = 2;
 
 	boolean hasPermanentMenuKey()
 	{
-		if(android.os.Build.VERSION.SDK_INT < 14) return true;
-		boolean hasKey = true;
-		try
+		if(android.os.Build.VERSION.SDK_INT >= 14)
 		{
-			Method hasPermanentMenuKeyFunc = ViewConfiguration.class.getMethod("hasPermanentMenuKey");
-			ViewConfiguration viewConf = ViewConfiguration.get(this);
-			try
-			{
-				hasKey = (Boolean)hasPermanentMenuKeyFunc.invoke(viewConf);
-			}
-			catch (IllegalAccessException ie)
-			{
-				//Log.i(logTag, "IllegalAccessException calling hasPermanentMenuKeyFunc");
-			}
-			catch (InvocationTargetException ite)
-			{
-				//Log.i(logTag, "InvocationTargetException calling hasPermanentMenuKeyFunc");
-			}
+			return ViewConfiguration.get(this).hasPermanentMenuKey();
 		}
-		catch (NoSuchMethodException nsme)
-		{
-			//Log.i(logTag, "hasPermanentMenuKeyFunc not present even though SDK >= 14"); // should never happen
-		}
-		return hasKey;
+		return true;
 	}
 		
 	int sigHash()
@@ -119,14 +120,22 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 		return defaultDpy.getRotation();
 	}
 
-	void enumDisplays()
+	void enumDisplays(long nativeUserData)
 	{
-		displayEnumerated(defaultDpy, Display.DEFAULT_DISPLAY,
+		displayEnumerated(nativeUserData, defaultDpy, Display.DEFAULT_DISPLAY,
 			defaultDpy.getRefreshRate(), defaultDpy.getRotation(),
 			getResources().getDisplayMetrics());
 		if(android.os.Build.VERSION.SDK_INT >= 17)
 		{
-			DisplayListenerHelper.enumPresentationDisplays(this);
+			DisplayListenerHelper.enumPresentationDisplays(this, nativeUserData);
+		}
+	}
+
+	void enumInputDevices(long nativeUserData)
+	{
+		if(android.os.Build.VERSION.SDK_INT >= 12)
+		{
+			InputDeviceHelper.enumInputDevices(this, nativeUserData);
 		}
 	}
 
@@ -157,26 +166,7 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 		if(hasVibrator && android.os.Build.VERSION.SDK_INT >= 11)
 		{
 			// check if a vibrator is really present
-			try
-			{
-				Method hasVibratorFunc = Vibrator.class.getMethod("hasVibrator");
-				try
-				{
-					hasVibrator = (Boolean)hasVibratorFunc.invoke(vibrator);
-				}
-				catch (IllegalAccessException ie)
-				{
-					//Log.i(logTag, "IllegalAccessException calling hasVibratorFunc");
-				}
-				catch (InvocationTargetException ite)
-				{
-					//Log.i(logTag, "InvocationTargetException calling hasVibratorFunc");
-				}
-			}
-			catch (NoSuchMethodException nsme)
-			{
-				//Log.i(logTag, "hasVibratorFunc not present even though SDK >= 11"); // should never happen
-			}
+			hasVibrator = vibrator.hasVibrator();
 		}
 		return hasVibrator ? vibrator : null;
 	}
@@ -193,11 +183,7 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 	
 	void setUIVisibility(int mode)
 	{
-		if(setSystemUiVisibility == null)
-		{
-			return;
-		}
-		try
+		if(android.os.Build.VERSION.SDK_INT >= 11)
 		{
 			int flags = mode | commonUILayoutFlags;
 			if((android.os.Build.VERSION.SDK_INT == 16 || android.os.Build.VERSION.SDK_INT == 17)
@@ -207,38 +193,37 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 				//Log.i(logTag, "using stable layout");
 				flags |= View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
 			}
-			setSystemUiVisibility.invoke(getWindow().getDecorView(), flags);
-		}
-		catch (IllegalAccessException ie)
-		{
-			//Log.i(logTag, "IllegalAccessException calling setSystemUiVisibility");
-		}
-		catch (InvocationTargetException ite)
-		{
-			//Log.i(logTag, "InvocationTargetException calling setSystemUiVisibility");
+			getWindow().getDecorView().setSystemUiVisibility(flags);
 		}
 	}
-	
+
 	void setWinFlags(int flags, int mask)
 	{
 		getWindow().setFlags(flags, mask);
 	}
-	
-	void setWinFormat(int format)
-	{
-		getWindow().setFormat(format);
-	}
-	
+
 	int winFlags()
 	{
 		return getWindow().getAttributes().flags;
 	}
-	
-	int winFormat()
+
+	Window setMainContentView(long nativeUserData)
 	{
-		return getWindow().getAttributes().format;
+		// get rid of NativeActivity's view and layout listener, then add our custom view
+		View nativeActivityView = findViewById(android.R.id.content);
+		nativeActivityView.getViewTreeObserver().removeGlobalOnLayoutListener(this);
+		View contentView;
+		if(android.os.Build.VERSION.SDK_INT >= 24)
+			contentView = new ContentViewV24(this, nativeUserData);
+		else if(android.os.Build.VERSION.SDK_INT >= 16)
+			contentView = new ContentViewV16(this, nativeUserData);
+		else
+			contentView = new ContentViewV9(this, nativeUserData);
+		setContentView(contentView);
+		contentView.requestFocus();
+		return getWindow();
 	}
-	
+
 	void addNotification(String onShow, String title, String message)
 	{
 		NotificationHelper.addNotification(this, onShow, title, message);
@@ -282,19 +267,26 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 		return adapter.getState();
 	}
 	
-	private static final int REQUEST_BT_ON = 1;
-	
 	void btTurnOn()
 	{
 		Intent btOn = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
 		startActivityForResult(btOn, REQUEST_BT_ON);
 	}
 	
-	@Override protected void onActivityResult(int requestCode, int resultCode, Intent data)
+	@Override protected void onActivityResult(int requestCode, int resultCode, Intent intent)
 	{
 		if(requestCode == REQUEST_BT_ON)
 		{
 			onBTOn(resultCode == RESULT_OK);
+		}
+		else if(android.os.Build.VERSION.SDK_INT >= 30 && requestCode == REQUEST_OPEN_DOCUMENT_TREE &&
+			resultCode == RESULT_OK && intent != null)
+		{
+			final String path = StorageManagerHelper.pathFromOpenDocumentTreeResult(this, intent);
+			if(path != null)
+			{
+				documentTreeOpened(activityResultNativeUserData, path);
+			}
 		}
 	}
 	
@@ -368,18 +360,6 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 			// cause the screen to flash
 			win.setFormat(PixelFormat.UNKNOWN);
 		}
-		// get rid of NativeActivity's view and layout listener, then add our custom view
-		View nativeActivityView = findViewById(android.R.id.content);
-		nativeActivityView.getViewTreeObserver().removeGlobalOnLayoutListener(this);
-		View contentView;
-		if(android.os.Build.VERSION.SDK_INT >= 24)
-			contentView = new ContentViewV24(this);
-		else if(android.os.Build.VERSION.SDK_INT >= 16)
-			contentView = new ContentViewV16(this);
-		else
-			contentView = new ContentViewV9(this);
-		setContentView(contentView);
-		contentView.requestFocus();
 	}
 	
 	@Override protected void onResume()
@@ -394,73 +374,49 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 		removeNotification();
 		super.onDestroy();
 	}
-	
-	static native void sysTextInputEnded(String text, boolean processText, boolean isDoingDismiss);
-	
-	static void endSysTextInput(String text, boolean processText, boolean isDoingDismiss)
+
+	TextEntry newTextEntry(final String initialText, final String promptText,
+		int x, int y, int width, int height, int fontSize, long nativeUserData)
 	{
-		sysTextInputEnded(text, processText, isDoingDismiss);
+		return new TextEntry(this, initialText, promptText, x, y, width, height, fontSize, nativeUserData);
 	}
-	
-	void startSysTextInput(final String initialText, final String promptText,
-		int x, int y, int width, int height, int fontSize)
-	{
-		TextEntry.startSysTextInput(this, initialText, promptText, x, y, width, height, fontSize);
-	}
-	
-	void finishSysTextInput(final boolean canceled)
-	{
-		TextEntry.finishSysTextInput(canceled);
-	}
-	
-	void placeSysTextInput(final int x, final int y, final int width, final int height)
-	{
-		TextEntry.placeSysTextInput(x, y, width, height);
-	}
-	
+
 	FontRenderer newFontRenderer()
 	{
 		return new FontRenderer();
 	}
-	
-	ChoreographerHelper newChoreographerHelper(long timerAddr)
+
+	ChoreographerHelper choreographerHelper(long timerAddr)
 	{
 		if(android.os.Build.VERSION.SDK_INT < 16)
 			return null;
 		return new ChoreographerHelper(timerAddr);
 	}
-	
-	InputDeviceHelper inputDeviceHelper()
-	{
-		if(android.os.Build.VERSION.SDK_INT < 12)
-			return null;
-		return new InputDeviceHelper();
-	}
-	
-	InputDeviceListenerHelper inputDeviceListenerHelper()
+
+	InputDeviceListenerHelper inputDeviceListenerHelper(long nativeUserData)
 	{
 		if(android.os.Build.VERSION.SDK_INT < 16)
 			return null;
-		return new InputDeviceListenerHelper(this);
+		return new InputDeviceListenerHelper(this, nativeUserData);
 	}
 	
-	DisplayListenerHelper displayListenerHelper()
+	DisplayListenerHelper displayListenerHelper(long nativeUserData)
 	{
 		if(android.os.Build.VERSION.SDK_INT < 17)
 			return null;
-		return new DisplayListenerHelper(this);
+		return new DisplayListenerHelper(this, nativeUserData);
 	}
 	
-	MOGAHelper mogaHelper(long mogaSystemAddr)
+	MOGAHelper mogaHelper(long nativeUserData)
 	{
-		return new MOGAHelper(this, mogaSystemAddr);
+		return new MOGAHelper(this, nativeUserData);
 	}
 	
-	PresentationHelper presentation(Display display, long windowAddr)
+	PresentationHelper presentation(Display display, long nativeUserData)
 	{
 		if(android.os.Build.VERSION.SDK_INT < 17)
 			return null;
-		return new PresentationHelper(this, display, windowAddr);
+		return new PresentationHelper(this, display, nativeUserData);
 	}
 
 	StorageManagerHelper storageManagerHelper()
@@ -558,5 +514,14 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 		{
 			startActivity(intent);
 		}
+	}
+
+	void openDocumentTree(long nativeUserData)
+	{
+		if(android.os.Build.VERSION.SDK_INT < 30)
+			return;
+		activityResultNativeUserData = nativeUserData;
+		Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+		startActivityForResult(intent, REQUEST_OPEN_DOCUMENT_TREE);
 	}
 }

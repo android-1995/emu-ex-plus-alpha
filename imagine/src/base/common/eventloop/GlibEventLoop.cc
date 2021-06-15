@@ -14,16 +14,12 @@
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
 #define LOGTAG "EventLoop"
-#include <imagine/base/Base.hh>
 #include <imagine/base/EventLoop.hh>
 #include <imagine/thread/Thread.hh>
 #include <imagine/logger/logger.h>
 #include <imagine/util/string.h>
 #include <imagine/util/ScopeGuard.hh>
 #include <glib-unix.h>
-#ifdef CONFIG_BASE_X11
-#include "../../x11/x11.hh"
-#endif
 
 namespace Base
 {
@@ -45,6 +41,7 @@ GlibFDEventSource &GlibFDEventSource::operator=(GlibFDEventSource &&o)
 	tag = std::exchange(o.tag, {});
 	fd_ = std::exchange(o.fd_, -1);
 	debugLabel = o.debugLabel;
+	usingGlibSource = o.usingGlibSource;
 	return *this;
 }
 
@@ -53,30 +50,43 @@ GlibFDEventSource::~GlibFDEventSource()
 	deinit();
 }
 
-bool FDEventSource::attach(EventLoop loop, PollEventDelegate callback, GSourceFuncs *funcs, uint32_t events)
+bool FDEventSource::attach(EventLoop loop, GSource *source, uint32_t events)
 {
 	detach();
 	if(!loop)
 		loop = EventLoop::forThread();
-	return makeAndAttachSource(funcs, callback, (GIOCondition)events, loop.nativeObject());
+	return attachGSource(source, (GIOCondition)events, loop.nativeObject());
 }
 
-bool FDEventSource::attach(EventLoop loop, PollEventDelegate callback, uint32_t events)
+bool FDEventSource::attach(EventLoop loop, PollEventDelegate callback_, uint32_t events)
 {
 	static GSourceFuncs fdSourceFuncs
 	{
-		nullptr,
-		nullptr,
-		[](GSource *source, GSourceFunc, gpointer userData)
+		.prepare{},
+		.check{},
+		.dispatch
 		{
-			auto s = (GSource2*)source;
-			auto pollFD = (GPollFD*)userData;
-			//logMsg("events for source:%p in thread 0x%llx", source, (long long)IG::this_thread::get_id());
-			return (gboolean)s->callback(pollFD->fd, g_source_query_unix_fd(source, pollFD));
+			[](GSource *source, GSourceFunc, gpointer userData)
+			{
+				auto s = (GlibSource*)source;
+				auto pollFD = (GPollFD*)userData;
+				//logMsg("events for source:%p in thread 0x%llx", source, (long long)IG::this_thread::get_id());
+				return (gboolean)s->callback(pollFD->fd, g_source_query_unix_fd(source, pollFD));
+			}
 		},
-		nullptr
+		.finalize{},
+		.closure_callback{},
+		.closure_marshal{},
 	};
-	return attach(loop, callback, &fdSourceFuncs, events);
+	auto source = (GlibSource*)g_source_new(&fdSourceFuncs, sizeof(GlibSource));
+	source->callback = callback_;
+	if(!attach(loop, source, events))
+	{
+		g_source_unref(source);
+		return false;
+	}
+	usingGlibSource = true;
+	return true;
 }
 
 void FDEventSource::detach()
@@ -86,6 +96,7 @@ void FDEventSource::detach()
 	g_source_destroy(source);
 	g_source_unref(source);
 	source = {};
+	usingGlibSource = false;
 }
 
 void FDEventSource::setEvents(uint32_t events)
@@ -100,8 +111,8 @@ void FDEventSource::setEvents(uint32_t events)
 
 void FDEventSource::dispatchEvents(uint32_t events)
 {
-	assumeExpr(source);
-	source->callback(fd(), events);
+	assert(usingGlibSource);
+	static_cast<GlibSource*>(source)->callback(fd(), events);
 }
 
 void FDEventSource::setCallback(PollEventDelegate callback)
@@ -111,7 +122,8 @@ void FDEventSource::setCallback(PollEventDelegate callback)
 		logErr("trying to set callback while not attached to event loop");
 		return;
 	}
-	source->callback = callback;
+	assert(usingGlibSource);
+	static_cast<GlibSource*>(source)->callback = callback;
 }
 
 bool FDEventSource::hasEventLoop() const
@@ -140,13 +152,8 @@ void FDEventSource::closeFD()
 	fd_ = -1;
 }
 
-bool GlibFDEventSource::makeAndAttachSource(GSourceFuncs *fdSourceFuncs,
-	PollEventDelegate callback_, GIOCondition events, GMainContext *ctx)
+bool GlibFDEventSource::attachGSource(GSource *source, GIOCondition events, GMainContext *ctx)
 {
-	assumeExpr(!source);
-	auto source = (GSource2*)g_source_new(fdSourceFuncs, sizeof(GSource2));
-	auto unrefSource = IG::scopeGuard([&](){ g_source_unref(source); });
-	source->callback = callback_;
 	tag = g_source_add_unix_fd(source, fd_, events);
 	g_source_set_callback(source, nullptr, tag, nullptr);
 	if(!g_source_attach(source, ctx))
@@ -154,7 +161,6 @@ bool GlibFDEventSource::makeAndAttachSource(GSourceFuncs *fdSourceFuncs,
 		logErr("error attaching source with fd:%d (%s)", fd_, label());
 		return false;
 	}
-	unrefSource.cancel();
 	this->source = source;
 	logMsg("added fd:%d to GMainContext:%p (%s)", fd_, ctx, label());
 	return true;

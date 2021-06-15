@@ -17,151 +17,112 @@
 #include <unistd.h>
 #include <errno.h>
 #include <imagine/base/Screen.hh>
-#include <imagine/base/Base.hh>
+#include <imagine/base/ApplicationContext.hh>
+#include <imagine/base/Application.hh>
 #include <imagine/time/Time.hh>
 #include <imagine/util/algorithm.h>
 #include <imagine/logger/logger.h>
-#include "internal.hh"
 #include "android.hh"
-#include "../common/screenPrivate.hh"
-#include "../common/SimpleFrameTimer.hh"
+#include <imagine/base/SimpleFrameTimer.hh>
 
 namespace Base
 {
 
-static JavaInstMethod<jobject()> jGetSupportedRefreshRates{};
-JavaInstMethod<jobject(jobject, jlong)> jPresentation{};
-static JavaInstMethod<void(jboolean)> jSetListener{};
-static JavaInstMethod<void()> jEnumDisplays{};
+static JNI::InstMethod<void(jboolean)> jSetListener{};
+static JNI::InstMethod<void(jlong)> jEnumDisplays{};
 
-static bool displayIdIsInList(int id)
-{
-	return IG::containsIf(screen_, [=](const auto &e) { return e->id() == id; });
-}
-
-static void clearSecondaryDisplays()
-{
-	while(screen_.size() > 1)
-	{
-		screen_.pop_back();
-	}
-}
-
-void initScreens(JNIEnv *env, jobject activity, jclass activityCls)
+void AndroidApplication::initScreens(JNIEnv *env, jobject baseActivity, jclass baseActivityClass, int32_t androidSDK, ANativeActivity *nActivity)
 {
 	assert(!jEnumDisplays);
-	if(Base::androidSDK() >= 17)
+	if(androidSDK >= 17)
 	{
-		jPresentation.setup(env, activityCls, "presentation", "(Landroid/view/Display;J)Lcom/imagine/PresentationHelper;");
-		JavaInstMethod<jobject()> jDisplayListenerHelper{env, activityCls, "displayListenerHelper", "()Lcom/imagine/DisplayListenerHelper;"};
-		auto displayListenerHelper = jDisplayListenerHelper(env, activity);
-		assert(displayListenerHelper);
-		displayListenerHelper = env->NewGlobalRef(displayListenerHelper);
+		JNI::InstMethod<jobject(jlong)> jDisplayListenerHelper{env, baseActivityClass, "displayListenerHelper", "(J)Lcom/imagine/DisplayListenerHelper;"};
+		displayListenerHelper = {env, jDisplayListenerHelper(env, baseActivity, (jlong)nActivity)};
 		auto displayListenerHelperCls = env->GetObjectClass(displayListenerHelper);
 		JNINativeMethod method[]
 		{
 			{
-				"displayAdd", "(ILandroid/view/Display;FLandroid/util/DisplayMetrics;)V",
-				(void*)(void (*)(JNIEnv*, jobject, jint, jobject, jfloat, jobject))
-				([](JNIEnv* env, jobject thiz, jint id, jobject disp, jfloat refreshRate, jobject metrics)
+				"displayAdd", "(JILandroid/view/Display;FLandroid/util/DisplayMetrics;)V",
+				(void*)
+				+[](JNIEnv* env, jobject thiz, jlong nActivityAddr, jint id, jobject disp, jfloat refreshRate, jobject metrics)
 				{
-					if(displayIdIsInList(id))
+					ApplicationContext ctx{(ANativeActivity*)nActivityAddr};
+					auto &app = ctx.application();
+					if(app.findScreen(id))
 					{
 						logMsg("screen id:%d already in device list", id);
 						return;
 					}
-					Screen &s = Screen::addScreen(std::make_unique<Screen>(env, disp, id, refreshRate, SURFACE_ROTATION_0, metrics));
-					if(Screen::onChange)
-						Screen::onChange(s, {Screen::Change::ADDED});
-				})
+					app.addScreen(ctx, std::make_unique<Screen>(ctx,
+						Screen::InitParams{env, disp, metrics, id, refreshRate, SURFACE_ROTATION_0}), true);
+				}
 			},
 			{
-				"displayChange", "(IF)V",
-				(void*)(void (*)(JNIEnv*, jobject, jint, jfloat))
-				([](JNIEnv* env, jobject thiz, jint id, jfloat refreshRate)
+				"displayChange", "(JIF)V",
+				(void*)
+				+[](JNIEnv* env, jobject thiz, jlong nActivityAddr, jint id, jfloat refreshRate)
 				{
-					auto it = IG::find_if(screen_, [=](const auto &e) { return e->id() == id; });
-					if(it == screen_.end())
+					ApplicationContext ctx{(ANativeActivity*)nActivityAddr};
+					auto &app = ctx.application();
+					auto screen = app.findScreen(id);
+					if(!screen)
 					{
 						logWarn("screen id:%d changed but isn't in device list", id);
 						return;
 					}
-					(*it)->updateRefreshRate(refreshRate);
-				})
+					screen->updateRefreshRate(refreshRate);
+				}
 			},
 			{
-				"displayRemove", "(I)V",
-				(void*)(void (*)(JNIEnv*, jobject, jint))
-				([](JNIEnv* env, jobject thiz, jint id)
+				"displayRemove", "(JI)V",
+				(void*)
+				+[](JNIEnv* env, jobject thiz, jlong nActivityAddr, jint id)
 				{
+					ApplicationContext ctx{(ANativeActivity*)nActivityAddr};
+					auto &app = ctx.application();
 					logMsg("screen id:%d removed", id);
-					if(auto removedScreen = IG::moveOutIf(screen_, [&](auto &s){ return s->id() == id; });
-						removedScreen)
-					{
-						if(Screen::onChange)
-							Screen::onChange(*removedScreen, {Screen::Change::REMOVED});
-					}
-				})
+					app.removeScreen(ctx, id, true);
+				}
 			}
 		};
 		env->RegisterNatives(displayListenerHelperCls, method, std::size(method));
 		jSetListener = {env, displayListenerHelperCls, "setListener", "(Z)V"};
 		jSetListener(env, displayListenerHelper, true);
-		Base::addOnExit([env, displayListenerHelper](bool backgrounded)
+		addOnExit([env, &displayListenerHelper = displayListenerHelper](ApplicationContext ctx, bool backgrounded)
 		{
-			clearSecondaryDisplays();
+			ctx.application().removeSecondaryScreens();
 			logMsg("unregistering display listener");
 			jSetListener(env, displayListenerHelper, false);
 			if(backgrounded)
 			{
-				Base::addOnResume([env, displayListenerHelper](bool)
+				ctx.addOnResume([env, &displayListenerHelper](ApplicationContext ctx, bool)
 				{
 					logMsg("registering display listener");
 					jSetListener(env, displayListenerHelper, true);
-					jEnumDisplays(env, Base::jBaseActivity);
+					jEnumDisplays(env, ctx.baseActivityObject(), (jlong)ctx.aNativeActivityPtr());
 					return false;
 				}, Base::SCREEN_ON_RESUME_PRIORITY);
 			}
 			return true;
 		}, Base::SCREEN_ON_EXIT_PRIORITY);
 	}
-	JNINativeMethod method[]
-	{
-		{
-			"displayEnumerated", "(Landroid/view/Display;IFILandroid/util/DisplayMetrics;)V",
-			(void*)(void (*)(JNIEnv*, jobject, jobject, jint, jfloat, jint, jobject))
-			([](JNIEnv* env, jobject thiz, jobject disp, jint id, jfloat refreshRate, jint rotation, jobject metrics)
-			{
-				auto it = IG::find_if(screen_, [=](const auto &e) { return e->id() == id; });
-				if(it == screen_.end())
-				{
-					Screen::addScreen(std::make_unique<Screen>(env, disp, id, refreshRate, (SurfaceRotation)rotation, metrics));
-					return;
-				}
-				else
-				{
-					// already in list, update existing
-					(*it)->updateRefreshRate(refreshRate);
-				}
-			})
-		},
-	};
-	env->RegisterNatives(activityCls, method, std::size(method));
-	jEnumDisplays = {env, activityCls, "enumDisplays", "()V"};
-	jEnumDisplays(env, activity);
+	jEnumDisplays = {env, baseActivityClass, "enumDisplays", "(J)V"};
+	jEnumDisplays(env, baseActivity, (jlong)nActivity);
 }
 
-AndroidScreen::AndroidScreen(JNIEnv *env, jobject aDisplay, int id, float refreshRate, SurfaceRotation rotation, jobject metrics)
+AndroidScreen::AndroidScreen(ApplicationContext ctx, InitParams params):
+	frameTimer{ctx.application().makeFrameTimer(*static_cast<Screen*>(this))}
 {
+	auto [env, aDisplay, metrics, id, refreshRate, rotation] = params;
 	assumeExpr(aDisplay);
 	assumeExpr(metrics);
-	this->aDisplay = env->NewGlobalRef(aDisplay);
+	this->aDisplay = {env, aDisplay};
 	bool isStraightRotation = true;
 	if(id == 0)
 	{
 		id_ = 0;
 		logMsg("init main display with starting rotation:%d", (int)rotation);
-		osRotation = rotation;
+		ctx.application().setCurrentRotation(ctx, rotation);
 		isStraightRotation = surfaceRotationIsStraight(rotation);
 	}
 	else
@@ -171,10 +132,10 @@ AndroidScreen::AndroidScreen(JNIEnv *env, jobject aDisplay, int id, float refres
 	}
 
 	updateRefreshRate(refreshRate);
-	if(Base::androidSDK() <= 10)
+	if(ctx.androidSDK() <= 10)
 	{
 		// corrections for devices known to report wrong refresh rates
-		auto buildDevice = Base::androidBuildDevice();
+		auto buildDevice = ctx.androidBuildDevice();
 		if(Config::MACHINE_IS_GENERIC_ARMV7 && string_equal(buildDevice.data(), "R800at"))
 			refreshRate_ = 61.5;
 		else if(Config::MACHINE_IS_GENERIC_ARMV7 && string_equal(buildDevice.data(), "sholes"))
@@ -182,6 +143,7 @@ AndroidScreen::AndroidScreen(JNIEnv *env, jobject aDisplay, int id, float refres
 		else
 			reliableRefreshRate = false;
 	}
+	frameTimer.setFrameTime(static_cast<Screen*>(this)->frameTime());
 
 	// DisplayMetrics
 	jclass jDisplayMetricsCls = env->GetObjectClass(metrics);
@@ -248,7 +210,6 @@ void AndroidScreen::updateRefreshRate(float refreshRate)
 	}
 	refreshRate_ = refreshRate;
 	frameTime_ = IG::FloatSeconds(1. / refreshRate);
-
 }
 
 bool AndroidScreen::operator ==(AndroidScreen const &rhs) const
@@ -261,17 +222,12 @@ AndroidScreen::operator bool() const
 	return aDisplay;
 }
 
-AndroidScreen::~AndroidScreen()
-{
-	jEnvForThread()->DeleteGlobalRef(aDisplay);
-}
-
-int Screen::width()
+int Screen::width() const
 {
 	return width_;
 }
 
-int Screen::height()
+int Screen::height() const
 {
 	return height_;
 }
@@ -291,27 +247,14 @@ bool Screen::frameRateIsReliable() const
 	return reliableRefreshRate;
 }
 
-void Screen::postFrame()
+void Screen::postFrameTimer()
 {
-	if(!isActive)
-	{
-		//logMsg("can't post frame when app isn't running");
-		return;
-	}
-	if(framePosted)
-		return;
-	//logMsg("posting frame");
-	framePosted = true;
-	frameTimer->scheduleVSync();
+	frameTimer.scheduleVSync();
 }
 
-void Screen::unpostFrame()
+void Screen::unpostFrameTimer()
 {
-	if(!framePosted)
-		return;
-	framePosted = false;
-	if(!screensArePosted())
-		frameTimer->cancel();
+	frameTimer.cancel();
 }
 
 void Screen::setFrameInterval(int interval)
@@ -326,30 +269,27 @@ bool Screen::supportsFrameInterval()
 	return false;
 }
 
-bool Screen::supportsTimestamps()
+bool Screen::supportsTimestamps() const
 {
-	return Base::androidSDK() >= 16;
+		return !std::holds_alternative<SimpleFrameTimer>(frameTimer);
 }
 
 void Screen::setFrameRate(double rate)
 {
-	// unsupported
+	auto time = rate ? IG::FloatSeconds(1. / rate) : frameTime();
+	frameTimer.setFrameTime(time);
 }
 
-std::vector<double> Screen::supportedFrameRates()
+std::vector<double> Screen::supportedFrameRates(ApplicationContext ctx) const
 {
 	std::vector<double> rateVec;
-	if(Base::androidSDK() < 21)
+	if(ctx.androidSDK() < 21)
 	{
 		rateVec.reserve(1);
 		rateVec.emplace_back(frameRate());
 	}
-	auto env = jEnvForThread();
-	if(unlikely(!jGetSupportedRefreshRates))
-	{
-		jclass jDisplayCls = env->GetObjectClass(aDisplay);
-		jGetSupportedRefreshRates.setup(env, jDisplayCls, "getSupportedRefreshRates", "()[F");
-	}
+	auto env = ctx.mainThreadJniEnv();
+	JNI::InstMethod<jobject()> jGetSupportedRefreshRates{env, (jobject)aDisplay, "getSupportedRefreshRates", "()[F"};
 	auto jRates = (jfloatArray)jGetSupportedRefreshRates(env, aDisplay);
 	auto rate = env->GetFloatArrayElements(jRates, 0);
 	auto rates = env->GetArrayLength(jRates);

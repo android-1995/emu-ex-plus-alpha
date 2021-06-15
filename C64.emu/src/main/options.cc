@@ -53,7 +53,7 @@ const AspectRatioInfo EmuSystem::aspectRatioInfo[] =
 		{"4:3 (Original)", 4, 3},
 		EMU_SYSTEM_DEFAULT_ASPECT_RATIO_INFO_INIT
 };
-const uint EmuSystem::aspectRatioInfos = std::size(EmuSystem::aspectRatioInfo);
+const unsigned EmuSystem::aspectRatioInfos = std::size(EmuSystem::aspectRatioInfo);
 Byte1Option optionDriveTrueEmulation(CFGKEY_DRIVE_TRUE_EMULATION, 0);
 Byte1Option optionVirtualDeviceTraps(CFGKEY_VIRTUAL_DEVICE_TRAPS, 1);
 Byte1Option optionCropNormalBorders(CFGKEY_CROP_NORMAL_BORDERS, 1);
@@ -94,10 +94,10 @@ Byte1Option optionAutostartOnLaunch(CFGKEY_AUTOSTART_ON_LOAD, 1);
 // VIC-20 specific
 Byte1Option optionVic20RamExpansions(CFGKEY_VIC20_RAM_EXPANSIONS, 0);
 
-EmuSystem::Error EmuSystem::onOptionsLoaded()
+EmuSystem::Error EmuSystem::onOptionsLoaded(Base::ApplicationContext app)
 {
 	currSystem = (ViceSystem)optionViceSystem.val;
-	plugin = loadVicePlugin(currSystem, EmuApp::libPath().data());
+	plugin = loadVicePlugin(currSystem, EmuApp::libPath(app).data());
 	if(!plugin)
 	{
 		return makeError("Error loading plugin for system %s", VicePlugin::systemName(currSystem));
@@ -105,7 +105,7 @@ EmuSystem::Error EmuSystem::onOptionsLoaded()
 	return {};
 }
 
-void EmuSystem::onSessionOptionsLoaded()
+void EmuSystem::onSessionOptionsLoaded(EmuApp &)
 {
 	if(optionModel >= plugin.models)
 	{
@@ -114,7 +114,7 @@ void EmuSystem::onSessionOptionsLoaded()
 	applySessionOptions();
 }
 
-bool EmuSystem::resetSessionOptions()
+bool EmuSystem::resetSessionOptions(EmuApp &app)
 {
 	optionModel.reset();
 	optionDriveTrueEmulation.reset();
@@ -125,11 +125,11 @@ bool EmuSystem::resetSessionOptions()
 	optionSwapJoystickPorts.reset();
 	optionAutostartOnLaunch.reset();
 	optionVic20RamExpansions.reset();
-	onSessionOptionsLoaded();
+	onSessionOptionsLoaded(app);
 	return true;
 }
 
-bool EmuSystem::readSessionConfig(IO &io, uint key, uint readSize)
+bool EmuSystem::readSessionConfig(IO &io, unsigned key, unsigned readSize)
 {
 	switch(key)
 	{
@@ -177,7 +177,7 @@ void EmuSystem::writeSessionConfig(IO &io)
 	}
 }
 
-bool EmuSystem::readConfig(IO &io, uint key, uint readSize)
+bool EmuSystem::readConfig(IO &io, unsigned key, unsigned readSize)
 {
 	switch(key)
 	{

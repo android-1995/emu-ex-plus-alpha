@@ -18,7 +18,6 @@
 #include <imagine/config/defs.hh>
 #include <imagine/gfx/defs.hh>
 #include <imagine/gfx/TextureConfig.hh>
-#include <imagine/gfx/Mat4.hh>
 #include <imagine/pixmap/Pixmap.hh>
 
 #ifdef CONFIG_GFX_OPENGL
@@ -36,6 +35,7 @@ class Renderer;
 class RendererTask;
 class RendererCommands;
 class TextureSampler;
+class Mat4;
 
 class LockedTextureBuffer: public LockedTextureBufferImpl
 {
@@ -63,7 +63,7 @@ public:
 	bool canUseMipmaps() const;
 	bool generateMipmaps();
 	uint8_t levels() const;
-	IG::ErrorCode setFormat(IG::PixmapDesc desc, uint8_t levels, const TextureSampler *compatSampler = {});
+	IG::ErrorCode setFormat(IG::PixmapDesc, uint8_t levels, ColorSpace c = {}, const TextureSampler *compatSampler = {});
 	void write(uint8_t level, IG::Pixmap pixmap, IG::WP destPos, uint32_t writeFlags = 0);
 	void writeAligned(uint8_t level, IG::Pixmap pixmap, IG::WP destPos, uint8_t assumedDataAlignment, uint32_t writeFlags = 0);
 	void clear(uint8_t level);
@@ -77,7 +77,7 @@ public:
 	bool compileDefaultProgramOneShot(uint32_t mode) const;
 	void useDefaultProgram(RendererCommands &cmds, uint32_t mode, const Mat4 *modelMat) const;
 	void useDefaultProgram(RendererCommands &cmds, uint32_t mode) const { useDefaultProgram(cmds, mode, nullptr); }
-	void useDefaultProgram(RendererCommands &cmds, uint32_t mode, Mat4 modelMat) const { useDefaultProgram(cmds, mode, &modelMat); }
+	void useDefaultProgram(RendererCommands &cmds, uint32_t mode, Mat4 modelMat) const;
 	explicit operator bool() const;
 	Renderer &renderer() const;
 	RendererTask &task() const;

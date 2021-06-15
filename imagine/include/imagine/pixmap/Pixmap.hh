@@ -33,7 +33,7 @@ public:
 	class PitchInit
 	{
 	public:
-		uint32_t val;
+		unsigned val;
 		PitchUnits units;
 
 		constexpr PitchInit(uint32_t pitchVal, PitchUnits units):
@@ -83,6 +83,11 @@ public:
 		return pitchBytes() * h();
 	}
 
+	constexpr size_t unpaddedBytes() const
+	{
+		return PixmapDesc::bytes();
+	}
+
 	constexpr bool isPadded() const
 	{
 		return w() != pitchPixels();
@@ -103,7 +108,7 @@ public:
 		//logDMsg("sub-pixmap with pos:%dx%d size:%dx%d", pos.x, pos.y, size.x, size.y);
 		assumeExpr(pos.x >= 0 && pos.y >= 0);
 		assumeExpr(pos.x + size.x <= (int)w() && pos.y + size.y <= (int)h());
-		return Pixmap{{size, format()}, pixel(pos), {pitchBytes(), BYTE_UNITS}};
+		return Pixmap{makeNewSize(size), pixel(pos), {pitchBytes(), BYTE_UNITS}};
 	}
 
 	void write(Pixmap pixmap);
@@ -116,10 +121,55 @@ public:
 	template <class Func>
 	static constexpr bool checkTransformFunc()
 	{
-		constexpr bool isValid = !std::is_void_v<FunctionTraitsR<Func>>
-			&& functionTraitsArity<Func> == 1;
+		using FuncTraits = FunctionTraits<Func>;
+		constexpr bool isValid = !std::is_void_v<typename FuncTraits::Result>
+			&& FuncTraits::arity == 1;
 		static_assert(isValid, "Transform function must take 1 argument and return a value");
 		return isValid;
+	}
+
+	template <class Func>
+	void transformInPlace(Func func)
+	{
+		if constexpr(!checkTransformFunc<Func>())
+		{
+			return;
+		}
+		switch(format().bytesPerPixel())
+		{
+			case 1: return transformInPlace2<uint8_t>(func);
+			case 2: return transformInPlace2<uint16_t>(func);
+			case 4: return transformInPlace2<uint32_t>(func);
+		}
+	}
+
+	template <class Data, class Func>
+	void transformInPlace2(Func func)
+	{
+		auto data = (Data*)data_;
+		if(!isPadded())
+		{
+			IG::transformN(data, w() * h(), data,
+				[=](Data pixel)
+				{
+					return func(pixel);
+				});
+		}
+		else
+		{
+			auto dataPitchPixels = pitchPixels();
+			auto width = w();
+			iterateTimes(h(), y)
+			{
+				auto lineData = data;
+				IG::transformN(lineData, width, lineData,
+					[=](Data pixel)
+					{
+						return func(pixel);
+					});
+				data += dataPitchPixels;
+			}
+		}
 	}
 
 	template <class Func>
@@ -187,6 +237,7 @@ protected:
 		}
 		else
 		{
+			auto destPitchPixels = pitchPixels();
 			iterateTimes(pixmap.h(), h)
 			{
 				auto destLineData = destData;
@@ -197,7 +248,7 @@ protected:
 						return func(srcPixel);
 					});
 				srcData += pixmap.pitchPixels();
-				destData += pitchPixels();
+				destData += destPitchPixels;
 			}
 		}
 	}

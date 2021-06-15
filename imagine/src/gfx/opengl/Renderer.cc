@@ -19,119 +19,113 @@
 #include <imagine/logger/logger.h>
 #include <imagine/base/Window.hh>
 #include <imagine/base/GLContext.hh>
-#include <imagine/base/Base.hh>
+#include <imagine/base/ApplicationContext.hh>
 #include "internalDefs.hh"
-#ifdef __ANDROID__
-#include <imagine/base/platformExtras.hh>
-#endif
 
 namespace Gfx
 {
 
-Renderer::Renderer(RendererConfig config, Base::Window *initialWindow, Error &err)
+Renderer::Renderer(Base::ApplicationContext ctx, Error &err):
+	GLRenderer{ctx, err}
+{}
+
+Renderer::~Renderer()
 {
-	auto pixelFormat = config.pixelFormat();
-	if(pixelFormat == PIXEL_FMT_NONE)
-		pixelFormat = Base::Window::defaultPixelFormat();
+	for(auto &w : appContext().windows())
 	{
-		auto [ec, dpy] = Base::GLDisplay::makeDefault(glAPI);
-		if(ec)
-		{
-			err = std::runtime_error("error creating GL display connection");
-			return;
-		}
-		glDpy = dpy;
+		detachWindow(*w);
 	}
+}
+
+GLRenderer::GLRenderer(Base::ApplicationContext ctx, Error &err):
+	glManager{ctx.nativeDisplayConnection(), glAPI},
+	mainTask{ctx, "Main GL Context Messages", *static_cast<Renderer*>(this)},
+	releaseShaderCompilerEvent{"GLRenderer::releaseShaderCompilerEvent"}
+{
+	if(!glManager)
 	{
-		auto bufferConfig = makeGLBufferConfig(pixelFormat);
-		if(unlikely(!bufferConfig))
-		{
-			err = std::runtime_error("error finding a GL configuration");
-			return;
-		}
-		gfxBufferConfig = *bufferConfig;
+		err = std::runtime_error("error getting GL display");
+		return;
 	}
-	glDpy.logInfo();
+	glManager.logInfo();
+}
+
+Error Renderer::initMainTask(Base::Window *initialWindow, DrawableConfig drawableConfig)
+{
+	if(mainTask.glContext())
+	{
+		return {};
+	}
+	auto ctx = appContext();
+	auto bufferConfig = makeGLBufferConfig(ctx, drawableConfig.pixelFormat, initialWindow);
+	if(!bufferConfig) [[unlikely]]
+	{
+		return std::runtime_error("error finding a GL configuration");
+	}
 	Drawable initialDrawable{};
 	if(initialWindow)
 	{
-		if(!attachWindow(*initialWindow))
+		if(!GLRenderer::attachWindow(*initialWindow, *bufferConfig, (Base::GLColorSpace)drawableConfig.colorSpace))
 		{
-			err = std::runtime_error("error creating window surface");
-			return;
+			return std::runtime_error("error creating window surface");
 		}
-		initialDrawable = (Drawable)winData(*initialWindow).drawableHolder;
+		initialDrawable = (Drawable)winData(*initialWindow).drawable;
 	}
 	constexpr int DRAW_THREAD_PRIORITY = -4;
 	GLTaskConfig conf
 	{
-		.bufferConfig = gfxBufferConfig,
+		.glManagerPtr = &glManager,
+		.bufferConfig = *bufferConfig,
 		.initialDrawable = initialDrawable,
 		.threadPriority = DRAW_THREAD_PRIORITY,
 	};
-	err = mainTask.makeGLContext(conf);
-	if(unlikely(err))
+	if(auto err = mainTask.makeGLContext(conf);
+		err) [[unlikely]]
 	{
-		return;
+		return err;
 	}
-	mainTask.setDrawAsyncMode(maxSwapChainImages() < 3 ? DrawAsyncMode::PRESENT : DrawAsyncMode::NONE);
-	addEventHandlers(mainTask);
+	addEventHandlers(ctx, mainTask);
 	configureRenderer();
+	return {};
 }
 
-Renderer::Renderer(Base::Window *initialWindow, Error &err):
-	Renderer({Base::Window::defaultPixelFormat()}, initialWindow, err)
-{}
-
-GLRenderer::GLRenderer():
-	mainTask{"Main GL Context Messages", *static_cast<Renderer*>(this)},
-	releaseShaderCompilerEvent{"GLRenderer::releaseShaderCompilerEvent"}
-{}
-
-GLRenderer::~GLRenderer()
+Base::NativeWindowFormat GLRenderer::nativeWindowFormat(Base::GLBufferConfig bufferConfig) const
 {
-	deinit();
+	return glManager.nativeWindowFormat(mainTask.appContext(), bufferConfig);
 }
 
-void GLRenderer::deinit()
+bool GLRenderer::attachWindow(Base::Window &win, Base::GLBufferConfig bufferConfig, Base::GLColorSpace colorSpace)
 {
-	glDpy.deinit();
-}
-
-bool Renderer::attachWindow(Base::Window &win)
-{
-	if(unlikely(!win.hasSurface()))
+	if(!win.hasSurface()) [[unlikely]]
 	{
 		logMsg("can't attach uninitialized window");
 		return false;
 	}
 	logMsg("attaching window:%p", &win);
-	win.setFormat(nativeWindowFormat());
 	auto &rData = win.makeRendererData<GLRendererWindowData>();
-	rData.drawableHolder.makeDrawable(glDpy, win, gfxBufferConfig);
-	if(unlikely(!rData.drawableHolder))
+	if(!makeWindowDrawable(mainTask, win, bufferConfig, colorSpace)) [[unlikely]]
 	{
 		return false;
 	}
-	if(win == Base::mainWindow())
+	if(win.isMainWindow())
 	{
 		if(!Config::SYSTEM_ROTATES_WINDOWS)
 		{
 			rData.projAngleM = orientationToGC(win.softOrientation());
-			Base::setOnDeviceOrientationChanged(
-				[this, &win](Base::Orientation newO)
+			win.appContext().setOnDeviceOrientationChanged(
+				[this, &win](Base::ApplicationContext, Base::Orientation newO)
 				{
 					auto oldWinO = win.softOrientation();
 					if(win.requestOrientationChange(newO))
 					{
-						animateProjectionMatrixRotation(win, orientationToGC(oldWinO), orientationToGC(newO));
+						static_cast<Renderer*>(this)->animateProjectionMatrixRotation(win, orientationToGC(oldWinO), orientationToGC(newO));
 					}
 				});
 		}
-		else if(Config::SYSTEM_ROTATES_WINDOWS && !Base::Window::systemAnimatesRotation())
+		else if(Config::SYSTEM_ROTATES_WINDOWS && !win.appContext().systemAnimatesWindowRotation())
 		{
-			Base::setOnSystemOrientationChanged(
-				[this, &win](Base::Orientation oldO, Base::Orientation newO) // TODO: parameters need proper type definitions in API
+			win.appContext().setOnSystemOrientationChanged(
+				[this, &win](Base::ApplicationContext, Base::Orientation oldO, Base::Orientation newO) // TODO: parameters need proper type definitions in API
 				{
 					const Angle orientationDiffTable[4][4]
 					{
@@ -142,27 +136,84 @@ bool Renderer::attachWindow(Base::Window &win)
 					};
 					auto rotAngle = orientationDiffTable[oldO][newO];
 					logMsg("animating from %d degrees", (int)angleToDegree(rotAngle));
-					animateProjectionMatrixRotation(win, rotAngle, 0.);
+					static_cast<Renderer*>(this)->animateProjectionMatrixRotation(win, rotAngle, 0.);
 				});
 		}
 	}
 	return true;
 }
 
+bool GLRenderer::makeWindowDrawable(RendererTask &task, Base::Window &win, Base::GLBufferConfig bufferConfig, Base::GLColorSpace colorSpace)
+{
+	auto &rData = winData(win);
+	rData.bufferConfig = bufferConfig;
+	rData.colorSpace = colorSpace;
+	task.destroyDrawable(rData.drawable);
+	Base::GLDrawableAttributes attr{bufferConfig};
+	attr.setColorSpace(colorSpace);
+	IG::ErrorCode ec{};
+	rData.drawable = glManager.makeDrawable(win, attr, ec);
+	if(ec) [[unlikely]]
+	{
+		return false;
+	}
+	return true;
+}
+
+bool Renderer::attachWindow(Base::Window &win, DrawableConfig drawableConfig)
+{
+	Base::GLBufferConfig bufferConfig = mainTask.glBufferConfig();
+	if(canRenderToMultiplePixelFormats())
+	{
+		auto bufferConfigOpt = makeGLBufferConfig(appContext(), drawableConfig.pixelFormat, &win);
+		if(!bufferConfigOpt) [[unlikely]]
+		{
+			return false;
+		}
+		bufferConfig = *bufferConfigOpt;
+	}
+	return GLRenderer::attachWindow(win, bufferConfig, (Base::GLColorSpace)drawableConfig.colorSpace);
+}
+
 void Renderer::detachWindow(Base::Window &win)
 {
 	win.resetRendererData();
-	if(win == Base::mainWindow())
+	if(win.isMainWindow())
 	{
 		if(!Config::SYSTEM_ROTATES_WINDOWS)
 		{
-			Base::setOnDeviceOrientationChanged({});
+			win.appContext().setOnDeviceOrientationChanged({});
 		}
-		else if(Config::SYSTEM_ROTATES_WINDOWS && !Base::Window::systemAnimatesRotation())
+		else if(Config::SYSTEM_ROTATES_WINDOWS && !win.appContext().systemAnimatesWindowRotation())
 		{
-			Base::setOnSystemOrientationChanged({});
+			win.appContext().setOnSystemOrientationChanged({});
 		}
 	}
+}
+
+bool Renderer::setDrawableConfig(Base::Window &win, DrawableConfig config)
+{
+	auto bufferConfig = makeGLBufferConfig(appContext(), config.pixelFormat, &win);
+	if(!bufferConfig) [[unlikely]]
+	{
+		return false;
+	}
+	if(winData(win).bufferConfig == *bufferConfig && winData(win).colorSpace == (Base::GLColorSpace)config.colorSpace)
+	{
+		return true;
+	}
+	if(mainTask.glBufferConfig() != *bufferConfig && !canRenderToMultiplePixelFormats())
+	{
+		// context only supports config it was created with
+		return false;
+	}
+	win.setFormat(config.pixelFormat);
+	return makeWindowDrawable(mainTask, win, *bufferConfig, (Base::GLColorSpace)config.colorSpace);
+}
+
+bool Renderer::canRenderToMultiplePixelFormats() const
+{
+	return glManager.hasNoConfigContext();
 }
 
 void Renderer::releaseShaderCompiler()
@@ -221,7 +272,7 @@ ClipRect Renderer::makeClipRect(const Base::Window &win, IG::WindowRect rect)
 		//x += win.viewport.rect.x;
 		y = win.height() - (y + h /*+ win.viewport.rect.y*/);
 	}
-	return {x, y, w, h};
+	return {{x, y}, {w, h}};
 }
 
 bool Renderer::supportsSyncFences() const
@@ -234,12 +285,12 @@ void Renderer::setPresentationTime(Base::Window &win, IG::FrameTime time) const
 	#ifdef __ANDROID__
 	if(!support.eglPresentationTimeANDROID)
 		return;
-	auto drawable = (Drawable)winData(win).drawableHolder;
-	bool success = support.eglPresentationTimeANDROID(glDpy, drawable, time.count());
+	auto drawable = (Drawable)winData(win).drawable;
+	bool success = support.eglPresentationTimeANDROID(glDisplay(), drawable, time.count());
 	if(Config::DEBUG_BUILD && !success)
 	{
 		logErr("error:%s in eglPresentationTimeANDROID(%p, %llu)",
-			glDpy.errorString(eglGetError()), (EGLSurface)drawable, (unsigned long long)time.count());
+			Base::GLManager::errorString(eglGetError()), (EGLSurface)drawable, (unsigned long long)time.count());
 	}
 	#endif
 }
@@ -247,16 +298,81 @@ void Renderer::setPresentationTime(Base::Window &win, IG::FrameTime time) const
 unsigned Renderer::maxSwapChainImages() const
 {
 	#ifdef __ANDROID__
-	if(Base::androidSDK() < 18)
+	if(appContext().androidSDK() < 18)
 		return 2;
 	#endif
 	return 3; // assume triple-buffering by default
+}
+
+bool Renderer::supportsColorSpace() const
+{
+	return glManager.hasSrgbColorSpace();
+}
+
+bool Renderer::hasSrgbColorSpaceWriteControl() const
+{
+	return support.hasSrgbWriteControl;
+}
+
+Base::ApplicationContext Renderer::appContext() const
+{
+	return task().appContext();
 }
 
 GLRendererWindowData &winData(Base::Window &win)
 {
 	assumeExpr(win.rendererData<GLRendererWindowData>());
 	return *win.rendererData<GLRendererWindowData>();
+}
+
+Base::GLDisplay GLRenderer::glDisplay() const
+{
+	return glManager.display();
+}
+
+std::vector<DrawableConfigDesc> Renderer::supportedDrawableConfigs() const
+{
+	std::vector<DrawableConfigDesc> formats{};
+	formats.reserve(3);
+	static constexpr DrawableConfigDesc testDescs[]
+	{
+		{
+			.name = "RGBA8888",
+			.config{ .pixelFormat = PIXEL_RGBA8888, .colorSpace{} }
+		},
+		{
+			.name = "RGBA8888:sRGB",
+			.config{ .pixelFormat = PIXEL_RGBA8888, .colorSpace = ColorSpace::SRGB }
+		},
+		{
+			.name = "RGB565",
+			.config{ .pixelFormat = PIXEL_RGB565, .colorSpace{} }
+		},
+	};
+	for(auto desc : testDescs)
+	{
+		if(glManager.hasDrawableConfig(desc.config.pixelFormat, (Base::GLColorSpace)desc.config.colorSpace))
+		{
+			formats.emplace_back(desc);
+		}
+	}
+	return formats;
+}
+
+bool Renderer::hasBgraFormat(TextureBufferMode mode) const
+{
+	if constexpr(Config::envIsAndroid)
+	{
+		if(mode == TextureBufferMode::ANDROID_HARDWARE_BUFFER || mode == TextureBufferMode::ANDROID_SURFACE_TEXTURE)
+			return false;
+	}
+	if(!support.hasBGRPixels)
+		return false;
+	if(Config::Gfx::OPENGL_ES && support.hasImmutableTexStorage)
+	{
+		return false;
+	}
+	return true;
 }
 
 }

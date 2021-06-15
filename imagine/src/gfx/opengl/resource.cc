@@ -48,11 +48,12 @@ TextureSampler Renderer::makeTextureSampler(TextureSamplerConfig config)
 	return {task(), config};
 }
 
-TextureSampler &GLRenderer::commonTextureSampler(CommonTextureSampler sampler)
+template <class CommonSamplers>
+static auto &commonTextureSampler(CommonSamplers &commonSampler, CommonTextureSampler sampler)
 {
 	switch(sampler)
 	{
-		default: bug_unreachable("sampler:%d", (int)sampler); [[fallthrough]];
+		default: bug_unreachable("sampler:%d", (int)sampler); return commonSampler.clamp;
 		case CommonTextureSampler::CLAMP: return commonSampler.clamp;
 		case CommonTextureSampler::NEAREST_MIP_CLAMP: return commonSampler.nearestMipClamp;
 		case CommonTextureSampler::NO_MIP_CLAMP: return commonSampler.noMipClamp;
@@ -62,12 +63,19 @@ TextureSampler &GLRenderer::commonTextureSampler(CommonTextureSampler sampler)
 	}
 }
 
+const TextureSampler &Renderer::commonTextureSampler(CommonTextureSampler sampler) const
+{
+	auto &samplerObj = Gfx::commonTextureSampler(commonSampler, sampler);
+	assert(samplerObj);
+	return samplerObj;
+}
+
 static TextureSamplerConfig commonTextureSamplerConfig(CommonTextureSampler sampler)
 {
 	TextureSamplerConfig conf;
 	switch(sampler)
 	{
-		default: bug_unreachable("sampler:%d", (int)sampler); [[fallthrough]];
+		default: bug_unreachable("sampler:%d", (int)sampler); return conf;
 		case CommonTextureSampler::CLAMP:
 			conf.setDebugLabel("CommonClamp");
 			return conf;
@@ -96,12 +104,12 @@ static TextureSamplerConfig commonTextureSamplerConfig(CommonTextureSampler samp
 	}
 }
 
-TextureSampler &Renderer::makeCommonTextureSampler(CommonTextureSampler sampler)
+const TextureSampler &Renderer::makeCommonTextureSampler(CommonTextureSampler sampler)
 {
-	auto &commonSampler = commonTextureSampler(sampler);
-	if(!commonSampler)
-		commonSampler = makeTextureSampler(commonTextureSamplerConfig(sampler));
-	return commonSampler;
+	auto &samplerObj = Gfx::commonTextureSampler(commonSampler, sampler);
+	if(!samplerObj)
+		samplerObj = makeTextureSampler(commonTextureSamplerConfig(sampler));
+	return samplerObj;
 }
 
 }

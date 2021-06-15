@@ -41,7 +41,7 @@
 #include "internal.hh"
 
 static constexpr uint MAX_ROM_SIZE = 512 * 1024;
-std::unique_ptr<OSystem> osystem{};
+std::optional<OSystem> osystem{};
 Properties defaultGameProps{};
 bool p1DiffB = true, p2DiffB = true, vcsColor = true;
 Controller::Type autoDetectedInput1{};
@@ -97,13 +97,12 @@ static void updateSwitchValues()
 
 bool EmuSystem::vidSysIsPAL()
 {
-	auto os = osystem.get();
-	return os->hasConsole() && os->console().timing() != ConsoleTiming::ntsc;
+	return osystem->hasConsole() && osystem->console().timing() != ConsoleTiming::ntsc;
 }
 
-EmuSystem::Error EmuSystem::loadGame(IO &io, EmuSystemCreateParams, OnLoadProgressDelegate)
+EmuSystem::Error EmuSystem::loadGame(Base::ApplicationContext ctx, IO &io, EmuSystemCreateParams, OnLoadProgressDelegate)
 {
-	auto os = osystem.get();
+	auto &os = *osystem;
 	auto size = io.size();
 	if(size > MAX_ROM_SIZE)
 	{
@@ -116,27 +115,27 @@ EmuSystem::Error EmuSystem::loadGame(IO &io, EmuSystemCreateParams, OnLoadProgre
 	}
 	string md5 = MD5::hash(image, size);
 	Properties props{};
-	os->propSet().getMD5(md5, props);
+	os.propSet().getMD5(md5, props);
 	defaultGameProps = props;
 	auto &romType = props.get(PropType::Cart_Type);
 	FilesystemNode fsNode{gamePath()};
-	auto &settings = os->settings();
+	auto &settings = os.settings();
 	settings.setValue("romloadcount", 0);
 	auto cartridge = CartDetector::create(fsNode, image, size, md5, romType, settings);
 	if((int)optionTVPhosphor != TV_PHOSPHOR_AUTO)
 	{
 		props.set(PropType::Display_Phosphor, optionTVPhosphor ? "YES" : "NO");
 	}
-	os->frameBuffer().enablePhosphor(props.get(PropType::Display_Phosphor) == "YES", optionTVPhosphorBlend);
+	os.frameBuffer().enablePhosphor(props.get(PropType::Display_Phosphor) == "YES", optionTVPhosphorBlend);
 	if((int)optionVideoSystem) // not auto
 	{
 		logMsg("forcing video system to: %s", optionVideoSystemToStr());
 		props.set(PropType::Display_Format, optionVideoSystemToStr());
 	}
-	os->makeConsole(cartridge, props, gamePath());
-	auto &console = os->console();
+	os.makeConsole(cartridge, props, gamePath());
+	auto &console = os.console();
 	autoDetectedInput1 = limitToSupportedControllerTypes(console.leftController().type());
-	setControllerType(console, (Controller::Type)optionInputPort1.val);
+	setControllerType(EmuApp::get(ctx), console, (Controller::Type)optionInputPort1.val);
 	Paddles::setDigitalSensitivity(optionPaddleDigitalSensitivity);
 	console.initializeVideo();
 	console.initializeAudio();
@@ -149,10 +148,18 @@ void EmuSystem::configAudioRate(IG::FloatSeconds frameTime, uint32_t rate)
 	osystem->setFrameTime(frameTime.count(), rate);
 }
 
+static void renderVideo(EmuSystemTask *task, EmuVideo &video, FrameBuffer &fb, TIA &tia)
+{
+	auto fmt = video.renderPixelFormat();
+	auto img = video.startFrameWithFormat(task, {{(int)tia.width(), (int)tia.height()}, fmt});
+	fb.render(img.pixmap(), tia);
+	img.endFrame();
+}
+
 void EmuSystem::runFrame(EmuSystemTask *task, EmuVideo *video, EmuAudio *audio)
 {
-	auto os = osystem.get();
-	auto &console = os->console();
+	auto &os = *osystem;
+	auto &console = os.console();
 	console.leftController().update();
 	console.rightController().update();
 	console.switches().update();
@@ -162,27 +169,31 @@ void EmuSystem::runFrame(EmuSystemTask *task, EmuVideo *video, EmuAudio *audio)
 	tia.renderToFrameBuffer();
 	if(video)
 	{
-		auto img = video->startFrameWithFormat(task, {{(int)tia.width(), (int)tia.height()}, IG::PIXEL_FMT_RGB565});
-		os->frameBuffer().render(img.pixmap(), tia);
-		img.endFrame();
+		renderVideo(task, *video, os.frameBuffer(), tia);
 	}
-	os->processAudio(audio);
+	os.processAudio(audio);
+}
+
+void EmuSystem::renderFramebuffer(EmuVideo &video)
+{
+	auto &tia = osystem->console().tia();
+	auto &fb = osystem->frameBuffer();
+	renderVideo({}, video, fb, tia);
 }
 
 void EmuSystem::reset(ResetMode mode)
 {
-	auto os = osystem.get();
 	assert(gameIsRunning());
 	if(mode == RESET_HARD)
 	{
-		os->console().system().reset();
+		osystem->console().system().reset();
 	}
 	else
 	{
-		Event &ev = os->eventHandler().event();
+		Event &ev = osystem->eventHandler().event();
 		ev.clear();
 		ev.set(Event::ConsoleReset, 1);
-		auto &console = os->console();
+		auto &console = osystem->console();
 		console.switches().update();
 		TIA& tia = console.tia();
 		tia.update(console.emulationTiming().cyclesPerFrame());
@@ -229,11 +240,21 @@ void EmuSystem::onPrepareAudio(EmuAudio &audio)
 	audio.setStereo(false); // TODO: stereo mode
 }
 
-EmuSystem::Error EmuSystem::onInit()
+void EmuSystem::onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat fmt)
 {
-	osystem = make_unique<OSystem>();
+	osystem->frameBuffer().setPixelFormat(fmt);
+	if(osystem->hasConsole())
+	{
+		osystem->console().setPalette(osystem->settings().getString("palette"));
+	}
+}
+
+EmuSystem::Error EmuSystem::onInit(Base::ApplicationContext ctx)
+{
+	auto &app = EmuApp::get(ctx);
+	osystem.emplace(app);
 	Paddles::setDigitalSensitivity(5);
 	Paddles::setMouseSensitivity(7);
-	EmuControls::setActiveFaceButtons(2);
+	app.setActiveFaceButtons(2);
 	return {};
 }

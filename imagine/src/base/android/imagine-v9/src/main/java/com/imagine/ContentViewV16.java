@@ -25,16 +25,9 @@ import android.util.Log;
 // so use fitSystemWindows to get the area not overlapping the system windows
 final class ContentViewV16 extends ContentViewV16Base
 {
-	public ContentViewV16(Context context)
+	public ContentViewV16(Context context, long nativeUserData)
 	{
-		super(context);
-		((Activity)context).getWindow().getAttributes().systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-			| View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
-	}
-	
-	public ContentViewV16(Context context, long windowAddr)
-	{
-		super(context, windowAddr);
+		super(context, nativeUserData);
 	}
 	
 	@Override protected boolean fitSystemWindows(Rect insets)
@@ -58,11 +51,11 @@ final class ContentViewV16 extends ContentViewV16Base
 			newContentRect.right -= insets.right;
 			newContentRect.bottom -= insets.bottom;
 		}
-		if(!contentRect.equals(newContentRect) || newWindowWidth != windowWidth || newWindowHeight != windowHeight)
+		if(nativeUserData != 0 && (!contentRect.equals(newContentRect) || newWindowWidth != windowWidth || newWindowHeight != windowHeight))
 		{
 			//Log.i(logTag, "content rect: " + contentRect.left + "," + contentRect.top + " " + contentRect.right + "," + contentRect.bottom
 			//		+ " -> " + newContentRect.left + "," + newContentRect.top + " " + newContentRect.right + "," + newContentRect.bottom);
-			BaseActivity.onContentRectChanged(windowAddr,
+			BaseActivity.onContentRectChanged(nativeUserData,
 				newContentRect.left, newContentRect.top, newContentRect.right, newContentRect.bottom,
 				newWindowWidth, newWindowHeight);
 			contentRect.set(newContentRect);

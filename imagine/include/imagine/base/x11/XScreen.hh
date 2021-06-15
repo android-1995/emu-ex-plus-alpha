@@ -17,24 +17,49 @@
 
 #include <imagine/config/defs.hh>
 #include <imagine/time/Time.hh>
+#include <imagine/base/baseDefs.hh>
+#include <imagine/base/SimpleFrameTimer.hh>
+#include <imagine/base/linux/DRMFrameTimer.hh>
+#include <imagine/base/linux/FBDevFrameTimer.hh>
 #include <utility>
 #include <compare>
+#include <memory>
 
 namespace Base
 {
 
+class ApplicationContext;
+
+using FrameTimerVariant = std::variant<DRMFrameTimer, FBDevFrameTimer, SimpleFrameTimer>;
+
+class FrameTimer : public FrameTimerVariantWrapper<FrameTimerVariant>
+{
+public:
+	using FrameTimerVariantWrapper::FrameTimerVariantWrapper;
+};
+
 class XScreen
 {
 public:
-	constexpr XScreen() {}
-	XScreen(void *xScreen);
+	struct InitParams
+	{
+		void *xScreen;
+	};
+
+	XScreen(ApplicationContext, InitParams);
 	std::pair<float, float> mmSize() const;
 	void *nativeObject() const;
 	bool operator ==(XScreen const &rhs) const;
 	explicit operator bool() const;
 
+	constexpr bool operator ==(ScreenId screen) const
+	{
+		return xScreen == screen;
+	}
+
 protected:
 	void *xScreen{};
+	FrameTimer frameTimer;
 	float xMM = 0, yMM = 0;
 	IG::FloatSeconds frameTime_{};
 	bool reliableFrameTime = true;

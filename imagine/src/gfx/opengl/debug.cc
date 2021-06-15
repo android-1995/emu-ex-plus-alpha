@@ -108,12 +108,12 @@ void DrawContextSupport::setGLDebugOutput(bool on)
 	}
 	else
 	{
-		if(unlikely(!glDebugMessageCallback))
+		if(!glDebugMessageCallback) [[unlikely]]
 		{
 			auto glDebugMessageCallbackStr =
 					Config::Gfx::OPENGL_ES ? "glDebugMessageCallbackKHR" : "glDebugMessageCallback";
 			logWarn("enabling debug output with %s", glDebugMessageCallbackStr);
-			glDebugMessageCallback = (typeof(glDebugMessageCallback))Base::GLContext::procAddress(glDebugMessageCallbackStr);
+			glDebugMessageCallback = (typeof(glDebugMessageCallback))Base::GLManager::procAddress(glDebugMessageCallbackStr);
 		}
 		glDebugMessageCallback(
 			GL_APIENTRY [](GLenum source, GLenum type, GLuint id,

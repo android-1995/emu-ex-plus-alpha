@@ -17,21 +17,43 @@
 
 #include <imagine/config/defs.hh>
 #include <imagine/time/Time.hh>
-#include <jni.h>
+#include <imagine/base/baseDefs.hh>
+#include <imagine/base/SimpleFrameTimer.hh>
+#include <imagine/base/android/Choreographer.hh>
+#include <imagine/util/jni.hh>
 #include <utility>
 #include <compare>
+#include <memory>
 
 namespace Base
 {
 
-enum SurfaceRotation : int;
+class ApplicationContext;
+
+enum SurfaceRotation : uint8_t;
+
+using FrameTimerVariant = std::variant<NativeChoreographerFrameTimer, JavaChoreographerFrameTimer, SimpleFrameTimer>;
+
+class FrameTimer : public FrameTimerVariantWrapper<FrameTimerVariant>
+{
+public:
+	using FrameTimerVariantWrapper::FrameTimerVariantWrapper;
+};
 
 class AndroidScreen
 {
 public:
-	constexpr AndroidScreen() {}
-	AndroidScreen(JNIEnv *env, jobject aDisplay, int id, float refreshRate, SurfaceRotation rotation, jobject metrics);
-	~AndroidScreen();
+	struct InitParams
+	{
+		JNIEnv *env;
+		jobject aDisplay;
+		jobject metrics;
+		int id;
+		float refreshRate;
+		SurfaceRotation rotation;
+	};
+
+	AndroidScreen(ApplicationContext, InitParams);
 	std::pair<float, float> dpi() const;
 	float densityDPI() const;
 	jobject displayObject() const;
@@ -40,8 +62,14 @@ public:
 	bool operator ==(AndroidScreen const &rhs) const;
 	explicit operator bool() const;
 
+	constexpr bool operator ==(ScreenId id) const
+	{
+		return id_ == id;
+	}
+
 protected:
-	jobject aDisplay{};
+	JNI::UniqueGlobalRef aDisplay{};
+	FrameTimer frameTimer;
 	IG::FloatSeconds frameTime_{};
 	float xDPI{}, yDPI{};
 	float densityDPI_{};

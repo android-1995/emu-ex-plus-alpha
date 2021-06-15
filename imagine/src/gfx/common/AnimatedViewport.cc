@@ -15,6 +15,7 @@
 
 #define LOGTAG "AnimatedViewport"
 #include <imagine/gfx/AnimatedViewport.hh>
+#include <imagine/gfx/Viewport.hh>
 #include <imagine/base/Window.hh>
 #include <imagine/base/Screen.hh>
 #include <imagine/logger/logger.h>
@@ -94,7 +95,7 @@ void AnimatedViewport::cancel()
 Gfx::Viewport AnimatedViewport::viewport() const
 {
 	return win ? Gfx::Viewport::makeFromWindow(*win,
-		{animator[0], animator[1], animator[2], animator[3]}) : Gfx::Viewport{};
+		{{animator[0], animator[1]}, {animator[2], animator[3]}}) : Gfx::Viewport{};
 }
 
 }

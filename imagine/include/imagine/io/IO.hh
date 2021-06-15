@@ -16,7 +16,7 @@
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <imagine/config/defs.hh>
-#include <imagine/util/bits.h>
+#include <imagine/util/bitset.hh>
 #include <imagine/util/BufferView.hh>
 #include <imagine/util/typeTraits.hh>
 #include <memory>
@@ -54,13 +54,24 @@ public:
 	bool rewind();
 	off_t tell(std::error_code *ecOut = nullptr);
 	ssize_t send(IO &output, off_t *srcOffset, size_t bytes, std::error_code *ecOut = nullptr);
-	IG::ConstBufferView constBufferView();
+	IG::ConstByteBufferView constBufferView();
 
 	template <class T>
 	std::pair<T, ssize_t> read(std::error_code *ecOut = nullptr)
 	{
 		T obj;
-		auto size = static_cast<IO*>(this)->read(&obj, sizeof(T), ecOut);
+		ssize_t size;
+		if constexpr(std::is_same_v<T, bool>)
+		{
+			// special case to convert value to a valid bool
+			uint8_t tmpObj;
+			size = static_cast<IO*>(this)->read(&tmpObj, sizeof(T), ecOut);
+			obj = tmpObj;
+		}
+		else
+		{
+			size = static_cast<IO*>(this)->read(&obj, sizeof(T), ecOut);
+		}
 		if(size == -1)
 			return {{}, size};
 		return {obj, size};
@@ -75,7 +86,7 @@ public:
 	template <class T>
 	ssize_t write(T &&obj, std::error_code *ecOut = nullptr)
 	{
-		using DecayT = typename std::decay<T>::type;
+		using DecayT = typename std::decay_t<T>;
 		if constexpr(std::is_pointer_v<DecayT>)
 		{
 			static_assert(IG::dependentFalseValue<DecayT>, "attempting to write a pointer with no size parameter");
@@ -117,7 +128,7 @@ public:
 	// reading
 	virtual ssize_t read(void *buff, size_t bytes, std::error_code *ecOut) = 0;
 	virtual ssize_t readAtPos(void *buff, size_t bytes, off_t offset, std::error_code *ecOut);
-	virtual const char *mmapConst();
+	virtual const uint8_t *mmapConst();
 
 	// writing
 	virtual ssize_t write(const void *buff, size_t bytes, std::error_code *ecOut) = 0;
@@ -153,15 +164,15 @@ public:
 	constexpr GenericIO() {}
 	template<class T>
 	GenericIO(T &io): io{std::unique_ptr<IO>{new T(std::move(io))}} {}
-	GenericIO(std::unique_ptr<IO> io): io{std::move(io)} {}
-	explicit operator IO*(){ return io.get(); }
-	operator IO&(){ return *io; }
-	IO *release() { return io.release(); }
+	GenericIO(std::unique_ptr<IO> io);
+	explicit operator IO*();
+	operator IO&();
+	IO *release();
 	FILE *moveToFileStream(const char *opentype);
 
 	ssize_t read(void *buff, size_t bytes, std::error_code *ecOut);
 	ssize_t readAtPos(void *buff, size_t bytes, off_t offset, std::error_code *ecOut);
-	const char *mmapConst();
+	const uint8_t *mmapConst();
 	ssize_t write(const void *buff, size_t bytes, std::error_code *ecOut);
 	std::error_code truncate(off_t offset);
 	off_t seek(off_t offset, IO::SeekMode mode, std::error_code *ecOut);

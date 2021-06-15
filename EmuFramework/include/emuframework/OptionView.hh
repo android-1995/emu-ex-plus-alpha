@@ -15,19 +15,24 @@
 	You should have received a copy of the GNU General Public License
 	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <imagine/gui/MenuItem.hh>
-#include <imagine/gui/TableView.hh>
-#include <imagine/audio/AudioManager.hh>
-#include <imagine/audio/defs.hh>
-#include <imagine/util/container/ArrayList.hh>
 #include <emuframework/EmuSystem.hh>
+#include <emuframework/EmuAppHelper.hh>
+#include <imagine/gui/TableView.hh>
+#include <imagine/gui/MenuItem.hh>
+#include <imagine/audio/Manager.hh>
+#include <imagine/util/container/ArrayList.hh>
 #include <memory>
 
 class EmuVideoLayer;
 class EmuAudio;
 class TextTableView;
 
-class OptionCategoryView : public TableView
+namespace Gfx
+{
+struct DrawableConfig;
+}
+
+class OptionCategoryView : public TableView, public EmuAppHelper<OptionCategoryView>
 {
 public:
 	OptionCategoryView(ViewAttachParams attach, EmuAudio &audio, EmuVideoLayer &videoLayer);
@@ -36,7 +41,7 @@ protected:
 	TextMenuItem subConfig[5];
 };
 
-class VideoOptionView : public TableView
+class VideoOptionView : public TableView, public EmuAppHelper<VideoOptionView>
 {
 public:
 	VideoOptionView(ViewAttachParams attach, bool customMenu = false);
@@ -44,7 +49,7 @@ public:
 	void setEmuVideoLayer(EmuVideoLayer &videoLayer);
 
 protected:
-	static constexpr uint MAX_ASPECT_RATIO_ITEMS = 5;
+	static constexpr unsigned MAX_ASPECT_RATIO_ITEMS = 5;
 	EmuVideoLayer *videoLayer{};
 
 	StaticArrayList<TextMenuItem, 5> textureBufferModeItem{};
@@ -75,10 +80,8 @@ protected:
 	TextMenuItem imgEffectPixelFormatItem[3];
 	MultiChoiceMenuItem imgEffectPixelFormat;
 	#endif
-	#if defined EMU_FRAMEWORK_WINDOW_PIXEL_FORMAT_OPTION
-	TextMenuItem windowPixelFormatItem[5];
+	StaticArrayList<TextMenuItem, 4> windowPixelFormatItem{};
 	MultiChoiceMenuItem windowPixelFormat;
-	#endif
 	#if defined CONFIG_BASE_MULTI_WINDOW && defined CONFIG_BASE_X11
 	BoolMenuItem secondDisplay;
 	#endif
@@ -87,11 +90,13 @@ protected:
 	#endif
 	TextMenuItem imageBuffersItem[3];
 	MultiChoiceMenuItem imageBuffers;
+	TextMenuItem renderPixelFormatItem[3];
+	MultiChoiceMenuItem renderPixelFormat;
 	TextHeadingMenuItem visualsHeading;
 	TextHeadingMenuItem screenShapeHeading;
 	TextHeadingMenuItem advancedHeading;
 	TextHeadingMenuItem systemSpecificHeading;
-	StaticArrayList<MenuItem*, 28> item{};
+	StaticArrayList<MenuItem*, 30> item{};
 
 	void pushAndShowFrameRateSelectMenu(EmuSystem::VideoSystem vidSys, Input::Event e);
 	bool onFrameTimeChange(EmuSystem::VideoSystem vidSys, IG::FloatSeconds time);
@@ -99,10 +104,15 @@ protected:
 	void setZoom(uint8_t val);
 	void setViewportZoom(uint8_t val);
 	void setAspectRatio(double val);
-	unsigned idxOfBufferMode(Gfx::TextureBufferMode mode);
+	void setImgEffect(unsigned val);
+	void setOverlayEffect(unsigned val);
+	void setRenderPixelFormat(IG::PixelFormatID);
+	void setImgEffectPixelFormat(IG::PixelFormatID);
+	void setWindowDrawableConfig(Gfx::DrawableConfig);
+	EmuVideo &emuVideo() const;
 };
 
-class AudioOptionView : public TableView
+class AudioOptionView : public TableView, public EmuAppHelper<AudioOptionView>
 {
 public:
 	AudioOptionView(ViewAttachParams attach, bool customMenu = false);
@@ -122,9 +132,7 @@ protected:
 	BoolMenuItem addSoundBuffersOnUnderrun;
 	StaticArrayList<TextMenuItem, 5> audioRateItem{};
 	MultiChoiceMenuItem audioRate;
-	#ifdef CONFIG_AUDIO_MANAGER_SOLO_MIX
-	BoolMenuItem audioSoloMix;
-	#endif
+	IG_enableMemberIf(IG::Audio::Manager::HAS_SOLO_MIX, BoolMenuItem, audioSoloMix){};
 	#ifdef CONFIG_AUDIO_MULTIPLE_SYSTEM_APIS
 	StaticArrayList<TextMenuItem, MAX_APIS + 1> apiItem{};
 	MultiChoiceMenuItem api;
@@ -135,7 +143,7 @@ protected:
 	unsigned idxOfAPI(IG::Audio::Api api, std::vector<IG::Audio::ApiDesc> apiVec);
 };
 
-class SystemOptionView : public TableView
+class SystemOptionView : public TableView, public EmuAppHelper<SystemOptionView>
 {
 public:
 	SystemOptionView(ViewAttachParams attach, bool customMenu = false);
@@ -148,7 +156,7 @@ protected:
 	BoolMenuItem confirmOverwriteState;
 	TextMenuItem savePath;
 	BoolMenuItem checkSavePathWriteAccess;
-	static constexpr uint MIN_FAST_FORWARD_SPEED = 2;
+	static constexpr unsigned MIN_FAST_FORWARD_SPEED = 2;
 	TextMenuItem fastForwardSpeedItem[6];
 	MultiChoiceMenuItem fastForwardSpeed;
 	#if defined __ANDROID__
@@ -163,7 +171,7 @@ protected:
 	void pushAndShowFirmwareFilePathMenu(const char *name, Input::Event e);
 };
 
-class GUIOptionView : public TableView
+class GUIOptionView : public TableView, public EmuAppHelper<GUIOptionView>
 {
 public:
 	GUIOptionView(ViewAttachParams attach, bool customMenu = false);
@@ -196,7 +204,7 @@ protected:
 	void setFontSize(uint16_t val);
 };
 
-class BiosSelectMenu : public TableView
+class BiosSelectMenu : public TableView, public EmuAppHelper<BiosSelectMenu>
 {
 public:
 	using BiosChangeDelegate = DelegateFunc<void ()>;
