@@ -31,6 +31,7 @@
 #include <imagine/io/IO.hh>
 #include <vector>
 #include <optional>
+#include <list>
 
 class AssetIO;
 
