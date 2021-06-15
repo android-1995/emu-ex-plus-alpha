@@ -1206,41 +1206,41 @@ void ApplicationContext::onInit(ApplicationInitParams initParams)
 	initApplication<EmuApp>(initParams, *this, rendererErr);
 }
 //region 爱吾
-void onKeyPress(uint emuKey)
+void ApplicationContext::onKeyPress(uint emuKey)
 {
     if(!EmuSystem::gameIsRunning())
         return;
     EmuSystem::handleInputAction(Input::PUSHED, emuKey);
 }
-void onKeyRelease(uint emuKey)
+void ApplicationContext::onKeyRelease(uint emuKey)
 {
     if(!EmuSystem::gameIsRunning())
         return;
     EmuSystem::handleInputAction(Input::RELEASED, emuKey);
 }
-void showSetting()
+void ApplicationContext::showSetting()
 {
     if(!EmuSystem::gameIsRunning())
         return;
     emuViewController().showUI();
 }
-void changeEmulatorState(bool pause)
+void ApplicationContext::changeEmulatorState(bool pause)
 {
     if(!EmuSystem::gameIsRunning())
         return;
     EmuApp::changeEmulatorStateAiWu(pause);
 }
-void reset()
+void ApplicationContext::reset()
 {
     if(!EmuSystem::gameIsRunning())
         return;
     EmuSystem::reset(EmuSystem::RESET_SOFT);
 }
-bool isSoundEnabledAiWu()
+bool ApplicationContext::isSoundEnabledAiWu()
 {
     return soundIsEnabled();
 }
-void setSoundEnabledAiWu(bool enabled)
+void ApplicationContext::setSoundEnabledAiWu(bool enabled)
 {
     setSoundEnabled(enabled);
     if(enabled)
@@ -1248,11 +1248,11 @@ void setSoundEnabledAiWu(bool enabled)
     else
         emuAudio.close();
 }
-void screenshot(const char *filepath)
+void ApplicationContext::screenshot(const char *filepath)
 {
     emuVideo.takeGameScreenshotAiWu(filepath);
 }
-void fastForward(int speed)
+void ApplicationContext::fastForward(int speed)
 {
     if(speed < 2 || speed > 7){
         //内部的加速范围2-7
@@ -1265,7 +1265,7 @@ void fastForward(int speed)
         emuViewController().setFastForwardActive(true);
     }
 }
-bool saveStateAiWu(const char *filepath)
+bool ApplicationContext::saveStateAiWu(const char *filepath)
 {
     if(auto err = EmuApp::saveState(filepath);
             err)
@@ -1275,7 +1275,7 @@ bool saveStateAiWu(const char *filepath)
     }
     return true;
 }
-bool loadStateAiWu(const char *filepath)
+bool ApplicationContext::loadStateAiWu(const char *filepath)
 {
     if(auto err = EmuApp::loadState(filepath);
             err)
@@ -1285,7 +1285,7 @@ bool loadStateAiWu(const char *filepath)
     }
     return true;
 }
-void setCheatListAiWu(std::list<std::string> cheats)
+void ApplicationContext::setCheatListAiWu(std::list<std::string> cheats)
 {
     EmuSystem::setCheatListAiWu(cheats);
 }

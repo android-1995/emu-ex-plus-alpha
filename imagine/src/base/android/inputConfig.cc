@@ -23,8 +23,6 @@
 #include <android/configuration.h>
 #include <sys/inotify.h>
 #include <optional>
-#include <codecvt>
-#include <locale>
 
 #ifdef ANDROID_COMPAT_API
 static float (*AMotionEvent_getAxisValueFunc)(const AInputEvent* motion_event, int32_t axis, size_t pointer_index){};
@@ -397,171 +395,6 @@ static bool isXperiaPlayDeviceStr(const char *str)
 	return strstr(str, "R800") || string_equal(str, "zeus");
 }
 
-//爱吾的一些native方法
-static jboolean JNICALL isSoundEnabledClass(JNIEnv* env, jobject thiz)
-{
-    return Base::isSoundEnabledAiWu();
-}
-
-static std::string UTF16ToUTF8(std::u16string_view input)
-{
-    std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
-    return converter.to_bytes(input.data(), input.data() + input.size());
-}
-
-static std::string GetJString(JNIEnv* env, jstring jstr)
-{
-    const jchar* jchars = env->GetStringChars(jstr, nullptr);
-    const jsize length = env->GetStringLength(jstr);
-    const std::u16string_view string_view(reinterpret_cast<const char16_t*>(jchars), length);
-    const std::string converted_string = UTF16ToUTF8(string_view);
-    env->ReleaseStringChars(jstr, jchars);
-    return converted_string;
-}
-
-static void aiWuInit()
-{
-    auto env = Base::jEnvForThread();
-    JNINativeMethod method[]
-            {
-                    {
-                            "onKeyPress", "(I)V",
-                            (void*)(void (*)(JNIEnv*, jobject, jint))
-                                    ([](JNIEnv* env, jobject thiz, jint keyCode)
-                                    {
-                                        Base::onKeyPress(Base::bit(keyCode));
-                                    })
-                    },
-                    {
-                            "onKeyRelease", "(I)V",
-                            (void*)(void (*)(JNIEnv*, jobject, jint))
-                                    ([](JNIEnv* env, jobject thiz, jint keyCode)
-                                    {
-                                        Base::onKeyRelease(Base::bit(keyCode));
-                                    })
-                    },
-                    {
-                            "motionEvent", "(IIIIIIIJ)V",
-                            (void*)(void (*)(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint, jint,jlong))
-                                    ([](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint x, jint y, jint pointerId, jint pointerCount, jlong eventTime)
-                                    {
-                                        Input::processMotionEventAiWu(source,action,deviceId,x,y,pointerId,pointerCount,eventTime,*Base::deviceWindow());
-                                    })
-                    },
-                    {
-                            "keyEvent", "(IIIIIIJ)V",
-                            (void*)(void (*)(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint,jlong))
-                                    ([](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint keyCode, jint repeatCount, jint metaState, jlong eventTime)
-                                    {
-                                        Input::processKeyEventAiWu(source,action,deviceId,keyCode,repeatCount,metaState,eventTime,*Base::deviceWindow());
-                                    })
-                    },
-                    {
-                            "showSetting", "()V",
-                            (void*)(void (*)(JNIEnv*, jobject))
-                                    ([](JNIEnv* env, jobject thiz)
-                                    {
-                                        Base::showSetting();
-                                    })
-                    },
-                    {
-                            "changeEmulatorState", "(Z)V",
-                            (void*)(void (*)(JNIEnv*, jobject,jboolean))
-                                    ([](JNIEnv* env, jobject thiz,jboolean pause)
-                                    {
-                                        Base::changeEmulatorState(pause);
-                                    })
-                    },
-                    {
-                            "reset", "()V",
-                            (void*)(void (*)(JNIEnv*, jobject))
-                                    ([](JNIEnv* env, jobject thiz)
-                                    {
-                                        Base::reset();
-                                    })
-                    },
-                    {
-                            "exit", "()V",
-                            (void*)(void (*)(JNIEnv*, jobject))
-                                    ([](JNIEnv* env, jobject thiz)
-                                    {
-                                        Base::exit();
-                                    })
-                    },
-                    {
-                            "isSoundEnabled", "()Z",(void *)&isSoundEnabledClass
-                    },
-                    {
-                            "setSoundEnabled", "(Z)V",
-                            (void*)(void (*)(JNIEnv*, jobject,jboolean))
-                                    ([](JNIEnv* env, jobject thiz,jboolean enabled)
-                                    {
-                                        Base::setSoundEnabledAiWu(enabled);
-                                    })
-                    },
-                    {
-                            "screenshot", "(Ljava/lang/String;)V",
-                            (void*)(void (*)(JNIEnv*, jobject,jstring))
-                                    ([](JNIEnv* env, jobject thiz,jstring jPath)
-                                    {
-                                        auto path = javaStringCopy<FS::PathString>(env, jPath);
-                                        Base::screenshot(path.data());
-                                    })
-                    },
-                    {
-                            "fastForward", "(I)V",
-                            (void*)(void (*)(JNIEnv*, jobject,jint))
-                                    ([](JNIEnv* env, jobject thiz,jint jSpeed)
-                                    {
-                                        Base::fastForward(jSpeed);
-                                    })
-                    },
-                    {
-                            "saveState", "(Ljava/lang/String;)V",
-                            (void*)(void (*)(JNIEnv*, jobject,jstring))
-                                    ([](JNIEnv* env, jobject thiz,jstring jPath)
-                                    {
-                                        const char *path = env->GetStringUTFChars(jPath, nullptr);
-                                        Base::saveStateAiWu(path);
-                                        env->ReleaseStringUTFChars(jPath, path);
-                                    })
-                    },
-                    {
-                            "loadState", "(Ljava/lang/String;)V",
-                            (void*)(void (*)(JNIEnv*, jobject,jstring))
-                                    ([](JNIEnv* env, jobject thiz,jstring jPath)
-                                    {
-                                        const char *path = env->GetStringUTFChars(jPath, nullptr);
-                                        Base::loadStateAiWu(path);
-                                        env->ReleaseStringUTFChars(jPath, path);
-                                    })
-                    },
-                    {
-                            "updateCheat", "([Ljava/lang/String;)V",
-                            (void*)(void (*)(JNIEnv*, jobject,jobjectArray))
-                                    ([](JNIEnv* env, jobject thiz,jobjectArray jCheats)
-                                    {
-                                        //支持GS 1-2的金手指 格式XXXXXXXXYYYYYYYY
-                                        //支持GS 3的金手指 格式XXXXXXXX-YYYYYYYY
-                                        //支持AR的金手指 格式XXXXXXXX YYYY
-                                        std::list<std::string> internalCheats;
-                                        if( jCheats == NULL || env->GetArrayLength(jCheats) == 0 ){
-                                            Base::setCheatListAiWu(internalCheats);
-                                            return;
-                                        }
-                                        jsize cheatCount = env->GetArrayLength(jCheats);
-                                        for (int i = 0; i < cheatCount; ++i) {
-                                            jstring code = (jstring) (env->GetObjectArrayElement(jCheats, i));
-                                            const std::string codeString = GetJString(env,code);
-                                            internalCheats.push_back(codeString);
-                                        }
-                                        Base::setCheatListAiWu(internalCheats);
-                                    })
-                    }
-            };
-    env->RegisterNatives(Base::jBaseActivityCls, method, std::size(method));
-}
-
 void AndroidApplication::initInput(JNIEnv *env, jobject baseActivity, jclass baseActivityClass, int32_t androidSDK)
 {
 	processInput_ = androidSDK >= 12 ? &AndroidApplication::processInputWithGetEvent : &AndroidApplication::processInputWithHasEvents;
@@ -709,8 +542,6 @@ void AndroidApplication::initInput(JNIEnv *env, jobject baseActivity, jclass bas
 		sysInputDev.reserve(1);
 		builtinKeyboardDev = addInputDevice(genericKeyDev, false, false);
 	}
-    //爱吾的一些native方法
-    aiWuInit();
 }
 
 void AndroidApplication::initInputConfig(AConfiguration *config)

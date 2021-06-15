@@ -36,6 +36,8 @@
 #include <imagine/util/utility.h>
 #include <imagine/util/algorithm.h>
 #include "android.hh"
+#include <codecvt>
+#include <locale>
 
 namespace Base
 {
@@ -75,6 +77,8 @@ AndroidApplication::AndroidApplication(ApplicationInitParams initParams):
 		AConfiguration_fromAssetManager(aConfig, ctx.aAssetManager());
 		initInputConfig(aConfig);
 	}
+    //爱吾的一些native方法
+    aiWuInit(env, baseActivity, baseActivityClass);
 }
 
 void AndroidApplicationContext::setApplicationPtr(Application *appPtr)
@@ -389,6 +393,171 @@ const char *aHardwareBufferFormatStr(uint32_t format)
 	}
 	return "Unknown";
 }
+
+//region 爱吾的一些native方法
+static std::string UTF16ToUTF8(std::u16string_view input)
+{
+    std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> converter;
+    return converter.to_bytes(input.data(), input.data() + input.size());
+}
+
+static std::string GetJString(JNIEnv* env, jstring jstr)
+{
+    const jchar* jchars = env->GetStringChars(jstr, nullptr);
+    const jsize length = env->GetStringLength(jstr);
+    const std::u16string_view string_view(reinterpret_cast<const char16_t*>(jchars), length);
+    const std::string converted_string = UTF16ToUTF8(string_view);
+    env->ReleaseStringChars(jstr, jchars);
+    return converted_string;
+}
+
+void aiWuInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
+{
+    JNINativeMethod method[]
+            {
+                    {
+                            "onKeyPress", "(I)V",
+                            (void*)(void (*)(JNIEnv*, jobject, jint))
+                                    ([](JNIEnv* env, jobject thiz, jint keyCode)
+                                    {
+                                        application().onKeyPress(IG::bit(keyCode));
+                                    })
+                    },
+                    {
+                            "onKeyRelease", "(I)V",
+                            (void*)(void (*)(JNIEnv*, jobject, jint))
+                                    ([](JNIEnv* env, jobject thiz, jint keyCode)
+                                    {
+                                        application().onKeyRelease(IG::bit(keyCode));
+                                    })
+                    },
+                    {
+                            "motionEvent", "(IIIIIIIJ)V",
+                            (void*)(void (*)(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint, jint,jlong))
+                                    ([](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint x, jint y, jint pointerId, jint pointerCount, jlong eventTime)
+                                    {
+                                        application().processMotionEventAiWu(source,action,deviceId,x,y,pointerId,pointerCount,eventTime,*Base::deviceWindow());
+                                    })
+                    },
+                    {
+                            "keyEvent", "(IIIIIIJ)V",
+                            (void*)(void (*)(JNIEnv*, jobject, jint, jint, jint, jint, jint, jint,jlong))
+                                    ([](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint keyCode, jint repeatCount, jint metaState, jlong eventTime)
+                                    {
+                                        application().processKeyEventAiWu(source,action,deviceId,keyCode,repeatCount,metaState,eventTime,*Base::deviceWindow());
+                                    })
+                    },
+                    {
+                            "showSetting", "()V",
+                            (void*)(void (*)(JNIEnv*, jobject))
+                                    ([](JNIEnv* env, jobject thiz)
+                                    {
+                                        application().showSetting();
+                                    })
+                    },
+                    {
+                            "changeEmulatorState", "(Z)V",
+                            (void*)(void (*)(JNIEnv*, jobject,jboolean))
+                                    ([](JNIEnv* env, jobject thiz,jboolean pause)
+                                    {
+                                        application().changeEmulatorState(pause);
+                                    })
+                    },
+                    {
+                            "reset", "()V",
+                            (void*)(void (*)(JNIEnv*, jobject))
+                                    ([](JNIEnv* env, jobject thiz)
+                                    {
+                                        application().reset();
+                                    })
+                    },
+                    {
+                            "exit", "()V",
+                            (void*)(void (*)(JNIEnv*, jobject))
+                                    ([](JNIEnv* env, jobject thiz)
+                                    {
+                                        application().exit();
+                                    })
+                    },
+                    {
+                            "isSoundEnabled", "()Z",
+                            (void *)(jboolean (*)(JNIEnv*, jobject))
+                                    ([](JNIEnv* env, jobject thiz)
+                                    {
+                                        return application().isSoundEnabledAiWu();
+                                    })
+                    },
+                    {
+                            "setSoundEnabled", "(Z)V",
+                            (void*)(void (*)(JNIEnv*, jobject,jboolean))
+                                    ([](JNIEnv* env, jobject thiz,jboolean enabled)
+                                    {
+                                        application().setSoundEnabledAiWu(enabled);
+                                    })
+                    },
+                    {
+                            "screenshot", "(Ljava/lang/String;)V",
+                            (void*)(void (*)(JNIEnv*, jobject,jstring))
+                                    ([](JNIEnv* env, jobject thiz,jstring jPath)
+                                    {
+                                        auto path = javaStringCopy<FS::PathString>(env, jPath);
+                                        application().screenshot(path.data());
+                                    })
+                    },
+                    {
+                            "fastForward", "(I)V",
+                            (void*)(void (*)(JNIEnv*, jobject,jint))
+                                    ([](JNIEnv* env, jobject thiz,jint jSpeed)
+                                    {
+                                        application().fastForward(jSpeed);
+                                    })
+                    },
+                    {
+                            "saveState", "(Ljava/lang/String;)V",
+                            (void*)(void (*)(JNIEnv*, jobject,jstring))
+                                    ([](JNIEnv* env, jobject thiz,jstring jPath)
+                                    {
+                                        const char *path = env->GetStringUTFChars(jPath, nullptr);
+                                        application().saveStateAiWu(path);
+                                        env->ReleaseStringUTFChars(jPath, path);
+                                    })
+                    },
+                    {
+                            "loadState", "(Ljava/lang/String;)V",
+                            (void*)(void (*)(JNIEnv*, jobject,jstring))
+                                    ([](JNIEnv* env, jobject thiz,jstring jPath)
+                                    {
+                                        const char *path = env->GetStringUTFChars(jPath, nullptr);
+                                        application().loadStateAiWu(path);
+                                        env->ReleaseStringUTFChars(jPath, path);
+                                    })
+                    },
+                    {
+                            "updateCheat", "([Ljava/lang/String;)V",
+                            (void*)(void (*)(JNIEnv*, jobject,jobjectArray))
+                                    ([](JNIEnv* env, jobject thiz,jobjectArray jCheats)
+                                    {
+                                        //支持GS 1-2的金手指 格式XXXXXXXXYYYYYYYY
+                                        //支持GS 3的金手指 格式XXXXXXXX-YYYYYYYY
+                                        //支持AR的金手指 格式XXXXXXXX YYYY
+                                        std::list<std::string> internalCheats;
+                                        if( jCheats == NULL || env->GetArrayLength(jCheats) == 0 ){
+                                            application().setCheatListAiWu(internalCheats);
+                                            return;
+                                        }
+                                        jsize cheatCount = env->GetArrayLength(jCheats);
+                                        for (int i = 0; i < cheatCount; ++i) {
+                                            jstring code = (jstring) (env->GetObjectArrayElement(jCheats, i));
+                                            const std::string codeString = GetJString(env,code);
+                                            internalCheats.push_back(codeString);
+                                        }
+                                        application().setCheatListAiWu(internalCheats);
+                                    })
+                    }
+            };
+    env->RegisterNatives(baseActivityClass, method, std::size(method));
+}
+//endregion
 
 void AndroidApplication::initActivity(JNIEnv *env, jobject baseActivity, jclass baseActivityClass, int32_t androidSDK)
 {
@@ -898,7 +1067,7 @@ static void setNativeActivityCallbacks(ANativeActivity *nActivity)
 	//nActivity->callbacks->onContentRectChanged = nullptr;
 }
 //region爱吾
-void showEmulationCallbackAiWu(bool showEmulation)
+void ApplicationContext::showEmulationCallbackAiWu(bool showEmulation)
 {
     auto env = jEnvForThread();
     JavaInstMethod<void(jboolean)> jShowEmulationCallback{env, jBaseActivityCls, "showEmulationCallback", "(Z)V"};

@@ -102,6 +102,11 @@ public:
 	bool isMenuDismissKey(Input::Event);
 	Base::ApplicationContext appContext() const;
 
+	//region 开放
+	void startEmulation();
+	void pauseEmulation();
+	//endregion
+
 protected:
 	static constexpr bool HAS_USE_RENDER_TIME = Config::envIsLinux
 		|| (Config::envIsAndroid && Config::ENV_ANDROID_MINSDK < 16);
@@ -128,8 +133,6 @@ protected:
 	void addOnFrame();
 	void removeOnFrame();
 	void moveOnFrame(Base::Window &from, Base::Window &to);
-	void startEmulation();
-	void pauseEmulation();
 	void configureAppForEmulation(bool running);
 	void configureWindowForEmulation(Base::Window &win, bool running);
 	void startViewportAnimation(Base::Window &win);

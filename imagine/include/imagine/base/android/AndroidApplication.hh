@@ -147,6 +147,11 @@ public:
 	bool hasTrackball() const;
 	void flushSystemInputEvents();
 
+    //region 修改
+    bool processMotionEventAiWu(int source, int eventAction, int deviceId,int x,int y, int pointerId,int pointers,long eventTime,Base::Window &win);
+    bool processKeyEventAiWu(int source,int eventAction, int deviceId,int keyCode, int repeatCount,int metaState, long eventTime,Base::Window &win);
+    //endregion
+
 private:
 	JNI::UniqueGlobalRef displayListenerHelper{};
 	JNI::InstMethod<void()> jRecycle{};

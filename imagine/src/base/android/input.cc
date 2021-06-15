@@ -496,7 +496,7 @@ void AndroidApplication::flushSystemInputEvents()
 	}
 }
 
-bool processMotionEventAiWu(int source, int eventAction, int deviceId,int x,int y, int pointerId,int pointers,long eventTime,Base::Window &win)
+bool AndroidApplication::processMotionEventAiWu(int source, int eventAction, int deviceId,int x,int y, int pointerId,int pointers,long eventTime,Base::Window &win)
 {
     auto time =  IG::Nanoseconds(eventTime);
     switch(source & AINPUT_SOURCE_CLASS_MASK)
@@ -593,7 +593,7 @@ bool processMotionEventAiWu(int source, int eventAction, int deviceId,int x,int 
     }
     return false;
 }
-bool processKeyEventAiWu(int source,int eventAction,int deviceId,int keyCode, int repeatCount, int metaState, long eventTime,Base::Window &win)
+bool AndroidApplication::processKeyEventAiWu(int source,int eventAction,int deviceId,int keyCode, int repeatCount, int metaState, long eventTime,Base::Window &win)
 {
     auto eventSource = isFromSource(source, AINPUT_SOURCE_GAMEPAD) ? Source::GAMEPAD : Source::KEYBOARD;
     auto keyWasReallyRepeated =

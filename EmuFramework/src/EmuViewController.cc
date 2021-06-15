@@ -442,7 +442,7 @@ void EmuViewController::showEmulation()
 	placeEmuViews();
 
 	//回调一下C层
-    Base::showEmulationCallbackAiWu(true);
+    ApplicationContext::showEmulationCallbackAiWu(true);
 }
 
 void EmuViewController::showUI(bool updateTopView)
@@ -460,7 +460,7 @@ void EmuViewController::showUI(bool updateTopView)
 		viewStack.top().postDraw();
 	}
     //回调一下C层
-    Base::showEmulationCallbackAiWu(false);
+    ApplicationContext::showEmulationCallbackAiWu(false);
 }
 
 bool EmuViewController::showAutoStateConfirm(Input::Event e, bool addToRecent)
