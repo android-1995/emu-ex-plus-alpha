@@ -210,22 +210,6 @@ public:
 	[[gnu::format(printf, 3, 4)]]
 	void exitWithErrorMessagePrintf(int exitVal, const char *format, ...);
 	void exitWithErrorMessageVPrintf(int exitVal, const char *format, va_list args);
-
-	//region爱吾调用
-    void onKeyPress(uint emuKey);
-    void onKeyRelease(uint emuKey);
-    void showSetting();
-    void changeEmulatorState(bool pause);
-    void reset();
-    bool isSoundEnabledAiWu();
-    void setSoundEnabledAiWu(bool enabled);
-    void showEmulationCallbackAiWu(bool showEmulation);
-    void screenshot(const char *filepath);
-    void fastForward(int speed);
-    bool saveStateAiWu(const char *filepath);
-    bool loadStateAiWu(const char *filepath);
-    void setCheatListAiWu(std::list<std::string> cheats);
-    //endregion
 };
 
 class OnExit
@@ -244,5 +228,19 @@ protected:
 	ExitDelegate del{};
 	ApplicationContext ctx{};
 };
-
+//region爱吾调用
+void onKeyPress(uint emuKey);
+void onKeyRelease(uint emuKey);
+void showSetting();
+void changeEmulatorState(bool pause);
+void reset();
+bool isSoundEnabledAiWu();
+void setSoundEnabledAiWu(bool enabled);
+void showEmulationCallbackAiWu(bool showEmulation);
+void screenshot(const char *filepath);
+void fastForward(int speed);
+bool saveStateAiWu(const char *filepath);
+bool loadStateAiWu(const char *filepath);
+void setCheatListAiWu(std::list<std::string> cheats);
+//endregion
 }
