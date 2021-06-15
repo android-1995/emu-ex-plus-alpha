@@ -14,45 +14,20 @@
 	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
 
 #define LOGTAG "EmuSystemTask"
-#include <imagine/thread/Thread.hh>
-#include <imagine/logger/logger.h>
 #include <emuframework/EmuApp.hh>
 #include <emuframework/EmuVideo.hh>
-#include "EmuSystemTask.hh"
-#include "private.hh"
-#include "privateInput.hh"
+#include <emuframework/EmuSystemTask.hh>
+#include <imagine/thread/Thread.hh>
+#include <imagine/logger/logger.h>
+
+EmuSystemTask::EmuSystemTask(EmuApp &app):
+	appPtr{&app}
+{}
 
 void EmuSystemTask::start()
 {
 	if(started)
 		return;
-	replyPort.attach(
-		[this](auto msgs)
-		{
-			for(auto msg : msgs)
-			{
-				switch(msg.reply)
-				{
-					bcase Reply::VIDEO_FORMAT_CHANGED:
-					{
-						msg.args.videoFormat.videoAddr->dispatchFormatChanged();
-					}
-					bcase Reply::FRAME_FINISHED:
-					{
-						msg.args.videoFormat.videoAddr->dispatchFrameFinished();
-					}
-					bcase Reply::TOOK_SCREENSHOT:
-					{
-						EmuApp::printScreenshotResult(msg.args.screenshot.num, msg.args.screenshot.success);
-					}
-					bdefault:
-					{
-						logErr("unknown reply message:%d", (int)msg.reply);
-					}
-				}
-			}
-			return true;
-		});
 	IG::makeDetachedThreadSync(
 		[this](auto &sem)
 		{
@@ -68,28 +43,9 @@ void EmuSystemTask::start()
 							{
 								auto frames = msg.args.run.frames;
 								assumeExpr(frames);
-								auto *video = msg.args.run.video;
-								auto *audio = msg.args.run.audio;
 								//logMsg("running %d frame(s)", frames);
-								if(unlikely(msg.args.run.skipForward))
-								{
-									if(EmuSystem::skipForwardFrames(this, frames - 1))
-									{
-										// don't write any audio while skip is in progress
-										audio = nullptr;
-									}
-									else
-									{
-										// restore normal speed when skip ends
-										EmuSystem::setSpeedMultiplier(1);
-									}
-								}
-								else
-								{
-									EmuSystem::skipFrames(this, frames - 1, audio);
-								}
-								turboActions.update();
-								EmuSystem::runFrame(this, video, audio);
+								app().runFrames(this, msg.args.run.video, msg.args.run.audio,
+									frames, msg.args.run.skipForward);
 							}
 							bcase Command::PAUSE:
 							{
@@ -128,7 +84,7 @@ void EmuSystemTask::pause()
 	if(!started)
 		return;
 	commandPort.send({Command::PAUSE}, true);
-	replyPort.dispatchMessages();
+	app().flushMainThreadMessages();
 }
 
 void EmuSystemTask::stop()
@@ -136,29 +92,45 @@ void EmuSystemTask::stop()
 	if(!started)
 		return;
 	commandPort.send({Command::EXIT}, true);
-	replyPort.clear();
-	replyPort.detach();
+	app().flushMainThreadMessages();
 }
 
 void EmuSystemTask::runFrame(EmuVideo *video, EmuAudio *audio, uint8_t frames, bool skipForward)
 {
 	assumeExpr(frames);
-	if(unlikely(!started))
+	if(!started) [[unlikely]]
 		return;
 	commandPort.send({Command::RUN_FRAME, video, audio, frames, skipForward});
 }
 
 void EmuSystemTask::sendVideoFormatChangedReply(EmuVideo &video)
 {
-	replyPort.send({Reply::VIDEO_FORMAT_CHANGED, video});
+	app().runOnMainThread(
+		[&video](Base::ApplicationContext)
+		{
+			video.dispatchFormatChanged();
+		});
 }
 
 void EmuSystemTask::sendFrameFinishedReply(EmuVideo &video)
 {
-	replyPort.send({Reply::FRAME_FINISHED, video});
+	app().runOnMainThread(
+		[&video](Base::ApplicationContext)
+		{
+			video.dispatchFrameFinished();
+		});
 }
 
 void EmuSystemTask::sendScreenshotReply(int num, bool success)
 {
-	replyPort.send({Reply::TOOK_SCREENSHOT, num, success});
+	app().runOnMainThread(
+		[=](Base::ApplicationContext ctx)
+		{
+			EmuApp::get(ctx).printScreenshotResult(num, success);
+		});
+}
+
+EmuApp &EmuSystemTask::app() const
+{
+	return *appPtr;
 }

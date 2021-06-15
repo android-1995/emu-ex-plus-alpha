@@ -15,7 +15,7 @@
 
 static_assert(__has_feature(objc_arc), "This file requires ARC");
 #include <imagine/base/Screen.hh>
-#include <imagine/base/Base.hh>
+#include <imagine/base/ApplicationContext.hh>
 #include <imagine/input/Input.hh>
 #include <imagine/logger/logger.h>
 #include "ios.hh"
@@ -43,23 +43,17 @@ static_assert(__has_feature(objc_arc), "This file requires ARC");
 	return self;
 }
 
-- (void)onFrame
+- (void)onFrame:(CADisplayLink *)displayLink
 {
-	Input::flushInternalEvents();
 	auto &screen = *screen_;
-	auto timestamp = IG::FloatSeconds(screen.displayLink().timestamp);
-	//logMsg("screen: %p, frame time stamp: %f, duration: %f",
-	//	screen.uiScreen(), (double)timestamp, (double)screen.displayLink().duration);*/
-	if(&screen == screen.screen(0))
-		screen.startDebugFrameStats(timestamp);
-	screen.frameUpdate(timestamp);
-	if(!screen.isPosted())
+	auto timestamp = IG::FloatSeconds(displayLink.timestamp);
+	//logMsg("screen:%p, frame time stamp:%f, duration:%f",
+	//	screen.uiScreen(), timestamp.count(), (double)screen.displayLink().duration);
+	if(!screen.frameUpdate(timestamp))
 	{
 		//logMsg("stopping screen updates");
-		screen.displayLink().paused = YES;
+		displayLink.paused = YES;
 	}
-	if(&screen == screen.screen(0))
-		screen.endDebugFrameStats();
 }
 
 @end
@@ -67,8 +61,9 @@ static_assert(__has_feature(objc_arc), "This file requires ARC");
 namespace Base
 {
 
-IOSScreen::IOSScreen(UIScreen *screen)
+IOSScreen::IOSScreen(ApplicationContext, InitParams initParams)
 {
+	UIScreen *screen = (__bridge UIScreen*)initParams.uiScreen;
 	logMsg("init screen %p", screen);
 	auto currMode = screen.currentMode;
 	if(currMode.size.width == 1600 && currMode.size.height == 900)
@@ -102,7 +97,7 @@ IOSScreen::IOSScreen(UIScreen *screen)
 	}
 	uiScreen_ = (void*)CFBridgingRetain(screen);
 	displayLink_ = (void*)CFBridgingRetain([screen displayLinkWithTarget:[[DisplayLinkHelper alloc] initWithScreen:(Screen*)this]
-	                                       selector:@selector(onFrame)]);
+	                                       selector:@selector(onFrame:)]);
 	displayLink().paused = YES;
 
 	if(hasAtLeastIOS5())
@@ -139,17 +134,17 @@ bool Screen::supportsFrameInterval()
 	return true;
 }
 
-bool Screen::supportsTimestamps()
+bool Screen::supportsTimestamps() const
 {
 	return true;
 }
 
-int Screen::width()
+int Screen::width() const
 {
 	return uiScreen().bounds.size.width;
 }
 
-int Screen::height()
+int Screen::height() const
 {
 	return uiScreen().bounds.size.height;
 }
@@ -169,27 +164,14 @@ bool Screen::frameRateIsReliable() const
 	return true;
 }
 
-void Screen::postFrame()
+void Screen::postFrameTimer()
 {
-	if(!isActive)
-	{
-		logMsg("can't post screen update when app isn't running");
-		return;
-	}
-	if(!framePosted)
-	{
-		framePosted = true;
-		displayLink().paused = NO; 
-	}
+	displayLink().paused = NO;
 }
 
-void Screen::unpostFrame()
+void Screen::unpostFrameTimer()
 {
-	if(framePosted)
-	{
-		framePosted = false;
-		displayLink().paused = YES;
-	}
+	displayLink().paused = YES;
 }
 
 void Screen::setFrameRate(double rate)
@@ -197,7 +179,7 @@ void Screen::setFrameRate(double rate)
 	// unsupported
 }
 
-std::vector<double> Screen::supportedFrameRates()
+std::vector<double> Screen::supportedFrameRates(ApplicationContext) const
 {
 	// TODO
 	std::vector<double> rateVec;

@@ -49,7 +49,6 @@ static void system_frame_sms(EmuSystemTask *task, EmuVideo *emuVideo);
 static int pause_b;
 static EQSTATE eq;
 static int32 llp,rrp;
-static constexpr auto pixFmt = IG::PIXEL_FMT_RGB565;
 
 /****************************************************************
  * Audio subsystem
@@ -163,11 +162,11 @@ int audioUpdateAll(int16 *sb)
 		scd_pcm_update(cdPCMBuff, size, 1);
 	}
 	auto cddaRatio = snd.cddaRatio;
-	uint cddaFrames = round((float)size*cddaRatio);
+	unsigned cddaFrames = round((float)size*cddaRatio);
 	int16 cddaBuff[cddaFrames*2];
 	int16 *cdda = cddaBuff;
 	int16 cddaRemsampledBuff[size*2];
-	extern int readCDDA(void *dest, uint size);
+	extern int readCDDA(void *dest, unsigned size);
 	bool doCDDA = hasSegaCD && readCDDA(cddaBuff, cddaFrames);
 	if(doCDDA && snd.sample_rate != 44100)
 	{
@@ -175,7 +174,7 @@ int audioUpdateAll(int16 *sb)
 		auto cddaResampledPtr = (int32*)cddaRemsampledBuff;
 		iterateTimes(size, i)
 		{
-			uint samplePos = round(i * cddaRatio);
+			unsigned samplePos = round(i * cddaRatio);
 			if(samplePos > cddaFrames)
 			{
 				logMsg("resample pos %u too high", samplePos);
@@ -340,7 +339,7 @@ void system_shutdown (void)
 }
 
 template <bool hasSegaCD>
-static void runM68k(uint cycles)
+static void runM68k(unsigned cycles)
 {
 	m68k_run(mm68k, cycles);
 	#ifndef NO_SCD
@@ -431,6 +430,8 @@ static void system_frame_md(EmuSystemTask *task, EmuVideo *emuVideo)
     bitmap.viewport.w = 256 + ((reg[12] & 0x01) << 6);
   }
 
+  auto pixmap = framebufferRenderFormatPixmap();
+
   /* clear VBLANK, DMA, FIFO FULL & field flags */
   status &= 0xFEE5;
 
@@ -489,13 +490,6 @@ static void system_frame_md(EmuSystemTask *task, EmuVideo *emuVideo)
   /* update line cycle count */
   mcycles_vdp += MCYCLES_PER_LINE;
 
-  EmuVideoImage img{};
-  if(!do_skip)
-  {
-  	img = emuVideo->startFrameWithFormat(task, {{bitmap.viewport.w, bitmap.viewport.h}, pixFmt});
-  	gPixmap = img.pixmap();
-  }
-
   /* Active Display */
   do
   {
@@ -532,7 +526,7 @@ static void system_frame_md(EmuSystemTask *task, EmuVideo *emuVideo)
     /* render scanline */
     if (!do_skip)
     {
-      render_line(line, img.pixmap());
+      render_line(line, pixmap);
     }
 
     /* run 68k & Z80 */
@@ -564,10 +558,9 @@ static void system_frame_md(EmuSystemTask *task, EmuVideo *emuVideo)
   }
   while (++line < bitmap.viewport.h);
 
-  if(img)
+  if(!do_skip)
   {
-  	img.endFrame();
-  	gPixmap = {};
+  	emuVideo->startFrameWithAltFormat(task, pixmap);
   }
 
   /* end of active display */
@@ -827,6 +820,8 @@ static void system_frame_sms(EmuSystemTask *task, EmuVideo *emuVideo)
     bitmap.viewport.w = 256 + ((reg[12] & 0x01) << 6);
   }
 
+  auto pixmap = framebufferRenderFormatPixmap();
+
   /* Detect pause button input */
   if (input.pad[0] & INPUT_START)
   {
@@ -886,12 +881,6 @@ static void system_frame_sms(EmuSystemTask *task, EmuVideo *emuVideo)
   /* latch Vertical Scroll register */
   vscroll = reg[0x09];
 
-  EmuVideoImage img{};
-  if(!do_skip)
-  {
-  	img = emuVideo->startFrameWithFormat(task, {{bitmap.viewport.w, bitmap.viewport.h}, pixFmt});
-  }
-
   /* Active Display */
   do
   {
@@ -910,7 +899,7 @@ static void system_frame_sms(EmuSystemTask *task, EmuVideo *emuVideo)
       /* render scanline */
       if (!do_skip)
       {
-        render_line(line, img.pixmap());
+        render_line(line, pixmap);
       }
     }
 
@@ -948,8 +937,10 @@ static void system_frame_sms(EmuSystemTask *task, EmuVideo *emuVideo)
   }
   while (++line < bitmap.viewport.h);
 
-  if(img)
-  	img.endFrame();
+  if(!do_skip)
+  {
+  	emuVideo->startFrameWithAltFormat(task, pixmap);
+  }
 
   /* end of active display */
   v_counter = line;

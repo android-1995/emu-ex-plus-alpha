@@ -20,15 +20,16 @@
 #include <emuframework/EmuVideoLayer.hh>
 #include <emuframework/FilePicker.hh>
 #include "EmuOptions.hh"
-#include <imagine/gui/AlertView.hh>
-#include <imagine/gfx/RendererCommands.hh>
 #include "private.hh"
 #include "privateInput.hh"
+#include <imagine/gui/AlertView.hh>
+#include <imagine/gfx/RendererCommands.hh>
 
 EmuInputView::EmuInputView() {}
 
 EmuInputView::EmuInputView(ViewAttachParams attach, SysVController &vCtrl, EmuVideoLayer &videoLayer)
-	: View(attach), vController{&vCtrl}, videoLayer{&videoLayer}
+	: View(attach), vController{&vCtrl},
+		videoLayer{&videoLayer}
 {}
 
 void EmuInputView::draw(Gfx::RendererCommands &cmds)
@@ -55,12 +56,7 @@ void EmuInputView::resetInput()
 
 void EmuInputView::updateFastforward()
 {
-	emuViewController().setFastForwardActive(ffToggleActive);
-}
-
-EmuViewController &EmuInputView::emuViewController()
-{
-	return *static_cast<EmuViewController*>(controller());
+	app().viewController().setFastForwardActive(ffToggleActive);
 }
 
 bool EmuInputView::inputEvent(Input::Event e)
@@ -70,7 +66,7 @@ bool EmuInputView::inputEvent(Input::Event e)
 	{
 		if(e.pushed() && vController->menuHitTest(e.pos()))
 		{
-			EmuApp::showLastViewFromSystem(attachParams(), e);
+			app().showLastViewFromSystem(attachParams(), e);
 			return true;
 		}
 		else if(e.pushed() && vController->fastForwardHitTest(e.pos()))
@@ -89,14 +85,14 @@ bool EmuInputView::inputEvent(Input::Event e)
 			//logMsg("game consumed pointer input event");
 		}
 		#ifdef CONFIG_VCONTROLS_GAMEPAD
-		else if(!touchControlsOn && (uint)optionTouchCtrl == 2 && optionTouchCtrlShowOnTouch
+		else if(!touchControlsOn && (unsigned)optionTouchCtrl == 2 && optionTouchCtrlShowOnTouch
 			&& !vController->isInKeyboardMode()
 			&& e.isTouch() && e.pushed()
 			)
 		{
 			logMsg("turning on on-screen controls from touch input");
 			touchControlsOn = true;
-			emuViewController().placeEmuViews();
+			app().viewController().placeEmuViews();
 		}
 		#endif
 		return true;
@@ -106,14 +102,14 @@ bool EmuInputView::inputEvent(Input::Event e)
 	{
 		if(e.state == Input::PUSHED)
 		{
-			EmuApp::showMenuViewFromSystem(attachParams(), e);
+			app().showMenuViewFromSystem(attachParams(), e);
 		}
 		return true;
 	}
 	#endif
 	if(e.isRelativePointer())
 	{
-		processRelPtr(e);
+		//processRelPtr(app(), e);
 		return true;
 	}
 	else
@@ -122,7 +118,9 @@ bool EmuInputView::inputEvent(Input::Event e)
 		if(vController->keyInput(e))
 			return true;
 		#endif
-		if(unlikely(!keyMapping))
+		auto &emuApp = app();
+		auto &keyMapping = emuApp.keyInputMapping();
+		if(!keyMapping) [[unlikely]]
 			return false;
 		assumeExpr(e.device());
 		const KeyMapping::ActionGroup &actionMap = keyMapping.inputDevActionTablePtr[e.device()->idx][e.mapKey()];
@@ -152,7 +150,7 @@ bool EmuInputView::inputEvent(Input::Event e)
 					if(e.pushed())
 					{
 						logMsg("show load game view from key event");
-						emuViewController().popToRoot();
+						emuApp.viewController().popToRoot();
 						pushAndShow(EmuFilePicker::makeForLoading(attachParams(), e), e, false);
 						return true;
 					}
@@ -161,7 +159,7 @@ bool EmuInputView::inputEvent(Input::Event e)
 					if(e.pushed())
 					{
 						logMsg("show system actions view from key event");
-						EmuApp::showSystemActionsViewFromSystem(attachParams(), e);
+						emuApp.showSystemActionsViewFromSystem(attachParams(), e);
 						return true;
 					}
 
@@ -169,23 +167,23 @@ bool EmuInputView::inputEvent(Input::Event e)
 					if(e.pushed())
 					{
 						static auto doSaveState =
-							[](bool notify)
+							[](EmuApp &app, bool notify)
 							{
-								if(auto err = EmuApp::saveStateWithSlot(EmuSystem::saveStateSlot);
+								if(auto err = app.saveStateWithSlot(EmuSystem::saveStateSlot);
 									err)
 								{
-									EmuApp::printfMessage(4, true, "Save State: %s", err->what());
+									app.printfMessage(4, true, "Save State: %s", err->what());
 								}
 								else if(notify)
 								{
-									EmuApp::postMessage("State Saved");
+									app.postMessage("State Saved");
 								}
 							};
 
 						if(EmuSystem::shouldOverwriteExistingState())
 						{
-							EmuApp::syncEmulationThread();
-							doSaveState(optionConfirmOverwriteState);
+							emuApp.syncEmulationThread();
+							doSaveState(emuApp, optionConfirmOverwriteState);
 						}
 						else
 						{
@@ -193,13 +191,13 @@ bool EmuInputView::inputEvent(Input::Event e)
 							ynAlertView->setOnYes(
 								[this]()
 								{
-									doSaveState(false);
-									emuViewController().showEmulation();
+									doSaveState(app(), false);
+									app().viewController().showEmulation();
 								});
 							ynAlertView->setOnNo(
 								[this]()
 								{
-									emuViewController().showEmulation();
+									app().viewController().showEmulation();
 								});
 							pushAndShowModal(std::move(ynAlertView), e);
 						}
@@ -209,11 +207,11 @@ bool EmuInputView::inputEvent(Input::Event e)
 					bcase guiKeyIdxLoadState:
 					if(e.pushed())
 					{
-						EmuApp::syncEmulationThread();
-						if(auto err = EmuApp::loadStateWithSlot(EmuSystem::saveStateSlot);
+						emuApp.syncEmulationThread();
+						if(auto err = emuApp.loadStateWithSlot(EmuSystem::saveStateSlot);
 							err)
 						{
-							EmuApp::printfMessage(4, true, "Load State: %s", err->what());
+							emuApp.printfMessage(4, true, "Load State: %s", err->what());
 						}
 						return true;
 					}
@@ -224,7 +222,7 @@ bool EmuInputView::inputEvent(Input::Event e)
 						EmuSystem::saveStateSlot--;
 						if(EmuSystem::saveStateSlot < -1)
 							EmuSystem::saveStateSlot = 9;
-						EmuApp::printfMessage(1, false, "State Slot: %s", stateNameStr(EmuSystem::saveStateSlot));
+						emuApp.printfMessage(1, false, "State Slot: %s", stateNameStr(EmuSystem::saveStateSlot));
 					}
 
 					bcase guiKeyIdxIncStateSlot:
@@ -234,7 +232,7 @@ bool EmuInputView::inputEvent(Input::Event e)
 						EmuSystem::saveStateSlot++;
 						if(EmuSystem::saveStateSlot > 9)
 							EmuSystem::saveStateSlot = -1;
-						EmuApp::printfMessage(1, false, "State Slot: %s", stateNameStr(EmuSystem::saveStateSlot));
+						emuApp.printfMessage(1, false, "State Slot: %s", stateNameStr(EmuSystem::saveStateSlot));
 					}
 
 					bcase guiKeyIdxGameScreenshot:
@@ -258,7 +256,7 @@ bool EmuInputView::inputEvent(Input::Event e)
 					if(e.pushed())
 					{
 						logMsg("show last view from key event");
-						EmuApp::showLastViewFromSystem(attachParams(), e);
+						emuApp.showLastViewFromSystem(attachParams(), e);
 						return true;
 					}
 
@@ -270,20 +268,20 @@ bool EmuInputView::inputEvent(Input::Event e)
 						}
 						//logMsg("action %d, %d", emuKey, state);
 						bool turbo;
-						uint sysAction = EmuSystem::translateInputAction(action, turbo);
+						unsigned sysAction = EmuSystem::translateInputAction(action, turbo);
 						//logMsg("action %d -> %d, pushed %d", action, sysAction, e.state == Input::PUSHED);
 						if(turbo)
 						{
 							if(e.pushed())
 							{
-								turboActions.addEvent(sysAction);
+								emuApp.addTurboInputEvent(sysAction);
 							}
 							else
 							{
-								turboActions.removeEvent(sysAction);
+								emuApp.removeTurboInputEvent(sysAction);
 							}
 						}
-						EmuSystem::handleInputAction(e.state(), sysAction);
+						EmuSystem::handleInputAction(&emuApp, e.state(), sysAction);
 					}
 				}
 			}

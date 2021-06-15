@@ -18,7 +18,6 @@
 #include <imagine/config/defs.hh>
 #include <imagine/gfx/defs.hh>
 #include <imagine/gfx/SyncFence.hh>
-#include <imagine/gfx/Mat4.hh>
 
 #ifdef CONFIG_GFX_OPENGL
 #include <imagine/gfx/opengl/GLRendererCommands.hh>
@@ -30,6 +29,7 @@ namespace Gfx
 class Renderer;
 class Program;
 class Texture;
+class Mat4;
 
 enum class Primitive
 {
@@ -59,9 +59,6 @@ class RendererCommands : public RendererCommandsImpl
 {
 public:
 	using RendererCommandsImpl::RendererCommandsImpl;
-	RendererCommands(RendererCommands &&o);
-	RendererCommands &operator=(RendererCommands &&o);
-	~RendererCommands();
 	void present();
 	void setRenderTarget(Texture &t);
 	void setDefaultRenderTarget();
@@ -86,6 +83,7 @@ public:
 	void setImgMode(uint32_t mode);
 	void setDither(bool on);
 	bool dither();
+	void setSrgbFramebufferWrite(bool on);
 	void setVisibleGeomFace(uint32_t sides);
 	void setClipTest(bool on);
 	void setClipRect(ClipRect b);

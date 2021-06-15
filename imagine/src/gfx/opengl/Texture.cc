@@ -21,6 +21,7 @@
 #include <imagine/util/ScopeGuard.hh>
 #include <imagine/util/utility.h>
 #include <imagine/util/math/int.hh>
+#include <imagine/util/bit.hh>
 #include <imagine/data-type/image/GfxImageSource.hh>
 #include "utils.hh"
 #include <cstdlib>
@@ -60,6 +61,14 @@ using namespace IG;
 #define GL_TEXTURE_EXTERNAL_OES 0x8D65
 #endif
 
+#ifndef GL_UNSIGNED_INT_8_8_8_8_REV
+#define GL_UNSIGNED_INT_8_8_8_8_REV 0x8367
+#endif
+
+#ifndef GL_RGB5
+#define GL_RGB5 0x8050
+#endif
+
 namespace Gfx
 {
 
@@ -91,16 +100,11 @@ static GLenum makeGLDataType(IG::PixelFormatID format)
 	{
 		case PIXEL_RGBA8888:
 		case PIXEL_BGRA8888:
-		#if !defined CONFIG_GFX_OPENGL_ES
-			return GL_UNSIGNED_INT_8_8_8_8_REV;
-		#endif
-		case PIXEL_ARGB8888:
-		case PIXEL_ABGR8888:
-		#if !defined CONFIG_GFX_OPENGL_ES
-			return GL_UNSIGNED_INT_8_8_8_8;
-		#endif
+			if constexpr(!Config::Gfx::OPENGL_ES)
+			{
+				return GL_UNSIGNED_INT_8_8_8_8_REV;
+			} [[fallthrough]];
 		case PIXEL_RGB888:
-		case PIXEL_BGR888:
 		case PIXEL_I8:
 		case PIXEL_IA88:
 		case PIXEL_A8:
@@ -111,12 +115,6 @@ static GLenum makeGLDataType(IG::PixelFormatID format)
 			return GL_UNSIGNED_SHORT_5_5_5_1;
 		case PIXEL_RGBA4444:
 			return GL_UNSIGNED_SHORT_4_4_4_4;
-		#if !defined CONFIG_GFX_OPENGL_ES
-		case PIXEL_ABGR4444:
-			return GL_UNSIGNED_SHORT_4_4_4_4_REV;
-		case PIXEL_ABGR1555:
-			return GL_UNSIGNED_SHORT_1_5_5_5_REV;
-		#endif
 		default: bug_unreachable("format == %d", format); return 0;
 	}
 }
@@ -135,55 +133,35 @@ static GLenum makeGLFormat(const Renderer &r, IG::PixelFormatID format)
 		case PIXEL_RGB565:
 			return GL_RGB;
 		case PIXEL_RGBA8888:
-		case PIXEL_ARGB8888:
 		case PIXEL_RGBA5551:
 		case PIXEL_RGBA4444:
 			return GL_RGBA;
-		#if !defined CONFIG_GFX_OPENGL_ES
-		case PIXEL_BGR888:
-			assert(r.support.hasBGRPixels);
-			return GL_BGR;
-		case PIXEL_ABGR8888:
 		case PIXEL_BGRA8888:
-		case PIXEL_ABGR4444:
-		case PIXEL_ABGR1555:
 			assert(r.support.hasBGRPixels);
 			return GL_BGRA;
-		#endif
 		default: bug_unreachable("format == %d", format); return 0;
 	}
 }
 
-static int makeGLESInternalFormat(const Renderer &r, IG::PixelFormatID format)
+static GLenum makeGLESInternalFormat(const Renderer &r, IG::PixelFormatID format)
 {
-	if(format == PIXEL_BGRA8888) // Apple's BGRA extension loosens the internalformat match requirement
-		return r.support.bgrInternalFormat;
-	else return makeGLFormat(r, format); // OpenGL ES manual states internalformat always equals format
+	if(Config::envIsIOS && format == PIXEL_BGRA8888) // Apple's BGRA extension loosens the internalformat match requirement
+		return GL_RGBA;
+	return makeGLFormat(r, format); // OpenGL ES manual states internalformat always equals format
 }
 
-static int makeGLSizedInternalFormat(const Renderer &r, IG::PixelFormatID format)
+static GLenum makeGLSizedInternalFormat(const Renderer &r, IG::PixelFormatID format, bool isSrgb)
 {
 	switch(format)
 	{
 		case PIXEL_BGRA8888:
-		case PIXEL_ARGB8888:
-		case PIXEL_ABGR8888:
 		case PIXEL_RGBA8888:
-			return GL_RGBA8;
-		case PIXEL_RGB888:
-		case PIXEL_BGR888:
-			return GL_RGB8;
+			return isSrgb ? GL_SRGB8_ALPHA8 : GL_RGBA8;
 		case PIXEL_RGB565:
-			#if defined CONFIG_GFX_OPENGL_ES
-			return GL_RGB565;
-			#else
-			return GL_RGB5;
-			#endif
-		case PIXEL_ABGR1555:
+			return Config::Gfx::OPENGL_ES ? GL_RGB565 : GL_RGB5;
 		case PIXEL_RGBA5551:
 			return GL_RGB5_A1;
 		case PIXEL_RGBA4444:
-		case PIXEL_ABGR4444:
 			return GL_RGBA4;
 		case PIXEL_I8:
 			return r.support.luminanceInternalFormat;
@@ -195,10 +173,10 @@ static int makeGLSizedInternalFormat(const Renderer &r, IG::PixelFormatID format
 	}
 }
 
-static int makeGLInternalFormat(const Renderer &r, PixelFormatID format)
+static int makeGLInternalFormat(const Renderer &r, PixelFormatID format, bool isSrgb)
 {
 	return Config::Gfx::OPENGL_ES ? makeGLESInternalFormat(r, format)
-		: makeGLSizedInternalFormat(r, format);
+		: makeGLSizedInternalFormat(r, format, isSrgb);
 }
 
 static TextureType typeForPixelFormat(PixelFormatID format)
@@ -228,7 +206,7 @@ static IG::ErrorCode loadImageSource(Texture &texture, GfxImageSource &img, bool
 	else
 	{
 		auto lockBuff = texture.lock(0);
-		if(unlikely(!lockBuff))
+		if(!lockBuff) [[unlikely]]
 			return {ENOMEM};
 		//logDMsg("writing image source into texture pixel buffer");
 		img.write(lockBuff.pixmap());
@@ -257,7 +235,7 @@ Texture::Texture(RendererTask &r, TextureConfig config, IG::ErrorCode *errorPtr)
 	GLTexture{r}
 {
 	IG::ErrorCode err = init(r, config);
-	if(unlikely(err && errorPtr))
+	if(err && errorPtr) [[unlikely]]
 	{
 		*errorPtr = err;
 	}
@@ -267,9 +245,9 @@ Texture::Texture(RendererTask &r, GfxImageSource &img, const TextureSampler *com
 	GLTexture{r}
 {
 	IG::ErrorCode err;
-	auto setError = IG::scopeGuard([&](){ if(unlikely(err && errorPtr)) { *errorPtr = err; } });
+	auto setError = IG::scopeGuard([&](){ if(err && errorPtr) [[unlikely]] { *errorPtr = err; } });
 	if(err = init(r, configWithLoadedImagePixmap(img.pixmapView(), makeMipmaps, compatSampler));
-		unlikely(err))
+		err) [[unlikely]]
 	{
 		return;
 	}
@@ -309,12 +287,12 @@ TextureConfig GLTexture::baseInit(RendererTask &r, TextureConfig config)
 IG::ErrorCode GLTexture::init(RendererTask &r, TextureConfig config)
 {
 	config = baseInit(r, config);
-	return static_cast<Texture*>(this)->setFormat(config.pixmapDesc(), config.levels(), config.compatSampler());
+	return static_cast<Texture*>(this)->setFormat(config.pixmapDesc(), config.levels(), config.colorSpace(), config.compatSampler());
 }
 
 void GLTexture::deinit()
 {
-	if(!texName_ || !rTask || !*rTask)
+	if(!texName_)
 		return;
 	logMsg("deinit texture:0x%X", texName_);
 	rTask->run(
@@ -347,7 +325,7 @@ GLenum GLTexture::target() const
 
 bool Texture::generateMipmaps()
 {
-	if(unlikely(!texName_))
+	if(!texName_) [[unlikely]]
 	{
 		logErr("called generateMipmaps() on uninitialized texture");
 		return false;
@@ -370,8 +348,10 @@ uint8_t Texture::levels() const
 	return levels_;
 }
 
-IG::ErrorCode Texture::setFormat(IG::PixmapDesc desc, uint8_t levels, const TextureSampler *compatSampler)
+IG::ErrorCode Texture::setFormat(IG::PixmapDesc desc, uint8_t levels, ColorSpace colorSpace, const TextureSampler *compatSampler)
 {
+	assumeExpr(desc.w());
+	assumeExpr(desc.h());
 	if(renderer().support.textureSizeSupport.supportsMipmaps(desc.w(), desc.h()))
 	{
 		if(!levels)
@@ -384,6 +364,7 @@ IG::ErrorCode Texture::setFormat(IG::PixmapDesc desc, uint8_t levels, const Text
 	SamplerParams samplerParams = compatSampler ? compatSampler->samplerParams() : SamplerParams{};
 	if(renderer().support.hasImmutableTexStorage)
 	{
+		bool isSrgb = colorSpace == ColorSpace::SRGB && (desc.format() == IG::PIXEL_RGBA8888 || desc.format() == IG::PIXEL_BGRA8888);
 		task().runSync(
 			[=, &r = std::as_const(renderer()), &texName_ = texName_](GLTask::TaskContext ctx)
 			{
@@ -391,9 +372,10 @@ IG::ErrorCode Texture::setFormat(IG::PixmapDesc desc, uint8_t levels, const Text
 				texName_ = texName;
 				ctx.notifySemaphore();
 				glBindTexture(GL_TEXTURE_2D, texName);
-				auto internalFormat = makeGLSizedInternalFormat(r, desc.format());
-				logMsg("texture:0x%X storage size:%dx%d levels:%d internal format:%s",
-					texName, desc.w(), desc.h(), levels, glImageFormatToString(internalFormat));
+				auto internalFormat = makeGLSizedInternalFormat(r, desc.format(), isSrgb);
+				logMsg("texture:0x%X storage size:%dx%d levels:%d internal format:%s %s",
+					texName, desc.w(), desc.h(), levels, glImageFormatToString(internalFormat),
+					desc.format() == IG::PIXEL_BGRA8888 ? "write format:BGRA" : "");
 				runGLChecked(
 					[&]()
 					{
@@ -419,9 +401,11 @@ IG::ErrorCode Texture::setFormat(IG::PixmapDesc desc, uint8_t levels, const Text
 				glBindTexture(GL_TEXTURE_2D, texName);
 				auto format = makeGLFormat(r, desc.format());
 				auto dataType = makeGLDataType(desc.format());
-				auto internalFormat = makeGLInternalFormat(r, desc.format());
-				logMsg("texture:0x%X storage size:%dx%d levels:%d internal format:%s image format:%s:%s",
-					texName, desc.w(), desc.h(), levels, glImageFormatToString(internalFormat), glImageFormatToString(format), glDataTypeToString(dataType));
+				auto internalFormat = makeGLInternalFormat(r, desc.format(), false);
+				logMsg("texture:0x%X storage size:%dx%d levels:%d internal format:%s image format:%s:%s %s",
+					texName, desc.w(), desc.h(), levels, glImageFormatToString(internalFormat),
+					glImageFormatToString(format), glDataTypeToString(dataType),
+					desc.format() == IG::PIXEL_BGRA8888 && internalFormat != GL_BGRA ? "write format:BGRA" : "");
 				uint32_t w = desc.w(), h = desc.h();
 				iterateTimes(levels, i)
 				{
@@ -454,7 +438,7 @@ void GLTexture::bindTex(RendererCommands &cmds) const
 void Texture::writeAligned(uint8_t level, IG::Pixmap pixmap, IG::WP destPos, uint8_t assumeAlign, uint32_t writeFlags)
 {
 	//logDMsg("writing pixmap %dx%d to pos %dx%d", pixmap.x, pixmap.y, destPos.x, destPos.y);
-	if(unlikely(!texName_))
+	if(!texName_) [[unlikely]]
 	{
 		logErr("called writeAligned() on uninitialized texture");
 		return;
@@ -462,7 +446,7 @@ void Texture::writeAligned(uint8_t level, IG::Pixmap pixmap, IG::WP destPos, uin
 	auto &r = renderer();
 	assumeExpr(destPos.x + pixmap.w() <= (uint32_t)size(level).x);
 	assumeExpr(destPos.y + pixmap.h() <= (uint32_t)size(level).y);
-	assumeExpr(pixmap.format() == pixDesc.format());
+	assumeExpr(pixmap.format().bytesPerPixel() == pixDesc.format().bytesPerPixel());
 	if(!assumeAlign)
 		assumeAlign = unpackAlignForAddrAndPitch(pixmap.data(), pixmap.pitchBytes());
 	if((uintptr_t)pixmap.data() % (uintptr_t)assumeAlign != 0)
@@ -503,14 +487,15 @@ void Texture::writeAligned(uint8_t level, IG::Pixmap pixmap, IG::WP destPos, uin
 	{
 		// must copy to buffer without extra pitch pixels
 		logDMsg("texture:%u needs temporary buffer to copy pixmap with width:%d pitch:%d", texName_, pixmap.w(), pixmap.pitchPixels());
-		IG::WindowRect lockRect{0, 0, pixmap.size().x, pixmap.size().y};
+		IG::WindowRect lockRect{{}, pixmap.size()};
 		lockRect += destPos;
 		auto lockBuff = lock(level, lockRect);
-		if(unlikely(!lockBuff))
+		if(!lockBuff) [[unlikely]]
 		{
 			logErr("error getting buffer for writeAligned()");
 			return;
 		}
+		assumeExpr(pixmap.format().bytesPerPixel() == lockBuff.pixmap().format().bytesPerPixel());
 		lockBuff.pixmap().write(pixmap);
 		unlock(lockBuff, writeFlags);
 	}
@@ -524,7 +509,7 @@ void Texture::write(uint8_t level, IG::Pixmap pixmap, IG::WP destPos, uint32_t c
 void Texture::clear(uint8_t level)
 {
 	auto lockBuff = lock(level, BUFFER_FLAG_CLEARED);
-	if(unlikely(!lockBuff))
+	if(!lockBuff) [[unlikely]]
 	{
 		logErr("error getting buffer for clear()");
 		return;
@@ -534,12 +519,12 @@ void Texture::clear(uint8_t level)
 
 LockedTextureBuffer Texture::lock(uint8_t level, uint32_t bufferFlags)
 {
-	return lock(level, {0, 0, size(level).x, size(level).y}, bufferFlags);
+	return lock(level, {{}, size(level)}, bufferFlags);
 }
 
 LockedTextureBuffer Texture::lock(uint8_t level, IG::WindowRect rect, uint32_t bufferFlags)
 {
-	if(unlikely(!texName_))
+	if(!texName_) [[unlikely]]
 	{
 		logErr("called lock() on uninitialized texture");
 		return {};
@@ -552,7 +537,7 @@ LockedTextureBuffer Texture::lock(uint8_t level, IG::WindowRect rect, uint32_t b
 		data = (char*)std::calloc(1, bufferBytes);
 	else
 		data = (char*)std::malloc(bufferBytes);
-	if(unlikely(!data))
+	if(!data) [[unlikely]]
 	{
 		logErr("failed allocating %u bytes for pixel buffer", bufferBytes);
 		return {};
@@ -563,7 +548,7 @@ LockedTextureBuffer Texture::lock(uint8_t level, IG::WindowRect rect, uint32_t b
 
 void Texture::unlock(LockedTextureBuffer lockBuff, uint32_t writeFlags)
 {
-	if(unlikely(!lockBuff))
+	if(!lockBuff) [[unlikely]]
 		return;
 	if(lockBuff.pbo())
 	{
@@ -700,6 +685,11 @@ void Texture::useDefaultProgram(RendererCommands &cmds, uint32_t mode, const Mat
 	renderer().useCommonProgram(cmds, commonProgramForMode(type_, mode), modelMat);
 }
 
+void Texture::useDefaultProgram(RendererCommands &cmds, uint32_t mode, Mat4 modelMat) const
+{
+	useDefaultProgram(cmds, mode, &modelMat);
+}
+
 Texture::operator bool() const
 {
 	return texName();
@@ -817,7 +807,7 @@ void GLTexture::initWithEGLImage(EGLImageKHR eglImg, IG::PixmapDesc desc, Sample
 			{
 				auto texName = texName_;
 				bool madeTexName = false;
-				if(unlikely(!texName)) // texture storage is mutable, only need to make name once
+				if(!texName) [[unlikely]] // texture storage is mutable, only need to make name once
 				{
 					glGenTextures(1, &texName);
 					texName_ = texName;
@@ -872,7 +862,7 @@ PixmapTexture::PixmapTexture(RendererTask &r, TextureConfig config, IG::ErrorCod
 	GLPixmapTexture{r}
 {
 	IG::ErrorCode err = GLPixmapTexture::init(r, config);
-	if(unlikely(err && errorPtr))
+	if(err && errorPtr) [[unlikely]]
 	{
 		*errorPtr = err;
 	}
@@ -882,11 +872,11 @@ PixmapTexture::PixmapTexture(RendererTask &r, GfxImageSource &img, const Texture
 	GLPixmapTexture{r}
 {
 	IG::ErrorCode err;
-	auto setError = IG::scopeGuard([&](){ if(unlikely(err && errorPtr)) { *errorPtr = err; } });
+	auto setError = IG::scopeGuard([&](){ if(err && errorPtr) [[unlikely]] { *errorPtr = err; } });
 	if(img)
 	{
 		if(err = GLPixmapTexture::init(r, configWithLoadedImagePixmap(img.pixmapView(), makeMipmaps, compatSampler));
-			unlikely(err))
+			err) [[unlikely]]
 		{
 			return;
 		}
@@ -901,19 +891,19 @@ PixmapTexture::PixmapTexture(RendererTask &r, GfxImageSource &img, const Texture
 IG::ErrorCode GLPixmapTexture::init(RendererTask &r, TextureConfig config)
 {
 	config = baseInit(r, config);
-	if(auto err = static_cast<PixmapTexture*>(this)->setFormat(config.pixmapDesc(), config.levels(), config.compatSampler());
-		unlikely(err))
+	if(auto err = static_cast<PixmapTexture*>(this)->setFormat(config.pixmapDesc(), config.levels(), config.colorSpace(), config.compatSampler());
+		err) [[unlikely]]
 	{
 		return err;
 	}
 	return {};
 }
 
-IG::ErrorCode PixmapTexture::setFormat(IG::PixmapDesc desc, uint8_t levels, const TextureSampler *compatSampler)
+IG::ErrorCode PixmapTexture::setFormat(IG::PixmapDesc desc, uint8_t levels, ColorSpace colorSpace, const TextureSampler *compatSampler)
 {
 	IG::PixmapDesc fullPixDesc = renderer().support.textureSizeSupport.makePixmapDescWithSupportedSize(desc);
-	if(auto err = Texture::setFormat(fullPixDesc, levels, compatSampler);
-		unlikely(err))
+	if(auto err = Texture::setFormat(fullPixDesc, levels, colorSpace, compatSampler);
+		err) [[unlikely]]
 	{
 		return err;
 	}
@@ -925,7 +915,7 @@ IG::ErrorCode PixmapTexture::setFormat(IG::PixmapDesc desc, uint8_t levels, cons
 
 GTexCRect PixmapTexture::uvBounds() const
 {
-	return {0, 0, uv.x, uv.y};
+	return {{}, uv};
 }
 
 IG::PixmapDesc PixmapTexture::usedPixmapDesc() const
@@ -963,7 +953,7 @@ void GLPixmapTexture::initWithEGLImage(IG::WP usedSize, EGLImageKHR eglImg, IG::
 
 IG::PixmapDesc TextureSizeSupport::makePixmapDescWithSupportedSize(IG::PixmapDesc desc) const
 {
-	return {makeSupportedSize(desc.size()), desc.format()};
+	return desc.makeNewSize(makeSupportedSize(desc.size()));
 }
 
 IG::WP TextureSizeSupport::makeSupportedSize(IG::WP size) const

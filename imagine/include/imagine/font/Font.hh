@@ -16,11 +16,6 @@
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <imagine/config/defs.hh>
-#include <imagine/font/FontSettings.hh>
-#include <imagine/font/GlyphMetrics.hh>
-#include <imagine/io/IO.hh>
-#include <imagine/pixmap/Pixmap.hh>
-#include <system_error>
 
 #ifdef __ANDROID__
 #include <imagine/font/AndroidFont.hh>
@@ -30,8 +25,17 @@
 #include <imagine/font/FreetypeFont.hh>
 #endif
 
+#include <imagine/font/FontSettings.hh>
+#include <imagine/font/GlyphMetrics.hh>
+#include <imagine/base/ApplicationContext.hh>
+#include <system_error>
+
+class GenericIO;
+
 namespace IG
 {
+
+class Pixmap;
 
 class GlyphImage: public GlyphImageImpl
 {
@@ -54,9 +58,9 @@ public:
 	using FontImpl::FontImpl;
 	Font(GenericIO io);
 	Font(const char *name);
-	static Font makeSystem();
-	static Font makeBoldSystem();
-	static Font makeFromAsset(const char *name, const char *appName);
+	static Font makeSystem(Base::ApplicationContext);
+	static Font makeBoldSystem(Base::ApplicationContext);
+	static Font makeFromAsset(Base::ApplicationContext, const char *name, const char *appName = Base::ApplicationContext::applicationName);
 	operator bool() const;
 	int minUsablePixels() const;
 	Glyph glyph(int idx, FontSize &size, std::errc &ec);

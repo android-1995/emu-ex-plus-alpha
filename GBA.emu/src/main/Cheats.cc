@@ -14,13 +14,14 @@
 	along with GBA.emu.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <imagine/gui/TextEntry.hh>
+#include <imagine/util/string.h>
 #include <emuframework/Cheats.hh>
 #include <emuframework/EmuApp.hh>
 #include "EmuCheatViews.hh"
 #include <gba/Cheats.h>
 static bool cheatsModified = false;
 
-EmuEditCheatView::EmuEditCheatView(ViewAttachParams attach, uint cheatIdx, RefreshCheatsDelegate onCheatListChanged_):
+EmuEditCheatView::EmuEditCheatView(ViewAttachParams attach, unsigned cheatIdx, RefreshCheatsDelegate onCheatListChanged_):
 	BaseEditCheatView
 	{
 		"Edit Code",
@@ -30,7 +31,7 @@ EmuEditCheatView::EmuEditCheatView(ViewAttachParams attach, uint cheatIdx, Refre
 		{
 			return 3;
 		},
-		[this](const TableView &, uint idx) -> MenuItem&
+		[this](const TableView &, unsigned idx) -> MenuItem&
 		{
 			switch(idx)
 			{
@@ -53,9 +54,10 @@ EmuEditCheatView::EmuEditCheatView(ViewAttachParams attach, uint cheatIdx, Refre
 	{
 		"Code",
 		cheatsList[cheatIdx].codestring,
+		&defaultFace(),
 		[this](DualTextMenuItem &, View &, Input::Event)
 		{
-			EmuApp::postMessage("To change this cheat, please delete and re-add it");
+			app().postMessage("To change this cheat, please delete and re-add it");
 		}
 	},
 	idx{cheatIdx}
@@ -75,12 +77,12 @@ void EmuEditCheatView::renamed(const char *str)
 
 void EmuEditCheatListView::loadCheatItems()
 {
-	uint cheats = cheatsNumber;
+	unsigned cheats = cheatsNumber;
 	cheat.clear();
 	cheat.reserve(cheats);
 	iterateTimes(cheats, c)
 	{
-		cheat.emplace_back(cheatsList[c].desc,
+		cheat.emplace_back(cheatsList[c].desc, &defaultFace(),
 			[this, c](TextMenuItem &, View &, Input::Event e)
 			{
 				pushAndShow(makeView<EmuEditCheatView>(c, [this](){ onCheatListChanged(); }), e);
@@ -92,10 +94,10 @@ void EmuEditCheatListView::addNewCheat(int isGSv3)
 {
 	if(cheatsNumber == EmuCheats::MAX)
 	{
-		EmuApp::postMessage(true, "Too many cheats, delete some first");
+		app().postMessage(true, "Too many cheats, delete some first");
 		return;
 	}
-	EmuApp::pushAndShowNewCollectTextInputView(attachParams(), {},
+	app().pushAndShowNewCollectTextInputView(attachParams(), {},
 		isGSv3 ? "Input xxxxxxxx yyyyyyyy" : "Input xxxxxxxx yyyyyyyy (GS) or xxxxxxxx yyyy (AR)", "",
 		[this, isGSv3](CollectTextInputView &view, const char *str)
 		{
@@ -118,14 +120,14 @@ void EmuEditCheatListView::addNewCheat(int isGSv3)
 				}
 				else
 				{
-					EmuApp::postMessage(true, "Invalid format");
+					app().postMessage(true, "Invalid format");
 					return 1;
 				}
 				cheatsModified = true;
 				cheatsDisable(gGba.cpu, cheatsNumber-1);
 				onCheatListChanged();
 				view.dismiss();
-				EmuApp::pushAndShowNewCollectTextInputView(attachParams(), {}, "Input description", "",
+				app().pushAndShowNewCollectTextInputView(attachParams(), {}, "Input description", "",
 					[this](CollectTextInputView &view, const char *str)
 					{
 						if(str)
@@ -157,7 +159,7 @@ EmuEditCheatListView::EmuEditCheatListView(ViewAttachParams attach):
 		{
 			return 2 + cheat.size();
 		},
-		[this](const TableView &, uint idx) -> MenuItem&
+		[this](const TableView &, unsigned idx) -> MenuItem&
 		{
 			switch(idx)
 			{
@@ -169,7 +171,7 @@ EmuEditCheatListView::EmuEditCheatListView(ViewAttachParams attach):
 	},
 	addGS12CBCode
 	{
-		"Add Game Shark v1-2/Code Breaker Code",
+		"Add Game Shark v1-2/Code Breaker Code", &defaultFace(),
 		[this](TextMenuItem &item, View &, Input::Event e)
 		{
 			addNewCheat(false);
@@ -177,7 +179,7 @@ EmuEditCheatListView::EmuEditCheatListView(ViewAttachParams attach):
 	},
 	addGS3Code
 	{
-		"Add Game Shark v3 Code",
+		"Add Game Shark v3 Code", &defaultFace(),
 		[this](TextMenuItem &item, View &, Input::Event e)
 		{
 			addNewCheat(true);
@@ -189,13 +191,13 @@ EmuEditCheatListView::EmuEditCheatListView(ViewAttachParams attach):
 
 void EmuCheatsView::loadCheatItems()
 {
-	uint cheats = cheatsNumber;
+	unsigned cheats = cheatsNumber;
 	cheat.clear();
 	cheat.reserve(cheats);
 	iterateTimes(cheats, c)
 	{
 		auto &cheatEntry = cheatsList[c];
-		cheat.emplace_back(cheatEntry.desc, cheatEntry.enabled,
+		cheat.emplace_back(cheatEntry.desc, &defaultFace(), cheatEntry.enabled,
 			[this, c](BoolMenuItem &item, View &, Input::Event e)
 			{
 				cheatsModified = true;

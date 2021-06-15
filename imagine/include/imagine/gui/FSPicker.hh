@@ -15,16 +15,20 @@
 	You should have received a copy of the GNU General Public License
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <vector>
-#include <system_error>
 #include <imagine/config/defs.hh>
 #include <imagine/gfx/GfxText.hh>
-#include <imagine/input/Input.hh>
 #include <imagine/fs/FSDefs.hh>
 #include <imagine/gui/MenuItem.hh>
 #include <imagine/util/DelegateFunc.hh>
 #include <imagine/gui/View.hh>
 #include <imagine/gui/ViewStack.hh>
+#include <vector>
+#include <system_error>
+
+namespace Input
+{
+class Event;
+}
 
 class FSPicker : public View
 {
@@ -37,7 +41,7 @@ public:
 	static constexpr bool needsUpDirControl = true;
 
 	FSPicker(ViewAttachParams attach, Gfx::TextureSpan backRes, Gfx::TextureSpan closeRes,
-			FilterFunc filter = {}, bool singleDir = false, Gfx::GlyphTextureSet *face = &View::defaultFace);
+			FilterFunc filter = {}, bool singleDir = false, Gfx::GlyphTextureSet *face = {});
 	void place() override;
 	bool inputEvent(Input::Event e) override;
 	void prepareDraw() override;
@@ -51,22 +55,10 @@ public:
 	void onRightNavBtn(Input::Event e);
 	std::error_code setPath(const char *path, bool forcePathChange, FS::RootPathInfo rootInfo, Input::Event e);
 	std::error_code setPath(const char *path, bool forcePathChange, FS::RootPathInfo rootInfo);
-	std::error_code setPath(FS::PathString path, bool forcePathChange, FS::RootPathInfo rootInfo, Input::Event e)
-	{
-		return setPath(path.data(), forcePathChange, rootInfo, e);
-	}
-	std::error_code setPath(FS::PathString path, bool forcePathChange, FS::RootPathInfo rootInfo)
-	{
-		return setPath(path.data(), forcePathChange, rootInfo);
-	}
-	std::error_code setPath(FS::PathLocation location, bool forcePathChange)
-	{
-		return setPath(location.path, forcePathChange, location.root);
-	}
-	std::error_code setPath(FS::PathLocation location, bool forcePathChange, Input::Event e)
-	{
-		return setPath(location.path, forcePathChange, location.root, e);
-	}
+	std::error_code setPath(FS::PathString path, bool forcePathChange, FS::RootPathInfo rootInfo, Input::Event e);
+	std::error_code setPath(FS::PathString path, bool forcePathChange, FS::RootPathInfo rootInfo);
+	std::error_code setPath(FS::PathLocation location, bool forcePathChange);
+	std::error_code setPath(FS::PathLocation location, bool forcePathChange, Input::Event e);
 	FS::PathString path() const;
 	void clearSelection() override;
 	FS::PathString makePathString(const char *base) const;
@@ -89,13 +81,7 @@ protected:
 	ViewStack controller{};
 	OnChangePathDelegate onChangePath_{};
 	OnSelectFileDelegate onSelectFile_{};
-	OnCloseDelegate onClose_
-	{
-		[](FSPicker &picker, Input::Event e)
-		{
-			picker.dismiss();
-		}
-	};
+	OnCloseDelegate onClose_;
 	OnPathReadError onPathReadError_{};
 	std::vector<TextMenuItem> text{};
 	std::vector<FileEntry> dir{};
@@ -109,4 +95,5 @@ protected:
 	void changeDirByInput(const char *path, FS::RootPathInfo rootInfo, bool forcePathChange, Input::Event e);
 	bool isAtRoot() const;
 	void pushFileLocationsView(Input::Event e);
+	Gfx::GlyphTextureSet &face();
 };

@@ -16,7 +16,6 @@
 #include <cstring>
 #include <imagine/logger/logger.h>
 #include <imagine/fs/FS.hh>
-#include <imagine/base/Base.hh>
 #include <imagine/util/utility.h>
 #include <emuframework/EmuApp.hh>
 #include "VicePlugin.hh"
@@ -57,7 +56,7 @@ constexpr const char *libName[]
 
 struct PluginConfig
 {
-	uint models;
+	unsigned models;
 	const char **modelStr;
 	const char *getModelFuncName;
 	const char *setModelFuncName;
@@ -77,6 +76,14 @@ static void loadSymbolCheck(T &symPtr, Base::SharedLibraryRef lib, const char *n
 {
 	if(!Base::loadSymbol(symPtr, lib, name))
 		logErr("symbol:%s missing from plugin", name);
+}
+
+void VicePlugin::init()
+{
+	assert(libHandle);
+	int (*vice_init)();
+	loadSymbolCheck(vice_init, libHandle, "vice_init");
+	vice_init();
 }
 
 void VicePlugin::deinit()
@@ -496,7 +503,8 @@ VicePlugin loadVicePlugin(ViceSystem system, const char *libBasePath)
 			std::size(cbm2ModelStr),
 			cbm2ModelStr,
 			"cbm2model_get",
-			"cbm2model_set"
+			"cbm2model_set",
+			{}
 		},
 		// CBM-II 5x0
 		{
@@ -511,7 +519,8 @@ VicePlugin loadVicePlugin(ViceSystem system, const char *libBasePath)
 			std::size(petModelStr),
 			petModelStr,
 			"petmodel_get",
-			"petmodel_set"
+			"petmodel_set",
+			{}
 		},
 		// PLUS4
 		{
@@ -546,9 +555,6 @@ VicePlugin loadVicePlugin(ViceSystem system, const char *libBasePath)
 	plugin.borderModeStr = conf.borderModeStr;
 	//logMsg("getModel() address:%p", plugin.model_get_);
 	//logMsg("setModel() address:%p", plugin.model_set_);
-	int (*vice_init)();
-	loadSymbolCheck(vice_init, lib, "vice_init");
-	vice_init();
 	plugin.libHandle = lib;
 	return plugin;
 }

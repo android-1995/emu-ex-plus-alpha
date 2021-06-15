@@ -21,7 +21,12 @@
 
 struct AAsset;
 
-class AAssetIO final : public IO
+namespace Base
+{
+class ApplicationContext;
+}
+
+class AAssetIO : public IO
 {
 public:
 	using IO::read;
@@ -38,9 +43,9 @@ public:
 
 	constexpr AAssetIO() {}
 	GenericIO makeGeneric();
-	std::error_code open(const char *name, AccessHint access);
+	std::error_code open(Base::ApplicationContext, const char *name, AccessHint);
 	ssize_t read(void *buff, size_t bytes, std::error_code *ecOut) final;
-	const char *mmapConst() final;
+	const uint8_t *mmapConst() final;
 	ssize_t write(const void *buff, size_t bytes, std::error_code *ecOut) final;
 	off_t seek(off_t offset, SeekMode mode, std::error_code *ecOut) final;
 	void close() final;

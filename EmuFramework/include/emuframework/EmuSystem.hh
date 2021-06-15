@@ -15,30 +15,46 @@
 	You should have received a copy of the GNU General Public License
 	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <imagine/io/IO.hh>
 #include <imagine/fs/FS.hh>
 #include <imagine/base/baseDefs.hh>
-#include <imagine/base/Timer.hh>
 #include <imagine/time/Time.hh>
-#include <imagine/input/Input.hh>
 #include <imagine/audio/SampleFormat.hh>
-#include <imagine/util/string.h>
+#include <imagine/util/rectangle2.h>
 #include <emuframework/config.hh>
 #include <optional>
 #include <stdexcept>
 
+namespace Base
+{
+class ApplicationContext;
+}
+
+namespace Input
+{
+class Event;
+enum class Action : uint8_t;
+}
+
+namespace IG
+{
+class PixelFormat;
+}
+
+class IO;
+class GenericIO;
 class EmuInputView;
 class EmuSystemTask;
 class EmuAudio;
 class EmuVideo;
+class EmuApp;
 struct EmuFrameTimeInfo;
 
 struct AspectRatioInfo
 {
-	constexpr AspectRatioInfo(const char *name, uint n, uint d): name(name), aspect{n, d} {}
+	constexpr AspectRatioInfo(const char *name, unsigned n, unsigned d): name(name), aspect{n, d} {}
 	constexpr explicit operator double() const { return aspect.ratio<double>(); }
 	const char *name;
-	IG::Point2D<uint> aspect;
+	IG::Point2D<unsigned> aspect;
 };
 
 #define EMU_SYSTEM_DEFAULT_ASPECT_RATIO_INFO_INIT {"1:1", 1, 1}, {"Full Screen", 0, 1}
@@ -101,17 +117,16 @@ public:
 	using NameFilterFunc = bool(*)(const char *name);
 	static State state;
 	static FS::PathString savePath_;
-	static Base::Timer autoSaveStateTimer;
 	static int saveStateSlot;
-	static uint aspectRatioX, aspectRatioY;
-	static const uint maxPlayers;
+	static unsigned aspectRatioX, aspectRatioY;
+	static const unsigned maxPlayers;
 	static const AspectRatioInfo aspectRatioInfo[];
-	static const uint aspectRatioInfos;
+	static const unsigned aspectRatioInfos;
 	static const char *configFilename;
 	static const char *inputFaceBtnName;
 	static const char *inputCenterBtnName;
-	static const uint inputCenterBtns;
-	static const uint inputFaceBtns;
+	static const unsigned inputCenterBtns;
+	static const unsigned inputFaceBtns;
 	static const bool inputHasTriggerBtns;
 	static const bool inputHasRevBtnLayout;
 	static bool inputHasKeyboard;
@@ -138,34 +153,34 @@ public:
 	static const char *creditsViewStr;
 	static bool sessionOptionsSet;
 
-	static Error onInit();
+	static Error onInit(Base::ApplicationContext);
 	static bool isActive() { return state == State::ACTIVE; }
 	static bool isStarted() { return state == State::ACTIVE || state == State::PAUSED; }
 	static bool isPaused() { return state == State::PAUSED; }
-	static void cancelAutoSaveStateTimer();
-	static void startAutoSaveStateTimer();
+	static Error loadState(EmuApp &, const char *path);
 	static Error loadState(const char *path);
+	static Error saveState(EmuApp &, const char *path);
 	static Error saveState(const char *path);
 	static bool stateExists(int slot);
 	static bool shouldOverwriteExistingState();
 	static const char *systemName();
 	static const char *shortSystemName();
-	static const BundledGameInfo &bundledGameInfo(uint idx);
+	static const BundledGameInfo &bundledGameInfo(unsigned idx);
 	static const char *gamePath() { return gamePath_.data(); }
 	static FS::PathString gamePathString() { return gamePath_; }
 	static const char *fullGamePath() { return fullGamePath_.data(); }
 	static FS::FileString gameName() { return gameName_; }
-	static FS::FileString fullGameName() { return strlen(fullGameName_.data()) ? fullGameName_ : gameName_; }
-	static FS::FileString gameFileName() { return FS::basename(fullGamePath_); }
-	static FS::FileString originalGameFileName() { return strlen(originalGameName_.data()) ? originalGameName_ : gameFileName(); }
-	static void setFullGameName(const char *name) { string_copy(fullGameName_, name); }
+	static FS::FileString fullGameName();
+	static FS::FileString gameFileName();
+	static FS::FileString originalGameFileName();
+	static void setFullGameName(const char *name);
 	static FS::FileString fullGameNameForPathDefaultImpl(const char *path);
-	static FS::FileString fullGameNameForPath(const char *path);
+	static FS::FileString fullGameNameForPath(Base::ApplicationContext, const char *path);
 	static void setInitialLoadPath(const char *path);
-	static FS::PathString baseSavePath();
-	static FS::PathString makeDefaultBaseSavePath();
-	static void makeDefaultSavePath();
-	static const char *defaultSavePath();
+	static FS::PathString baseSavePath(Base::ApplicationContext);
+	static FS::PathString makeDefaultBaseSavePath(Base::ApplicationContext);
+	static void makeDefaultSavePath(Base::ApplicationContext);
+	static const char *defaultSavePath(Base::ApplicationContext);
 	static const char *savePath();
 	static FS::PathString sprintStateFilename(int slot,
 		const char *statePath = savePath(), const char *gameName = EmuSystem::gameName_.data());
@@ -174,27 +189,28 @@ public:
 	static void saveBackupMem();
 	static void savePathChanged();
 	static void reset(ResetMode mode);
+	static void reset(EmuApp &, ResetMode mode);
 	static void initOptions();
-	static Error onOptionsLoaded();
+	static Error onOptionsLoaded(Base::ApplicationContext);
 	static void writeConfig(IO &io);
-	static bool readConfig(IO &io, uint key, uint readSize);
-	static bool resetSessionOptions();
+	static bool readConfig(IO &io, unsigned key, unsigned readSize);
+	static bool resetSessionOptions(EmuApp &);
 	static void sessionOptionSet();
-	static void onSessionOptionsLoaded();
+	static void onSessionOptionsLoaded(EmuApp &);
 	static void writeSessionConfig(IO &io);
-	static bool readSessionConfig(IO &io, uint key, uint readSize);
-	static void createWithMedia(GenericIO io, const char *path, const char *name,
-		Error &err, EmuSystemCreateParams, OnLoadProgressDelegate onLoadProgress);
-	static Error loadGame(IO &io, EmuSystemCreateParams, OnLoadProgressDelegate onLoadProgress);
+	static bool readSessionConfig(IO &io, unsigned key, unsigned readSize);
+	static void createWithMedia(Base::ApplicationContext, GenericIO, const char *path, const char *name,
+		Error &errOut, EmuSystemCreateParams, OnLoadProgressDelegate);
+	static Error loadGame(IO &, EmuSystemCreateParams, OnLoadProgressDelegate);
+	static Error loadGame(Base::ApplicationContext, IO &, EmuSystemCreateParams, OnLoadProgressDelegate);
 	static FS::PathString willLoadGameFromPath(FS::PathString path);
-	static Error loadGameFromPath(const char *path, EmuSystemCreateParams params, OnLoadProgressDelegate onLoadProgress);
-	static Error loadGameFromFile(GenericIO io, const char *name, EmuSystemCreateParams params, OnLoadProgressDelegate onLoadProgress);
+	static Error loadGameFromPath(Base::ApplicationContext, const char *path, EmuSystemCreateParams, OnLoadProgressDelegate);
+	static Error loadGameFromFile(Base::ApplicationContext, GenericIO, const char *name, EmuSystemCreateParams, OnLoadProgressDelegate);
 	[[gnu::hot]] static void runFrame(EmuSystemTask *task, EmuVideo *video, EmuAudio *audio);
-	static void skipFrames(EmuSystemTask *task, uint32_t frames, EmuAudio *audio);
-	static bool skipForwardFrames(EmuSystemTask *task, uint32_t frames);
+	static void renderFramebuffer(EmuVideo &);
 	static bool shouldFastForward();
-	static void onPrepareAudio(EmuAudio &audio);
-	static void onPrepareVideo(EmuVideo &video);
+	static void onPrepareAudio(EmuAudio &);
+	static void onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat);
 	static bool vidSysIsPAL();
 	static uint32_t updateAudioFramesPerVideoFrame();
 	static double frameRate();
@@ -204,38 +220,37 @@ public:
 	static IG::FloatSeconds defaultFrameTime(VideoSystem system);
 	static bool frameTimeIsValid(VideoSystem system, IG::FloatSeconds time);
 	static bool setFrameTime(VideoSystem system, IG::FloatSeconds time);
-	static uint multiresVideoBaseX();
-	static uint multiresVideoBaseY();
+	static unsigned multiresVideoBaseX();
+	static unsigned multiresVideoBaseY();
 	static void configAudioRate(IG::FloatSeconds frameTime, uint32_t rate);
-	static void configAudioPlayback(uint32_t rate);
+	static void configAudioPlayback(EmuAudio &, uint32_t rate);
 	static void configFrameTime(uint32_t rate);
-	static void configFrameTime();
 	static void clearInputBuffers(EmuInputView &view);
-	static void handleInputAction(uint state, uint emuKey);
-	static uint translateInputAction(uint input, bool &turbo);
-	static uint translateInputAction(uint input)
+	static void handleInputAction(EmuApp *, Input::Action state, unsigned emuKey);
+	static unsigned translateInputAction(unsigned input, bool &turbo);
+	static unsigned translateInputAction(unsigned input)
 	{
 		bool turbo;
 		return translateInputAction(input, turbo);
 	}
 	static bool touchControlsApplicable();
 	static bool handlePointerInputEvent(Input::Event e, IG::WindowRect gameRect);
+	static void setStartFrameTime(Base::FrameTime time);
 	static EmuFrameTimeInfo advanceFramesWithTime(IG::FrameTime time);
-	static void setSpeedMultiplier(uint8_t speed);
-	static void setupGamePaths(const char *filePath);
-	static void setGameSavePath(const char *path);
-	static void setupGameSavePath();
+	static void setSpeedMultiplier(EmuAudio &, uint8_t speed);
+	static void setupGamePaths(Base::ApplicationContext, const char *filePath);
+	static void setGameSavePath(Base::ApplicationContext, const char *path);
+	static void setupGameSavePath(Base::ApplicationContext);
 	static void clearGamePaths();
-	static FS::PathString baseDefaultGameSavePath();
+	static FS::PathString baseDefaultGameSavePath(Base::ApplicationContext);
 	static IG::Time benchmark(EmuVideo &video);
 	static bool gameIsRunning();
 	static void resetFrameTime();
-	static void prepareAudioVideo(EmuAudio &audio, EmuVideo &video);
-	static void prepareVideo(EmuVideo &video);
-	static void pause();
-	static void start();
+	static void prepareAudio(EmuAudio &audio);
+	static void pause(EmuApp &);
+	static void start(EmuApp &);
 	static void closeSystem();
-	static void closeRuntimeSystem(bool allowAutosaveState = 1);
+	static void closeRuntimeSystem(EmuApp &, bool allowAutosaveState = 1);
 	[[gnu::format(printf, 1, 2)]]
 	static Error makeError(const char *msg, ...);
 	static Error makeError(std::error_code ec);

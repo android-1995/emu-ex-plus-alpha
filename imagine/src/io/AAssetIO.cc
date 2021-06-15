@@ -18,7 +18,7 @@
 #include <sys/mman.h>
 #include <imagine/io/AAssetIO.hh>
 #include "utils.hh"
-#include "../base/android/android.hh"
+#include <imagine/base/ApplicationContext.hh>
 #include <imagine/logger/logger.h>
 #include <android/asset_manager.h>
 
@@ -38,11 +38,11 @@ static int accessHintToAAssetMode(IO::AccessHint advice)
 	}
 }
 
-std::error_code AAssetIO::open(const char *name, AccessHint access)
+std::error_code AAssetIO::open(Base::ApplicationContext ctx, const char *name, AccessHint access)
 {
 	logMsg("opening asset %s", name);
 	auto mode = accessHintToAAssetMode(access);
-	asset.reset(AAssetManager_open(Base::activityAAssetManager(), name, mode));
+	asset.reset(AAssetManager_open(ctx.aAssetManager(), name, mode));
 	if(!asset)
 	{
 		logErr("error in AAssetManager_open");
@@ -50,10 +50,10 @@ std::error_code AAssetIO::open(const char *name, AccessHint access)
 	}
 	switch(access)
 	{
-		bdefault:
-		bcase IO::AccessHint::SEQUENTIAL:	advise(0, 0, IO::Advice::SEQUENTIAL);
-		bcase IO::AccessHint::RANDOM:	advise(0, 0, IO::Advice::RANDOM);
-		bcase IO::AccessHint::ALL:	advise(0, 0, IO::Advice::WILLNEED);
+		case IO::AccessHint::NORMAL: break;
+		case IO::AccessHint::SEQUENTIAL: advise(0, 0, IO::Advice::SEQUENTIAL); break;
+		case IO::AccessHint::RANDOM: advise(0, 0, IO::Advice::RANDOM); break;
+		case IO::AccessHint::ALL: advise(0, 0, IO::Advice::WILLNEED); break;
 	}
 	return {};
 }
@@ -72,7 +72,7 @@ ssize_t AAssetIO::read(void *buff, size_t bytes, std::error_code *ecOut)
 	return bytesRead;
 }
 
-const char *AAssetIO::mmapConst()
+const uint8_t *AAssetIO::mmapConst()
 {
 	if(makeMapIO())
 		return mapIO.mmapConst();

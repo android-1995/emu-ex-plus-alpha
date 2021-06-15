@@ -15,13 +15,15 @@
 
 #define LOGTAG "CreditsView"
 #include <emuframework/CreditsView.hh>
+#include "private.hh"
+#include <imagine/base/Window.hh>
+#include <imagine/input/Input.hh>
 #include <imagine/gfx/RendererCommands.hh>
 #include <imagine/util/math/int.hh>
-#include "private.hh"
 
 CreditsView::CreditsView(ViewAttachParams attach, const char *str):
 	View{appViewTitle(), attach},
-	text{str, &View::defaultFace},
+	text{str, &defaultFace()},
 	animate
 	{
 		[this](IG::FrameParams params)

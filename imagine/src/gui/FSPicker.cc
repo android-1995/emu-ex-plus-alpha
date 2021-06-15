@@ -20,7 +20,7 @@
 #include <imagine/gui/TextEntry.hh>
 #include <imagine/gui/NavView.hh>
 #include <imagine/fs/FS.hh>
-#include <imagine/base/Base.hh>
+#include <imagine/base/ApplicationContext.hh>
 #include <imagine/gfx/RendererCommands.hh>
 #include <imagine/logger/logger.h>
 #include <imagine/util/math/int.hh>
@@ -33,10 +33,17 @@ static bool isValidRootEndChar(char c)
 }
 
 FSPicker::FSPicker(ViewAttachParams attach, Gfx::TextureSpan backRes, Gfx::TextureSpan closeRes,
-	FilterFunc filter,  bool singleDir, Gfx::GlyphTextureSet *face):
+	FilterFunc filter,  bool singleDir, Gfx::GlyphTextureSet *face_):
 	View{attach},
 	filter{filter},
-	msgText{face},
+	onClose_
+	{
+		[](FSPicker &picker, Input::Event e)
+		{
+			picker.dismiss();
+		}
+	},
+	msgText{face_ ? face_ : &defaultFace()},
 	singleDir{singleDir}
 {
 	const Gfx::LGradientStopDesc fsNavViewGrad[]
@@ -49,7 +56,7 @@ FSPicker::FSPicker(ViewAttachParams attach, Gfx::TextureSpan backRes, Gfx::Textu
 	};
 	auto nav = makeView<BasicNavView>
 		(
-			face,
+			&face(),
 			singleDir ? nullptr : backRes,
 			closeRes
 		);
@@ -74,7 +81,7 @@ FSPicker::FSPicker(ViewAttachParams attach, Gfx::TextureSpan backRes, Gfx::Textu
 			}
 		});
 	controller.setNavView(std::move(nav));
-	controller.push(makeView<TableView>(text), Input::defaultEvent());
+	controller.push(makeView<TableView>(text));
 }
 
 void FSPicker::place()
@@ -228,7 +235,7 @@ std::error_code FSPicker::setPath(const char *path, bool forcePathChange, FS::Ro
 		{
 			if(entry.isDir)
 			{
-				text.emplace_back(entry.name.data(), &View::defaultBoldFace,
+				text.emplace_back(entry.name.data(), &face(),
 					[this, idx](Input::Event e)
 					{
 						assert(!singleDir);
@@ -239,7 +246,7 @@ std::error_code FSPicker::setPath(const char *path, bool forcePathChange, FS::Ro
 			}
 			else
 			{
-				text.emplace_back(entry.name.data(),
+				text.emplace_back(entry.name.data(), &face(),
 					[this, idx](Input::Event e)
 					{
 						onSelectFile_.callCopy(*this, dir[idx].name.data(), e);
@@ -252,7 +259,8 @@ std::error_code FSPicker::setPath(const char *path, bool forcePathChange, FS::Ro
 	{
 		// no entires, show a message instead
 		if(ec)
-			msgText.setString(string_makePrintf<48>("Can't open directory:\n%s", ec.message().c_str()).data());
+			msgText.setString(string_makePrintf<96>("Can't open directory:\n%s\nPick a path from the top bar",
+				ec.message().c_str()).data());
 		else
 			msgText.setString("Empty Directory");
 	}
@@ -291,7 +299,25 @@ std::error_code FSPicker::setPath(const char *path, bool forcePathChange, FS::Ro
 
 std::error_code FSPicker::setPath(const char *path, bool forcePathChange, FS::RootPathInfo rootInfo)
 {
-	return setPath(path, forcePathChange, rootInfo, Input::defaultEvent());
+	return setPath(path, forcePathChange, rootInfo, appContext().defaultInputEvent());
+}
+
+std::error_code FSPicker::setPath(FS::PathString path, bool forcePathChange, FS::RootPathInfo rootInfo, Input::Event e)
+{
+	return setPath(path.data(), forcePathChange, rootInfo, e);
+}
+
+std::error_code FSPicker::setPath(FS::PathString path, bool forcePathChange, FS::RootPathInfo rootInfo)
+{
+	return setPath(path.data(), forcePathChange, rootInfo);
+}
+std::error_code FSPicker::setPath(FS::PathLocation location, bool forcePathChange)
+{
+	return setPath(location.path, forcePathChange, location.root);
+}
+std::error_code FSPicker::setPath(FS::PathLocation location, bool forcePathChange, Input::Event e)
+{
+	return setPath(location.path, forcePathChange, location.root, e);
 }
 
 FS::PathString FSPicker::path() const
@@ -336,8 +362,9 @@ bool FSPicker::isAtRoot() const
 
 void FSPicker::pushFileLocationsView(Input::Event e)
 {
-	rootLocation = Base::rootFileLocations();
-	auto view = makeViewWithName<TextTableView>("File Locations", rootLocation.size() + 2);
+	rootLocation = appContext().rootFileLocations();
+	int customItems = appContext().hasSystemPathPicker() ? 3 : 2;
+	auto view = makeViewWithName<TextTableView>("File Locations", rootLocation.size() + customItems);
 	for(auto &loc : rootLocation)
 	{
 		view->appendItem(loc.description.data(),
@@ -366,12 +393,30 @@ void FSPicker::pushFileLocationsView(Input::Event e)
 						view.dismiss();
 						return false;
 					}
-					changeDirByInput(str, Base::nearestRootPath(str), false, Input::defaultEvent());
+					changeDirByInput(str, appContext().nearestRootPath(str), false, appContext().defaultInputEvent());
 					dismissPrevious();
 					view.dismiss();
 					return false;
 				});
 			pushAndShow(std::move(textInputView), e);
 		});
+	if(appContext().hasSystemPathPicker())
+	{
+		view->appendItem("OS Path Picker",
+			[this](View &view, Input::Event e)
+			{
+				appContext().showSystemPathPicker(
+					[this, &view](const char *path)
+					{
+						changeDirByInput(path, appContext().nearestRootPath(path), false, appContext().defaultInputEvent());
+						view.dismiss();
+					});
+			});
+	}
 	pushAndShow(std::move(view), e);
+}
+
+Gfx::GlyphTextureSet &FSPicker::face()
+{
+	return *msgText.face();
 }

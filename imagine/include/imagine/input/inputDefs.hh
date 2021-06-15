@@ -16,6 +16,8 @@
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <imagine/config/defs.hh>
+#include <imagine/util/DelegateFunc.hh>
+#include <array>
 
 namespace Input
 {
@@ -48,5 +50,9 @@ enum class Map : uint8_t
 
 	APPLE_GAME_CONTROLLER = 31
 };
+
+using EventKeyString = std::array<char, 4>;
+
+using TextFieldDelegate = DelegateFunc<void (const char *str)>;
 
 }

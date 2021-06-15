@@ -14,27 +14,26 @@
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
 #define LOGTAG "main"
-#include <memory>
 #include <imagine/logger/logger.h>
 #include <imagine/gfx/GfxSprite.hh>
 #include <imagine/gfx/GfxText.hh>
 #include <imagine/gfx/Renderer.hh>
 #include <imagine/gfx/RendererTask.hh>
 #include <imagine/gfx/RendererCommands.hh>
-#include <imagine/gfx/DrawableHolder.hh>
-#include <imagine/base/Base.hh>
+#include <imagine/gfx/Projection.hh>
+#include <imagine/base/ApplicationContext.hh>
+#include <imagine/base/Application.hh>
 #include <imagine/base/Screen.hh>
 #include <imagine/base/Window.hh>
-#include <imagine/base/platformExtras.hh>
 #include <imagine/util/string.h>
 #include "tests.hh"
 #include "TestPicker.hh"
 #include "cpuUtils.hh"
-#ifdef __ANDROID__
-#include <imagine/base/android/RootCpufreqParamSetter.hh>
-#endif
+#include "main.hh"
+#include <meta.h>
+#include <memory>
 
-static constexpr uint framesToRun = 60*60;
+static constexpr unsigned framesToRun = 60*60;
 
 struct WindowData
 {
@@ -47,177 +46,40 @@ struct WindowData
 	std::unique_ptr<TestFramework> activeTest{};
 };
 
-static std::unique_ptr<Gfx::Renderer> rendererPtr{};
-#ifdef __ANDROID__
-static std::unique_ptr<Base::RootCpufreqParamSetter> cpuFreq{};
-#endif
-
-static void finishTest(Base::Window &win, Gfx::Renderer &r, IG::FrameTime frameTime);
-
 static WindowData &windowData(const Base::Window &win)
 {
 	return *win.appData<WindowData>();
 }
 
-static void setPickerHandlers(Base::Window &win, Gfx::Renderer &r)
+FrameRateTestApplication::FrameRateTestApplication(Base::ApplicationInitParams initParams,
+	Base::ApplicationContext &ctx, Gfx::Error &rendererErr):
+	Application{initParams},
+	renderer{ctx, rendererErr}
 {
-	win.setOnDraw(
-		[&task = r.task()](Base::Window &win, Base::Window::DrawParams params)
-		{
-			auto &winData = windowData(win);
-			task.draw(win, params, {}, winData.proj.plane().viewport(), winData.proj.matrix(),
-				[&picker = winData.picker](Base::Window &win, Gfx::RendererCommands &cmds)
-				{
-					cmds.clear();
-					picker.draw(cmds);
-					cmds.setClipTest(false);
-					cmds.present();
-				});
-			return false;
-		});
-}
-
-static void setActiveTestHandlers(Base::Window &win, Gfx::Renderer &r)
-{
-	win.addOnFrame([&win, &r](Base::FrameParams params)
-		{
-			auto atOnFrame = IG::steadyClockTimestamp();
-			r.setPresentationTime(win, params.presentTime());
-			auto &activeTest = windowData(win).activeTest;
-			if(activeTest->started)
-			{
-				activeTest->frameUpdate(r.task(), win, params);
-			}
-			else
-			{
-				activeTest->started = true;
-			}
-			activeTest->lastFramePresentTime.timestamp = params.timestamp();
-			activeTest->lastFramePresentTime.atOnFrame = atOnFrame;
-			if(activeTest->frames == framesToRun || activeTest->shouldEndTest)
-			{
-				finishTest(win, r, params.timestamp());
-				return false;
-			}
-			else
-			{
-				win.postDraw();
-				return true;
-			}
-		});
-	win.setOnDraw(
-		[&task = r.task()](Base::Window &win, Base::Window::DrawParams params)
-		{
-			auto &winData = windowData(win);
-			task.draw(win, params, {}, winData.proj.plane().viewport(), winData.proj.matrix(),
-				[rect = winData.testRectWin, &activeTest = windowData(win).activeTest]
-				(Base::Window &win, Gfx::RendererCommands &cmds)
-				{
-					activeTest->draw(cmds, cmds.renderer().makeClipRect(win, rect));
-					activeTest->lastFramePresentTime.atWinPresent = IG::steadyClockTimestamp();
-					activeTest->presentFence = cmds.clientWaitSyncReset(activeTest->presentFence);
-					cmds.present();
-				});
-			return false;
-		});
-}
-
-static void placeElements(const Base::Window &win, Gfx::Renderer &r)
-{
-	auto &winData = windowData(win);
-	auto &picker = winData.picker;
-	auto projP = winData.proj.plane();
-	auto &activeTest = winData.activeTest;
-	TableView::setDefaultXIndent(win, projP);
-	if(!activeTest)
+	if(rendererErr)
 	{
-		picker.setViewRect(projP);
-		picker.place();
+		ctx.exitWithErrorMessagePrintf(-1, "Error creating renderer: %s", rendererErr->what());
+		return;
 	}
-	else
-	{
-		activeTest->place(r, projP, winData.testRect);
-	}
-}
 
-static void finishTest(Base::Window &win, Gfx::Renderer &r, IG::FrameTime frameTime)
-{
-	auto &activeTest = windowData(win).activeTest;
-	if(activeTest)
-	{
-		activeTest->finish(r.task(), frameTime);
-	}
-	r.task().awaitPending();
-	activeTest.reset();
-	deinitCPUFreqStatus();
-	deinitCPULoadStatus();
-	Base::setIdleDisplayPowerSave(true);
-	#ifdef __ANDROID__
-	if(cpuFreq)
-		cpuFreq->setDefaults();
-	Base::setSustainedPerformanceMode(false);
-	#endif
-	placeElements(win, r);
-	setPickerHandlers(win, r);
-	win.postDraw();
-}
+	Base::WindowConfig winConf;
+	winConf.setTitle(ctx.applicationName);
 
-TestFramework *startTest(Base::Window &win, Gfx::Renderer &r, const TestParams &t)
-{
-	#ifdef __ANDROID__
-	if(cpuFreq)
-		cpuFreq->setLowLatency();
-	Base::setSustainedPerformanceMode(true);
-	#endif
-	auto &activeTest = windowData(win).activeTest;
-	switch(t.test)
-	{
-		bcase TEST_CLEAR:
-			activeTest = std::make_unique<ClearTest>();
-		bcase TEST_DRAW:
-			activeTest = std::make_unique<DrawTest>();
-		bcase TEST_WRITE:
-			activeTest = std::make_unique<WriteTest>();
-	}
-	activeTest->init(r, t.pixmapSize, t.bufferMode);
-	Base::setIdleDisplayPowerSave(false);
-	initCPUFreqStatus();
-	initCPULoadStatus();
-	placeElements(win, r);
-	auto &winData = windowData(win);
-	setActiveTestHandlers(win, r);
-	return activeTest.get();
-}
-
-namespace Base
-{
-
-void onInit(int argc, char** argv)
-{
-	WindowConfig winConf;
-	winConf.setTitle("Frame Rate Test");
-
-	auto &mainWin = *Window::makeWindow(winConf,
-		[](Window &win)
+	ctx.makeWindow(winConf,
+		[this](Base::ApplicationContext ctx, Base::Window &win)
 		{
+			if(auto err = renderer.initMainTask(&win);
+				err)
 			{
-				Gfx::Error err;
-				rendererPtr = std::make_unique<Gfx::Renderer>(&win, err);
-				if(err)
-				{
-					Base::exitWithErrorMessagePrintf(-1, "Error creating renderer: %s", err->what());
-					return;
-				}
+				ctx.exitWithErrorMessagePrintf(-1, "Error creating renderer: %s", err->what());
+				return;
 			}
-			auto &renderer = *rendererPtr;
-			auto &winData = win.makeAppData<WindowData>(ViewAttachParams{win, renderer.task()});
-			View::compileGfxPrograms(renderer);
-			View::defaultFace = Gfx::GlyphTextureSet::makeSystem(renderer, IG::FontSettings{});
-
-			uint faceSize = win.heightSMMInPixels(3.5);
-			View::defaultFace.setFontSettings(renderer, faceSize);
-			View::defaultFace.precacheAlphaNum(renderer);
-			View::defaultFace.precache(renderer, ":.%()");
+			viewManager = {renderer};
+			auto defaultFace = Gfx::GlyphTextureSet::makeSystem(renderer, win.heightSMMInPixels(3.5));
+			defaultFace.precacheAlphaNum(renderer);
+			defaultFace.precache(renderer, ":.%()");
+			viewManager.setDefaultFace(std::move(defaultFace));
+			auto &winData = win.makeAppData<WindowData>(ViewAttachParams{viewManager, win, renderer.task()});
 			std::vector<TestDesc> testDesc;
 			testDesc.emplace_back(TEST_CLEAR, "Clear");
 			IG::WP pixmapSize{256, 256};
@@ -230,10 +92,10 @@ void onInit(int argc, char** argv)
 			}
 			auto &picker = winData.picker;
 			picker.setTests(testDesc.data(), testDesc.size());
-			setPickerHandlers(win, renderer);
+			setPickerHandlers(win);
 
 			win.setOnSurfaceChange(
-				[&renderer](Base::Window &win, Base::Window::SurfaceChange change)
+				[this](Base::Window &win, Base::Window::SurfaceChange change)
 				{
 					auto &winData = windowData(win);
 					renderer.task().updateDrawableForSurfaceChange(win, change);
@@ -243,19 +105,19 @@ void onInit(int argc, char** argv)
 						winData.proj = {viewport, Gfx::Mat4::makePerspectiveFovRH(M_PI/4.0, viewport.realAspectRatio(), 1.0, 100.)};
 						winData.testRectWin = viewport.rectWithRatioBestFitFromViewport(0, 0, 4./3., C2DO, C2DO);
 						winData.testRect = winData.proj.plane().unProjectRect(winData.testRectWin);
-						placeElements(win, renderer);
+						placeElements(win);
 					}
 				});
 
 			win.setOnInputEvent(
-				[](Base::Window &win, Input::Event e)
+				[this](Base::Window &win, Input::Event e)
 				{
 					auto &activeTest = windowData(win).activeTest;
 					if(!activeTest)
 					{
 						if(e.pushed() && !e.repeated() && e.isDefaultCancelButton())
 						{
-							Base::exit();
+							win.appContext().exit();
 							return true;
 						}
 						return windowData(win).picker.inputEvent(e);
@@ -274,8 +136,8 @@ void onInit(int argc, char** argv)
 					return false;
 				});
 
-			Base::addOnResume(
-				[&renderer, &win](bool focused)
+			ctx.addOnResume(
+				[this, &win](Base::ApplicationContext, bool focused)
 				{
 					windowData(win).picker.prepareDraw();
 					auto &activeTest = windowData(win).activeTest;
@@ -286,16 +148,16 @@ void onInit(int argc, char** argv)
 					return true;
 				});
 
-			Base::addOnExit(
-				[&renderer, &win](bool backgrounded)
+			ctx.addOnExit(
+				[this, &win](Base::ApplicationContext ctx, bool backgrounded)
 				{
 					if(backgrounded)
 					{
 						if(windowData(win).activeTest)
 						{
-							finishTest(win, renderer, IG::steadyClockTimestamp());
+							finishTest(win, IG::steadyClockTimestamp());
 						}
-						View::defaultFace.freeCaches();
+						viewManager.defaultFace().freeCaches();
 					}
 					return true;
 				});
@@ -307,13 +169,156 @@ void onInit(int argc, char** argv)
 	bool manageCPUFreq = false;
 	if(manageCPUFreq)
 	{
-		cpuFreq = std::make_unique<Base::RootCpufreqParamSetter>();
+		cpuFreq.emplace();
 		if(!(*cpuFreq))
 		{
 			cpuFreq.reset();
 		}
 	}
 	#endif
+}
+
+void FrameRateTestApplication::setPickerHandlers(Base::Window &win)
+{
+	win.setOnDraw(
+		[&task = renderer.task()](Base::Window &win, Base::Window::DrawParams params)
+		{
+			auto &winData = windowData(win);
+			return task.draw(win, params, {}, winData.proj.plane().viewport(), winData.proj.matrix(),
+				[&picker = winData.picker](Base::Window &win, Gfx::RendererCommands &cmds)
+				{
+					cmds.clear();
+					picker.draw(cmds);
+					cmds.setClipTest(false);
+					cmds.present();
+				});
+		});
+}
+
+void FrameRateTestApplication::setActiveTestHandlers(Base::Window &win)
+{
+	win.addOnFrame([this, &win](Base::FrameParams params)
+		{
+			auto atOnFrame = IG::steadyClockTimestamp();
+			renderer.setPresentationTime(win, params.presentTime());
+			auto &activeTest = windowData(win).activeTest;
+			if(activeTest->started)
+			{
+				activeTest->frameUpdate(renderer.task(), win, params);
+			}
+			else
+			{
+				activeTest->started = true;
+			}
+			activeTest->lastFramePresentTime.timestamp = params.timestamp();
+			activeTest->lastFramePresentTime.atOnFrame = atOnFrame;
+			if(activeTest->frames == framesToRun || activeTest->shouldEndTest)
+			{
+				finishTest(win, params.timestamp());
+				return false;
+			}
+			else
+			{
+				win.postDraw();
+				return true;
+			}
+		});
+	win.setOnDraw(
+		[this, &task = renderer.task()](Base::Window &win, Base::Window::DrawParams params)
+		{
+			auto &winData = windowData(win);
+			auto xIndent = viewManager.tableXIndent();
+			return task.draw(win, params, {}, winData.proj.plane().viewport(), winData.proj.matrix(),
+				[rect = winData.testRectWin, &activeTest = windowData(win).activeTest, xIndent]
+				(Base::Window &win, Gfx::RendererCommands &cmds)
+				{
+					activeTest->draw(cmds, cmds.renderer().makeClipRect(win, rect), xIndent);
+					activeTest->lastFramePresentTime.atWinPresent = IG::steadyClockTimestamp();
+					activeTest->presentFence = cmds.clientWaitSyncReset(activeTest->presentFence);
+					cmds.present();
+				});
+		});
+}
+
+void FrameRateTestApplication::placeElements(const Base::Window &win)
+{
+	auto &winData = windowData(win);
+	auto &picker = winData.picker;
+	auto projP = winData.proj.plane();
+	auto &activeTest = winData.activeTest;
+	viewManager.setTableXIndentToDefault(win, projP);
+	if(!activeTest)
+	{
+		picker.setViewRect(projP);
+		picker.place();
+	}
+	else
+	{
+		activeTest->place(renderer, projP, winData.testRect);
+	}
+}
+
+void FrameRateTestApplication::finishTest(Base::Window &win, IG::FrameTime frameTime)
+{
+	auto app = win.appContext();
+	auto &activeTest = windowData(win).activeTest;
+	if(activeTest)
+	{
+		activeTest->finish(renderer.task(), frameTime);
+	}
+	renderer.task().awaitPending();
+	activeTest.reset();
+	deinitCPUFreqStatus();
+	deinitCPULoadStatus();
+	app.setIdleDisplayPowerSave(true);
+	#ifdef __ANDROID__
+	if(cpuFreq)
+		cpuFreq->setDefaults();
+	app.setSustainedPerformanceMode(false);
+	#endif
+	placeElements(win);
+	setPickerHandlers(win);
+	win.postDraw();
+}
+
+TestFramework *FrameRateTestApplication::startTest(Base::Window &win, const TestParams &t)
+{
+	auto &face = viewManager.defaultFace();
+	auto app = win.appContext();
+	#ifdef __ANDROID__
+	if(cpuFreq)
+		cpuFreq->setLowLatency();
+	app.setSustainedPerformanceMode(true);
+	#endif
+	auto &activeTest = windowData(win).activeTest;
+	switch(t.test)
+	{
+		bcase TEST_CLEAR:
+			activeTest = std::make_unique<ClearTest>();
+		bcase TEST_DRAW:
+			activeTest = std::make_unique<DrawTest>();
+		bcase TEST_WRITE:
+			activeTest = std::make_unique<WriteTest>();
+	}
+	activeTest->init(app, renderer, face, t.pixmapSize, t.bufferMode);
+	app.setIdleDisplayPowerSave(false);
+	initCPUFreqStatus();
+	initCPULoadStatus();
+	placeElements(win);
+	auto &winData = windowData(win);
+	setActiveTestHandlers(win);
+	return activeTest.get();
+}
+
+namespace Base
+{
+
+const char *const ApplicationContext::applicationName{CONFIG_APP_NAME};
+
+void ApplicationContext::onInit(ApplicationInitParams initParams)
+{
+	Gfx::Error err;
+	initApplication<FrameRateTestApplication>(initParams, *this, err);
 }
 
 }

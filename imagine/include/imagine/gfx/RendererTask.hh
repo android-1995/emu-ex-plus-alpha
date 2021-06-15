@@ -38,8 +38,7 @@ class RendererTask : public RendererTaskImpl
 {
 public:
 	using RendererTaskImpl::RendererTaskImpl;
-	void updateDrawableForSurfaceChange(Base::Window &win, Base::WindowSurfaceChange change);
-	void destroyDrawable(DrawableHolder &drawable);
+	void updateDrawableForSurfaceChange(Base::Window &, Base::WindowSurfaceChange);
 	void releaseShaderCompiler();
 	void flush();
 	void setDebugOutput(bool on);
@@ -55,12 +54,13 @@ public:
 	}
 
 	// Run a delegate for drawing on the renderer thread with signature:
-	// void(DrawableHolder &drawableHolder, Base::Window &win, RendererCommands &cmds)
+	// void(Base::Window &win, RendererCommands &cmds)
+	// Returns true if the window's contents were presented synchronously
 	template<class Func>
-	void draw(Base::Window &win, Base::WindowDrawParams winParams, DrawParams params,
+	bool draw(Base::Window &win, Base::WindowDrawParams winParams, DrawParams params,
 		const Viewport &viewport, const Mat4 &projMat, Func &&del)
 	{
-		RendererTaskImpl::draw(win, winParams, params, viewport, projMat, std::forward<Func>(del));
+		return RendererTaskImpl::draw(win, winParams, params, viewport, projMat, std::forward<Func>(del));
 	}
 
 	// synchronization

@@ -20,11 +20,15 @@
 #endif
 
 const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2021\nRobert Broglia\nwww.explusalpha.com\n\n(c) 1996-2011 the\nSnes9x Team\nwww.snes9x.com";
-static constexpr auto pixFmt = IG::PIXEL_FMT_RGB565;
+#if PIXEL_FORMAT == RGB565
+static constexpr auto srcPixFmt = IG::PIXEL_FMT_RGB565;
+#else
+#error "incompatible PIXEL_FORMAT value"
+#endif
 static EmuSystemTask *emuSysTask{};
 static EmuVideo *emuVideo{};
-static const uint heightChangeFrameDelay = 4;
-static uint heightChangeFrames = heightChangeFrameDelay;
+static const unsigned heightChangeFrameDelay = 4;
+static unsigned heightChangeFrames = heightChangeFrameDelay;
 bool EmuSystem::hasCheats = true;
 bool EmuSystem::hasPALVideoSystem = true;
 bool EmuSystem::hasResetModes = true;
@@ -40,7 +44,7 @@ EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter =
 	};
 EmuSystem::NameFilterFunc EmuSystem::defaultBenchmarkFsFilter = defaultFsFilter;
 
-const BundledGameInfo &EmuSystem::bundledGameInfo(uint idx)
+const BundledGameInfo &EmuSystem::bundledGameInfo(unsigned idx)
 {
 	static const BundledGameInfo info[]
 	{
@@ -67,7 +71,7 @@ bool8 S9xDeinitUpdate(int width, int height, bool8)
 #endif
 {
 	assumeExpr(emuVideo);
-	if(unlikely(height == 239 && emuVideo->size().y == 224 && heightChangeFrames))
+	if(height == 239 && emuVideo->size().y == 224 && heightChangeFrames) [[unlikely]]
 	{
 		// ignore rapid 224 -> 239 -> 224 height changes
 		//logMsg("skipped height change");
@@ -78,13 +82,19 @@ bool8 S9xDeinitUpdate(int width, int height, bool8)
 	{
 		heightChangeFrames = heightChangeFrameDelay;
 	}
-	IG::Pixmap srcPix = {{{width, height}, pixFmt}, GFX.Screen};
-	emuVideo->startFrameWithFormat(emuSysTask, srcPix);
+	IG::Pixmap srcPix{{{width, height}, srcPixFmt}, GFX.Screen};
+	emuVideo->startFrameWithAltFormat(emuSysTask, srcPix);
 	#ifndef SNES9X_VERSION_1_4
 	memset(GFX.ZBuffer, 0, GFX.ScreenSize);
 	memset(GFX.SubZBuffer, 0, GFX.ScreenSize);
 	#endif
 	return 1;
+}
+
+void EmuSystem::renderFramebuffer(EmuVideo &video)
+{
+	IG::Pixmap srcPix{{video.image().size(), srcPixFmt}, GFX.Screen};
+	video.startFrameWithAltFormat({}, srcPix);
 }
 
 void EmuSystem::reset(ResetMode mode)
@@ -172,8 +182,8 @@ void EmuSystem::closeSystem()
 }
 
 bool EmuSystem::vidSysIsPAL() { return Settings.PAL; }
-uint EmuSystem::multiresVideoBaseX() { return 256; }
-uint EmuSystem::multiresVideoBaseY() { return 239; }
+unsigned EmuSystem::multiresVideoBaseX() { return 256; }
+unsigned EmuSystem::multiresVideoBaseY() { return 239; }
 
 EmuSystem::Error EmuSystem::loadGame(IO &io, EmuSystemCreateParams, OnLoadProgressDelegate)
 {
@@ -227,7 +237,7 @@ void EmuSystem::configAudioRate(IG::FloatSeconds frameTime, uint32_t rate)
 
 static void mixSamples(uint32_t samples, EmuAudio *audio)
 {
-	if(unlikely(!samples))
+	if(!samples) [[unlikely]]
 		return;
 	assumeExpr(samples % 2 == 0);
 	int16_t audioBuff[samples];
@@ -241,7 +251,7 @@ static void mixSamples(uint32_t samples, EmuAudio *audio)
 
 void EmuSystem::runFrame(EmuSystemTask *task, EmuVideo *video, EmuAudio *audio)
 {
-	if(unlikely(snesActiveInputPort != SNES_JOYPAD))
+	if(snesActiveInputPort != SNES_JOYPAD)
 	{
 		if(doubleClickFrames)
 			doubleClickFrames--;
@@ -298,7 +308,7 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 	view.setBackgroundGradient(navViewGrad);
 }
 
-EmuSystem::Error EmuSystem::onInit()
+EmuSystem::Error EmuSystem::onInit(Base::ApplicationContext)
 {
 	static uint16 screenBuff[512*478] __attribute__ ((aligned (8)));
 	#ifndef SNES9X_VERSION_1_4

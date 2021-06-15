@@ -16,7 +16,6 @@
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <imagine/config/defs.hh>
-#include <vector>
 
 namespace IG::Audio
 {
@@ -47,9 +46,7 @@ struct ApiDesc
 
 	constexpr ApiDesc() {}
 	constexpr ApiDesc(const char *name, Api api):name{name}, api{api} {}
+	constexpr bool operator ==(Api api_) const { return api == api_; }
 };
-
-std::vector<ApiDesc> audioAPIs();
-Api makeValidAPI(Api api = Api::DEFAULT);
 
 }

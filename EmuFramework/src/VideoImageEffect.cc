@@ -18,6 +18,7 @@
 #include <imagine/io/FileIO.hh>
 #include <imagine/gfx/Renderer.hh>
 #include <imagine/gfx/RendererCommands.hh>
+#include <imagine/util/string.h>
 #include <imagine/logger/logger.h>
 
 static const VideoImageEffect::EffectDesc
@@ -81,7 +82,7 @@ static Gfx::Shader makeEffectFragmentShader(Gfx::Renderer &r, const char *src, b
 	}
 }
 
-void VideoImageEffect::setEffect(Gfx::Renderer &r, uint effect, uint bitDepth, bool isExternalTex, const Gfx::TextureSampler &compatTexSampler)
+void VideoImageEffect::setEffect(Gfx::Renderer &r, unsigned effect, unsigned bitDepth, bool isExternalTex, const Gfx::TextureSampler &compatTexSampler)
 {
 	if(effect == effect_)
 		return;
@@ -129,7 +130,7 @@ void VideoImageEffect::initRenderTargetTexture(Gfx::Renderer &r, const Gfx::Text
 	if(!renderTarget_)
 		renderTarget_ = r.makeTexture({renderPix, &compatTexSampler});
 	else
-		renderTarget_.setFormat(renderPix, 1, &compatTexSampler);
+		renderTarget_.setFormat(renderPix, 1, {}, &compatTexSampler);
 	r.make(Gfx::CommonTextureSampler::NO_LINEAR_NO_MIP_CLAMP);
 }
 
@@ -174,7 +175,8 @@ void VideoImageEffect::compile(Gfx::Renderer &r, bool isExternalTex, const Gfx::
 		if(fallbackErr)
 		{
 			// print error from original compile if fallback effect not found
-			EmuApp::printfMessage(3, true, "%s", err->code().value() == ENOENT ? err->what() : fallbackErr->what());
+			auto &app = EmuApp::get(r.appContext());
+			app.printfMessage(3, true, "%s", err->code().value() == ENOENT ? err->what() : fallbackErr->what());
 			deinit(r);
 			return;
 		}
@@ -184,8 +186,9 @@ void VideoImageEffect::compile(Gfx::Renderer &r, bool isExternalTex, const Gfx::
 
 std::optional<std::system_error> VideoImageEffect::compileEffect(Gfx::Renderer &r, EffectDesc desc, bool isExternalTex, bool useFallback)
 {
+	auto &app = EmuApp::get(r.appContext());
 	{
-		auto file = EmuApp::openAppAssetIO(
+		auto file = app.openAppAssetIO(r.appContext(),
 			FS::makePathStringPrintf("shaders/%s%s", useFallback ? "fallback-" : "", desc.vShaderFilename),
 			IO::AccessHint::ALL);
 		if(!file)
@@ -209,7 +212,7 @@ std::optional<std::system_error> VideoImageEffect::compileEffect(Gfx::Renderer &
 		}
 	}
 	{
-		auto file = EmuApp::openAppAssetIO(
+		auto file = app.openAppAssetIO(r.appContext(),
 			FS::makePathStringPrintf("shaders/%s%s", useFallback ? "fallback-" : "", desc.fShaderFilename),
 			IO::AccessHint::ALL);
 		if(!file)
@@ -271,7 +274,7 @@ void VideoImageEffect::setImageSize(Gfx::Renderer &r, IG::WP size, const Gfx::Te
 	initRenderTargetTexture(r, compatTexSampler);
 }
 
-void VideoImageEffect::setBitDepth(Gfx::Renderer &r, uint bitDepth, const Gfx::TextureSampler &compatTexSampler)
+void VideoImageEffect::setBitDepth(Gfx::Renderer &r, unsigned bitDepth, const Gfx::TextureSampler &compatTexSampler)
 {
 	useRGB565RenderTarget = bitDepth <= 16;
 	initRenderTargetTexture(r, compatTexSampler);
@@ -289,10 +292,10 @@ Gfx::Texture &VideoImageEffect::renderTarget()
 
 void VideoImageEffect::drawRenderTarget(Gfx::RendererCommands &cmds, const Gfx::Texture &img)
 {
-	auto viewport = Gfx::Viewport::makeFromRect({0, 0, (int)renderTargetImgSize.x, (int)renderTargetImgSize.y});
+	auto viewport = Gfx::Viewport::makeFromRect({{}, renderTargetImgSize});
 	cmds.setViewport(viewport);
 	cmds.set(Gfx::CommonTextureSampler::NO_LINEAR_NO_MIP_CLAMP);
-	Gfx::Sprite spr{{-1., -1., 1., 1.}, {&img, {0., 1., 1., 0.}}};
+	Gfx::Sprite spr{{{-1., -1.}, {1., 1.}}, {&img, {{0., 1.}, {1., 0.}}}};
 	spr.draw(cmds);
 }
 

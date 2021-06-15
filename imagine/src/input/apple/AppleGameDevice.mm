@@ -14,11 +14,12 @@
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
 #define LOGTAG "GameController"
-#include <imagine/base/Base.hh>
+#include <imagine/base/ApplicationContext.hh>
+#include <imagine/base/Application.hh>
 #include <imagine/time/Time.hh>
 #include <imagine/input/Input.hh>
+#include <imagine/input/Device.hh>
 #include <imagine/logger/logger.h>
-#include "../private.hh"
 #include <imagine/util/coreFoundation.h>
 #include <imagine/util/string.h>
 #include <imagine/util/algorithm.h>
@@ -31,13 +32,14 @@ static const char *appleGCButtonName(Key k);
 
 struct AppleGameDevice : public Device
 {
+	Base::ApplicationContext ctx{};
 	GCController *gcController = nil;
 	uint32_t joystickAxisAsDpadBits_ = 0;
 	bool pushState[AppleGC::COUNT]{};
 	
-	AppleGameDevice(GCController *gcController, uint32_t enumId):
+	AppleGameDevice(Base::ApplicationContext ctx, GCController *gcController, uint32_t enumId):
 		Device{enumId, Map::APPLE_GAME_CONTROLLER, TYPE_BIT_GAMEPAD, [gcController.vendorName UTF8String]},
-		gcController{gcController}
+		ctx{ctx}, gcController{gcController}
 	{
 		auto extGamepad = gcController.extendedGamepad;
 		if(extGamepad)
@@ -194,11 +196,13 @@ struct AppleGameDevice : public Device
 			return;
 		auto time = IG::steadyClockTimestamp();
 		pushState[key] = pressed;
-		Base::endIdleByUserActivity();
-		Event event{enumId(), Map::APPLE_GAME_CONTROLLER, key, sysKey, pressed ? PUSHED : RELEASED, 0, 0, Source::GAMEPAD, time, this};
+		ctx.endIdleByUserActivity();
+		Event event{enumId(), Map::APPLE_GAME_CONTROLLER, key, sysKey, pressed ? Action::PUSHED : Action::RELEASED, 0, 0, Source::GAMEPAD, time, this};
 		if(repeatable)
-			startKeyRepeatTimer(event);
-		dispatchInputEvent(event);
+			ctx.application().dispatchRepeatableKeyInputEvent(event);
+		else
+			ctx.application().dispatchKeyInputEvent(event);
+		
 	}
 
 	void setJoystickAxisAsDpadBits(uint32_t axisMask) final
@@ -271,7 +275,7 @@ static bool devListContainsController(GCController *controller)
 	return false;
 }
 
-static void addController(GCController *controller, bool notify)
+static void addController(Base::ApplicationContext ctx, GCController *controller, bool notify)
 {
 	if(devListContainsController(controller))
 	{
@@ -279,28 +283,23 @@ static void addController(GCController *controller, bool notify)
 		return;
 	}
 	logMsg("adding controller: %p", controller);
-	auto &gc = gcList.emplace_back(std::make_unique<AppleGameDevice>(controller, findFreeDevId()));
-	Input::addDevice(*gc);
-	if(notify)
-	{
-		onDeviceChange.callCopySafe(*gc, { Device::Change::ADDED });
-	}
+	auto &gc = gcList.emplace_back(std::make_unique<AppleGameDevice>(ctx, controller, findFreeDevId()));
+	ctx.application().addSystemInputDevice(*gc, notify);
 }
 
-static void removeController(GCController *controller)
+static void removeController(Base::ApplicationContext ctx, GCController *controller)
 {
 	if(auto removedDev = IG::moveOutIf(gcList, [&](std::unique_ptr<AppleGameDevice> &dev){ return dev->gcController == controller; });
 		removedDev)
 	{
 		logMsg("removing controller: %p", controller);
-		removeDevice(*removedDev);
+		ctx.application().removeSystemInputDevice(*removedDev, true);
 		logMsg("name: %s", removedDev->name());
-		onDeviceChange.callCopySafe(*removedDev, { Device::Change::REMOVED });
 		return;
 	}
 }
 
-void initAppleGameControllers()
+void initAppleGameControllers(Base::ApplicationContext ctx)
 {
 	if(kCFCoreFoundationVersionNumber < kCFCoreFoundationVersionNumber_iOS_7_0)
 	{
@@ -314,7 +313,7 @@ void initAppleGameControllers()
 		{
 			logMsg("game controller connected");
 			GCController *controller = note.object;
-			addController(controller, true);
+			addController(ctx, controller, true);
 		}];
 	[center addObserverForName:GCControllerDidDisconnectNotification object:nil
 		queue:nil usingBlock:
@@ -322,12 +321,12 @@ void initAppleGameControllers()
 		{
 			logMsg("game controller disconnected");
 			GCController *controller = note.object;
-			removeController(controller);
+			removeController(ctx, controller);
 		}];
 	for(GCController *controller in [GCController controllers])
 	{
 		logMsg("checking game controller: %p", controller);
-		addController(controller, false);
+		addController(ctx, controller, false);
 	}
 }
 

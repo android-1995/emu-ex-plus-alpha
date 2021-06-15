@@ -14,6 +14,7 @@
 	along with GBC.emu.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <imagine/gui/TextEntry.hh>
+#include <imagine/util/string.h>
 #include <imagine/logger/logger.h>
 #include <emuframework/Cheats.hh>
 #include <emuframework/EmuApp.hh>
@@ -147,7 +148,7 @@ EmuEditCheatView::EmuEditCheatView(ViewAttachParams attach, GbcCheat &cheat_, Re
 		{
 			return 3;
 		},
-		[this](const TableView &, uint idx) -> MenuItem&
+		[this](const TableView &, unsigned idx) -> MenuItem&
 		{
 			switch(idx)
 			{
@@ -171,15 +172,16 @@ EmuEditCheatView::EmuEditCheatView(ViewAttachParams attach, GbcCheat &cheat_, Re
 	{
 		"Code",
 		cheat_.code,
+		&defaultFace(),
 		[this](DualTextMenuItem &item, View &, Input::Event e)
 		{
-			EmuApp::pushAndShowNewCollectValueInputView<const char*>(attachParams(), e,
+			app().pushAndShowNewCollectValueInputView<const char*>(attachParams(), e,
 				"Input xxxxxxxx (GS) or xxx-xxx-xxx (GG) code", cheat->code,
-				[this](auto str)
+				[this](EmuApp &app, auto str)
 				{
 					if(!strIsGGCode(str) && !strIsGSCode(str))
 					{
-						EmuApp::postMessage(true, "Invalid format");
+						app.postMessage(true, "Invalid format");
 						postDraw();
 						return false;
 					}
@@ -216,7 +218,7 @@ EmuEditCheatListView::EmuEditCheatListView(ViewAttachParams attach):
 		{
 			return 1 + cheat.size();
 		},
-		[this](const TableView &, uint idx) -> MenuItem&
+		[this](const TableView &, unsigned idx) -> MenuItem&
 		{
 			switch(idx)
 			{
@@ -227,10 +229,10 @@ EmuEditCheatListView::EmuEditCheatListView(ViewAttachParams attach):
 	},
 	addGGGS
 	{
-		"Add Game Genie / GameShark Code",
+		"Add Game Genie / GameShark Code", &defaultFace(),
 		[this](TextMenuItem &item, View &, Input::Event e)
 		{
-			EmuApp::pushAndShowNewCollectTextInputView(attachParams(), e,
+			app().pushAndShowNewCollectTextInputView(attachParams(), e,
 				"Input xxxxxxxx (GS) or xxx-xxx-xxx (GG) code", "",
 				[this](CollectTextInputView &view, const char *str)
 				{
@@ -238,13 +240,13 @@ EmuEditCheatListView::EmuEditCheatListView(ViewAttachParams attach):
 					{
 						if(cheatList.isFull())
 						{
-							EmuApp::postMessage(true, "Cheat list is full");
+							app().postMessage(true, "Cheat list is full");
 							view.dismiss();
 							return 0;
 						}
 						if(!strIsGGCode(str) && !strIsGSCode(str))
 						{
-							EmuApp::postMessage(true, "Invalid format");
+							app().postMessage(true, "Invalid format");
 							return 1;
 						}
 						GbcCheat c;
@@ -257,7 +259,7 @@ EmuEditCheatListView::EmuEditCheatListView(ViewAttachParams attach):
 						applyCheats();
 						onCheatListChanged();
 						view.dismiss();
-						EmuApp::pushAndShowNewCollectTextInputView(attachParams(), {}, "Input description", "",
+						app().pushAndShowNewCollectTextInputView(attachParams(), {}, "Input description", "",
 							[this](CollectTextInputView &view, const char *str)
 							{
 								if(str)
@@ -287,14 +289,14 @@ EmuEditCheatListView::EmuEditCheatListView(ViewAttachParams attach):
 
 void EmuEditCheatListView::loadCheatItems()
 {
-	uint cheats = cheatList.size();
+	unsigned cheats = cheatList.size();
 	cheat.clear();
 	cheat.reserve(cheats);
 	auto it = cheatList.begin();
 	iterateTimes(cheats, c)
 	{
 		auto &thisCheat = *it;
-		cheat.emplace_back(thisCheat.name,
+		cheat.emplace_back(thisCheat.name, &defaultFace(),
 			[this, c](TextMenuItem &, View &, Input::Event e)
 			{
 				pushAndShow(makeView<EmuEditCheatView>(cheatList[c], [this](){ onCheatListChanged(); }), e);
@@ -310,14 +312,14 @@ EmuCheatsView::EmuCheatsView(ViewAttachParams attach): BaseCheatsView{attach}
 
 void EmuCheatsView::loadCheatItems()
 {
-	uint cheats = cheatList.size();
+	unsigned cheats = cheatList.size();
 	cheat.clear();
 	cheat.reserve(cheats);
 	auto it = cheatList.begin();
 	iterateTimes(cheats, cIdx)
 	{
 		auto &thisCheat = *it;
-		cheat.emplace_back(thisCheat.name, thisCheat.isOn(),
+		cheat.emplace_back(thisCheat.name, &defaultFace(), thisCheat.isOn(),
 			[this, cIdx](BoolMenuItem &item, View &, Input::Event e)
 			{
 				item.flipBoolValue(*this);

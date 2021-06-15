@@ -17,37 +17,34 @@
 
 #include <imagine/config/defs.hh>
 #include <imagine/base/CustomEvent.hh>
-#include <imagine/base/baseDefs.hh>
-#include <imagine/input/Input.hh>
+#include <imagine/base/ApplicationContext.hh>
 #include <imagine/util/DelegateFunc.hh>
 #include <imagine/util/DelegateFuncSet.hh>
 #include <imagine/util/Point2D.hh>
 #include <imagine/util/typeTraits.hh>
-#include <atomic>
+#include <imagine/util/NonCopyable.hh>
 #include <memory>
 
 namespace Base
 {
 
-using namespace IG;
-
-class Window;
-class WindowConfig;
-class Screen;
-
-class BaseWindow
+class BaseWindow : private NonCopyable
 {
 public:
 	using SurfaceChange = WindowSurfaceChange;
 	using DrawParams = WindowDrawParams;
-	using InitDelegate = DelegateFunc<void (Window &win)>;
-	using SurfaceChangeDelegate = DelegateFunc<void (Window &win, WindowSurfaceChange change)>;
-	using DrawDelegate = DelegateFunc<bool (Window &win, WindowDrawParams params)>;
-	using InputEventDelegate = DelegateFunc<bool (Window &win, Input::Event event)>;
-	using FocusChangeDelegate = DelegateFunc<void (Window &win, bool in)>;
-	using DragDropDelegate = DelegateFunc<void (Window &win, const char *filename)>;
-	using DismissRequestDelegate = DelegateFunc<void (Window &win)>;
-	using DismissDelegate = DelegateFunc<void (Window &win)>;
+	using InitDelegate = WindowInitDelegate;
+	using SurfaceChangeDelegate = WindowSurfaceChangeDelegate;
+	using DrawDelegate = WindowDrawDelegate;
+	using InputEventDelegate = WindowInputEventDelegate;
+	using FocusChangeDelegate = WindowFocusChangeDelegate;
+	using DragDropDelegate = WindowDragDropDelegate;
+	using DismissRequestDelegate = WindowDismissRequestDelegate;
+	using DismissDelegate = WindowDismissDelegate;
+
+	static constexpr bool shouldRunOnInitAfterAddingWindow = true;
+
+	BaseWindow(ApplicationContext, WindowConfig);
 
 protected:
 	enum class DrawPhase : uint8_t
@@ -57,9 +54,7 @@ protected:
 		DRAW		// Drawing in progress, return to READY phase when finished
 	};
 
-	IG_enableMemberIf(Config::BASE_MULTI_SCREEN, Screen *, screen_){};
-	std::shared_ptr<void> appDataPtr{};
-	std::shared_ptr<void> rendererDataPtr{};
+	Base::OnExit onExit;
 	SurfaceChangeDelegate onSurfaceChange{};
 	DrawDelegate onDraw{};
 	InputEventDelegate onInputEvent{};
@@ -67,8 +62,10 @@ protected:
 	DragDropDelegate onDragDrop{};
 	DismissRequestDelegate onDismissRequest{};
 	DismissDelegate onDismiss{};
-	Base::OnExit onExit{};
 	DelegateFuncSet<Base::OnFrameDelegate> onFrame{};
+	std::shared_ptr<void> appDataPtr{};
+	std::shared_ptr<void> rendererDataPtr{};
+	IG_enableMemberIf(Config::BASE_MULTI_SCREEN, Screen *, screen_){};
 	Base::CustomEvent drawEvent{"Window::drawEvent"};
 	IG::Point2D<int> winSizePixels{}; // size of full window surface
 	IG::Point2D<float> winSizeMM{}; // size in millimeter
@@ -76,15 +73,14 @@ protected:
 	 // size in millimeter scaled by OS
 	IG_enableMemberIf(Config::envIsAndroid, IG::Point2D<float>, winSizeSMM){};
 	IG_enableMemberIf(Config::envIsAndroid, IG::Point2D<float>, smmToPixelScaler){};
-	std::atomic_bool drawNeeded = false;
-	std::atomic<DrawPhase> drawPhase{DrawPhase::READY};
+	bool drawNeeded{};
+	DrawPhase drawPhase{DrawPhase::READY};
 	uint8_t drawEventPriority_{};
 	// all windows need an initial onSurfaceChange call
-	SurfaceChange surfaceChange{SurfaceChange::SURFACE_RESIZED | SurfaceChange::CONTENT_RECT_RESIZED};
+	uint8_t surfaceChangeFlags{SurfaceChange::SURFACE_RESIZED | SurfaceChange::CONTENT_RECT_RESIZED};
 	IG_enableMemberIfOrConstant(!Config::SYSTEM_ROTATES_WINDOWS, Orientation, VIEW_ROTATE_0, softOrientation_){VIEW_ROTATE_0};
 	IG_enableMemberIfOrConstant(!Config::SYSTEM_ROTATES_WINDOWS, Orientation, VIEW_ROTATE_0, setSoftOrientation){VIEW_ROTATE_0};
 	IG_enableMemberIfOrConstant(!Config::SYSTEM_ROTATES_WINDOWS, Orientation, VIEW_ROTATE_0, validSoftOrientations_){VIEW_ROTATE_0};
-	static constexpr bool shouldRunOnInitAfterAddingWindow = true;
 
 	void setOnSurfaceChange(SurfaceChangeDelegate del);
 	void setOnDraw(DrawDelegate del);
@@ -93,10 +89,8 @@ protected:
 	void setOnDragDrop(DragDropDelegate del);
 	void setOnDismissRequest(DismissRequestDelegate del);
 	void setOnDismiss(DismissDelegate del);
-	void init(const WindowConfig &config);
-	void initDelegates(const WindowConfig &config);
-	void initDefaultValidSoftOrientations();
 	IG::Point2D<float> smmPixelScaler() const;
+	void attachDrawEvent();
 };
 
 }

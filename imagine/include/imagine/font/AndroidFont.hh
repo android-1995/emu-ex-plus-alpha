@@ -16,7 +16,9 @@
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <imagine/config/defs.hh>
-#include <jni.h>
+#include <imagine/base/ApplicationContext.hh>
+#include <imagine/pixmap/Pixmap.hh>
+#include <imagine/util/jni.hh>
 
 namespace IG
 {
@@ -25,7 +27,7 @@ class AndroidGlyphImage
 {
 public:
 	constexpr AndroidGlyphImage() {}
-	AndroidGlyphImage(IG::Pixmap pixmap, jobject bitmap);
+	AndroidGlyphImage(Base::ApplicationContext, IG::Pixmap pixmap, jobject bitmap);
 	AndroidGlyphImage(AndroidGlyphImage &&o);
 	AndroidGlyphImage &operator=(AndroidGlyphImage &&o);
 	~AndroidGlyphImage();
@@ -33,14 +35,18 @@ public:
 protected:
 	IG::Pixmap pixmap_{};
 	jobject aBitmap{};
+	Base::ApplicationContext ctx{};
 };
 
 class AndroidFont
 {
 public:
-	constexpr AndroidFont() {}
+	constexpr AndroidFont(Base::ApplicationContext ctx):
+		ctx{ctx}
+	{}
 
 protected:
+	Base::ApplicationContext ctx{};
 	bool isBold{};
 };
 
@@ -48,16 +54,11 @@ class AndroidFontSize
 {
 public:
 	constexpr AndroidFontSize() {}
-	AndroidFontSize(jobject paint);
-	AndroidFontSize(AndroidFontSize &&o);
-	AndroidFontSize &operator=(AndroidFontSize &&o);
-	~AndroidFontSize();
+	AndroidFontSize(JNI::UniqueGlobalRef paint);
 	jobject paint() const { return paint_; }
 
 protected:
-	jobject paint_{};
-
-	void deinit();
+	JNI::UniqueGlobalRef paint_{};
 };
 
 using GlyphImageImpl = AndroidGlyphImage;

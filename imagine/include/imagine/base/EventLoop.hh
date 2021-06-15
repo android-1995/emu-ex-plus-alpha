@@ -16,7 +16,6 @@
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <imagine/config/defs.hh>
-#include <imagine/base/eventLoopDefs.hh>
 
 #if defined CONFIG_BASE_GLIB
 #include <imagine/base/eventloop/GlibEventLoop.hh>
@@ -25,6 +24,8 @@
 #elif defined __APPLE__
 #include <imagine/base/eventloop/CFEventLoop.hh>
 #endif
+
+#include <imagine/base/eventLoopDefs.hh>
 
 namespace Base
 {
@@ -61,7 +62,7 @@ public:
 	bool attach(PollEventDelegate callback, uint32_t events = POLLEV_IN);
 	bool attach(EventLoop loop, PollEventDelegate callback, uint32_t events = POLLEV_IN);
 	#if defined CONFIG_BASE_GLIB
-	bool attach(EventLoop loop, PollEventDelegate callback, GSourceFuncs *funcs, uint32_t events = POLLEV_IN);
+	bool attach(EventLoop, GSource *, uint32_t events = POLLEV_IN);
 	#endif
 	void detach();
 	void setEvents(uint32_t events);

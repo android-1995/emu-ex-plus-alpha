@@ -15,41 +15,37 @@
 
 package com.imagine;
 
-import android.widget.*;
-import android.app.*;
-import android.content.*;
-import android.os.*;
-import android.view.*;
-import android.util.*;
+import android.view.Choreographer;
 
 final class ChoreographerHelper
 {
 	private final class Callback implements Choreographer.FrameCallback
 	{
+		private long nativeUserData;
+
+		Callback(long nativeUserData)
+		{
+			this.nativeUserData = nativeUserData;
+		}
+
 		@Override public void doFrame(long frameTimeNanos)
 		{
-			onFrame(timerAddr, frameTimeNanos);
+			onFrame(nativeUserData, frameTimeNanos);
 		}
 	}
 
 	private static final String logTag = "ChoreographerHelper";
-	private native boolean onFrame(long timerAddr, long frameTimeNanos);
+	private static native void onFrame(long nativeUserData, long frameTimeNanos);
 	private final Choreographer choreographer = Choreographer.getInstance();
-	private final Callback callback = new Callback();
-	private long timerAddr;
-	
-	ChoreographerHelper(long timerAddr)
+	private final Callback callback;
+
+	ChoreographerHelper(long nativeUserData)
 	{
-		this.timerAddr = timerAddr;
+		callback = new Callback(nativeUserData);
 	}
 
 	void postFrame()
 	{
 		choreographer.postFrameCallback(callback);
-	}
-	
-	void unpostFrame()
-	{
-		choreographer.removeFrameCallback(callback);
 	}
 }

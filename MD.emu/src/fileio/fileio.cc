@@ -2,10 +2,11 @@
 #include "shared.h"
 #include <imagine/io/FileIO.hh>
 #include <imagine/fs/ArchiveFS.hh>
+#include <imagine/util/string.h>
 #include <emuframework/EmuApp.hh>
 #include <emuframework/FilePicker.hh>
 
-uint hasROMExtension(const char *name)
+unsigned hasROMExtension(const char *name)
 {
 	return string_hasDotExtension(name, "bin") || string_hasDotExtension(name, "smd") ||
 		string_hasDotExtension(name, "md") || string_hasDotExtension(name, "gen")
@@ -15,7 +16,7 @@ uint hasROMExtension(const char *name)
 		;
 }
 
-int loadArchive(void *buff, uint bytes, const char *path, FS::FileString &nameInArchive)
+int loadArchive(void *buff, unsigned bytes, const char *path, FS::FileString &nameInArchive)
 {
 	if(EmuApp::hasArchiveExtension(path))
 	{

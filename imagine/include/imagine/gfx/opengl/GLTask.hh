@@ -18,7 +18,9 @@
 #include <imagine/config/defs.hh>
 #include <imagine/base/GLContext.hh>
 #include <imagine/base/MessagePort.hh>
+#include <imagine/base/ApplicationContext.hh>
 #include <imagine/util/FunctionTraits.hh>
+#include <imagine/util/NonCopyable.hh>
 #include <thread>
 
 namespace IG
@@ -34,13 +36,14 @@ class GLRendererTask;
 
 struct GLTaskConfig
 {
+	Base::GLManager *glManagerPtr{};
 	Base::GLBufferConfig bufferConfig{};
 	Drawable initialDrawable{};
 	int threadPriority{};
 };
 
 // Wraps an OpenGL context in a thread + message port
-class GLTask
+class GLTask : private NonCopyable
 {
 public:
 	class TaskContext
@@ -55,7 +58,7 @@ public:
 		constexpr IG::Semaphore *semaphorePtr() const { return semPtr; }
 
 	protected:
-		Base::GLDisplay glDpy{};
+		[[no_unique_address]] Base::GLDisplay glDpy{};
 		IG::Semaphore *semPtr{};
 		bool *semaphoreNeedsNotifyPtr{};
 	};
@@ -90,16 +93,14 @@ public:
 		void setReplySemaphore(IG::Semaphore *semPtr_) { assert(!semPtr); semPtr = semPtr_; };
 	};
 
-	GLTask();
-	GLTask(const char *debugLabel);
-	GLTask(const GLTask &o) = delete;
-	GLTask &operator=(const GLTask &o) = delete;
-	GLTask(GLTask &&o) = delete;
-	GLTask &operator=(GLTask &&o) = delete;
+	GLTask(Base::ApplicationContext);
+	GLTask(Base::ApplicationContext, const char *debugLabel);
 	~GLTask();
 	Error makeGLContext(GLTaskConfig);
 	void runFunc(FuncDelegate del, bool awaitReply);
-	Base::GLContext glContext() const;
+	Base::GLBufferConfig glBufferConfig() const;
+	const Base::GLContext &glContext() const;
+	Base::ApplicationContext appContext() const;
 	explicit operator bool() const;
 
 	template<class Func>
@@ -139,10 +140,11 @@ public:
 protected:
 	std::thread thread{};
 	Base::GLContext context{};
-	Base::OnExit onExit{};
+	Base::GLBufferConfig bufferConfig{};
+	Base::OnExit onExit;
 	Base::MessagePort<CommandMessage> commandPort{Base::MessagePort<CommandMessage>::NullInit{}};
 
-	Base::GLContext makeGLContext(Base::GLDisplay dpy, Base::GLBufferConfig bufferConf);
+	Base::GLContext makeGLContext(Base::GLManager &, Base::GLBufferConfig bufferConf);
 	void deinit();
 };
 

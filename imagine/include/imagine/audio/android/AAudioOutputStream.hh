@@ -25,10 +25,12 @@ typedef struct AAudioStreamBuilderStruct AAudioStreamBuilder;
 namespace IG::Audio
 {
 
+class Manager;
+
 class AAudioOutputStream : public OutputStream
 {
 public:
-	AAudioOutputStream();
+	AAudioOutputStream(const Manager &);
 	~AAudioOutputStream();
 	IG::ErrorCode open(OutputStreamConfig config) final;
 	void play() final;

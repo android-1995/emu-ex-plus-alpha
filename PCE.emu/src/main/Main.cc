@@ -31,11 +31,9 @@
 const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2021\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nMednafen Team\nmednafen.sourceforge.net";
 FS::PathString sysCardPath{};
 static std::vector<CDInterface *> CDInterfaces;
-using Pixel = uint16;
-static constexpr auto pixFmt = IG::PIXEL_FMT_RGB565;
-static const uint vidBufferX = 512, vidBufferY = 242;
-alignas(8) static Pixel pixBuff[vidBufferX*vidBufferY]{};
-static IG::Pixmap mSurfacePix{{{vidBufferX, vidBufferY}, pixFmt}, pixBuff};
+static const unsigned vidBufferX = 512, vidBufferY = 242;
+alignas(8) static uint32_t pixBuff[vidBufferX*vidBufferY]{};
+static IG::Pixmap mSurfacePix;
 std::array<uint16, 5> inputBuff{}; // 5 gamepad buffers
 static bool prevUsing263Lines = false;
 
@@ -44,6 +42,8 @@ static MDFN_Surface pixmapToMDFNSurface(IG::Pixmap pix)
 	MDFN_PixelFormat fmt;
 	switch(pix.format().id())
 	{
+		bcase IG::PIXEL_BGRA8888:
+			fmt = {MDFN_COLORSPACE_RGB, 16, 8, 0, 24};
 		bcase IG::PIXEL_RGBA8888:
 			fmt = {MDFN_COLORSPACE_RGB, 0, 8, 16, 24};
 		bcase IG::PIXEL_RGB565:
@@ -84,9 +84,9 @@ const char *EmuSystem::systemName()
 	return "PC Engine (TurboGrafx-16)";
 }
 
-EmuSystem::Error EmuSystem::onOptionsLoaded()
+EmuSystem::Error EmuSystem::onOptionsLoaded(Base::ApplicationContext ctx)
 {
-	EmuControls::setActiveFaceButtons(2);
+	EmuApp::get(ctx).setActiveFaceButtons(2);
 	return {};
 }
 
@@ -154,7 +154,7 @@ static void writeCDMD5()
 	memcpy(emuSys->MD5, LayoutMD5, 16);
 }
 
-uint EmuSystem::multiresVideoBaseX() { return 512; }
+unsigned EmuSystem::multiresVideoBaseX() { return 512; }
 
 EmuSystem::Error EmuSystem::loadGame(IO &io, EmuSystemCreateParams, OnLoadProgressDelegate)
 {
@@ -214,16 +214,15 @@ EmuSystem::Error EmuSystem::loadGame(IO &io, EmuSystemCreateParams, OnLoadProgre
 	return {};
 }
 
-void EmuSystem::onPrepareVideo(EmuVideo &video)
+void EmuSystem::onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat fmt)
 {
-	if(unlikely(!video.image()))
-	{
-		logMsg("doing initial video setup for emulator");
-		EmulateSpecStruct espec;
-		auto mSurface = pixmapToMDFNSurface(mSurfacePix);
-		espec.surface = &mSurface;
-		PCE_Fast::applyVideoFormat(&espec);
-	}
+	if(fmt == mSurfacePix.format())
+		return;
+	mSurfacePix = {{{vidBufferX, vidBufferY}, fmt}, pixBuff};
+	EmulateSpecStruct espec;
+	auto mSurface = pixmapToMDFNSurface(mSurfacePix);
+	espec.surface = &mSurface;
+	PCE_Fast::applyVideoFormat(&espec);
 }
 
 void EmuSystem::configAudioRate(IG::FloatSeconds frameTime, uint32_t rate)
@@ -241,6 +240,90 @@ void EmuSystem::configAudioRate(IG::FloatSeconds frameTime, uint32_t rate)
 
 namespace Mednafen
 {
+
+template <class Pixel>
+static void renderMultiresOutput(EmulateSpecStruct spec, IG::Pixmap srcPix, int multiResOutputWidth)
+{
+	int pixHeight = spec.DisplayRect.h;
+	auto img = spec.video->startFrameWithFormat(spec.task, {{multiResOutputWidth, pixHeight}, srcPix.format()});
+	auto destPixAddr = (Pixel*)img.pixmap().data();
+	auto lineWidth = spec.LineWidths + spec.DisplayRect.y;
+	if(multiResOutputWidth == 1024)
+	{
+		// scale 256x4, 341x3 + 1x4, 512x2
+		iterateTimes(pixHeight, h)
+		{
+			auto srcPixAddr = (Pixel*)srcPix.pixel({0,(int)h});
+			int width = lineWidth[h];
+			switch(width)
+			{
+				bdefault:
+					bug_unreachable("width == %d", width);
+				bcase 256:
+				{
+					iterateTimes(256, w)
+					{
+						*destPixAddr++ = *srcPixAddr;
+						*destPixAddr++ = *srcPixAddr;
+						*destPixAddr++ = *srcPixAddr;
+						*destPixAddr++ = *srcPixAddr++;
+					}
+				}
+				bcase 341:
+				{
+					iterateTimes(340, w)
+					{
+						*destPixAddr++ = *srcPixAddr;
+						*destPixAddr++ = *srcPixAddr;
+						*destPixAddr++ = *srcPixAddr++;
+					}
+					*destPixAddr++ = *srcPixAddr;
+					*destPixAddr++ = *srcPixAddr;
+					*destPixAddr++ = *srcPixAddr;
+					*destPixAddr++ = *srcPixAddr++;
+				}
+				bcase 512:
+				{
+					iterateTimes(512, w)
+					{
+						*destPixAddr++ = *srcPixAddr;
+						*destPixAddr++ = *srcPixAddr++;
+					}
+				}
+			}
+			destPixAddr += img.pixmap().paddingPixels();
+		}
+	}
+	else // 512 width
+	{
+		iterateTimes(pixHeight, h)
+		{
+			auto srcPixAddr = (Pixel*)srcPix.pixel({0,(int)h});
+			int width = lineWidth[h];
+			switch(width)
+			{
+				bdefault:
+					bug_unreachable("width == %d", width);
+				bcase 256:
+				{
+					iterateTimes(256, w)
+					{
+						*destPixAddr++ = *srcPixAddr;
+						*destPixAddr++ = *srcPixAddr++;
+					}
+				}
+				bcase 512:
+				{
+					memcpy(destPixAddr, srcPixAddr, 512 * sizeof(Pixel));
+					destPixAddr += 512;
+					srcPixAddr += 512;
+				}
+			}
+			destPixAddr += img.pixmap().paddingPixels();
+		}
+	}
+	img.endFrame();
+}
 
 void MDFND_commitVideoFrame(EmulateSpecStruct *espec)
 {
@@ -285,91 +368,16 @@ void MDFND_commitVideoFrame(EmulateSpecStruct *espec)
 	IG::Pixmap srcPix = mSurfacePix.subView(
 		{spec.DisplayRect.x, spec.DisplayRect.y},
 		{pixWidth, pixHeight});
-	auto &video = *espec->video;
 	if(multiResOutputWidth)
 	{
-		auto img = video.startFrameWithFormat(espec->task, {{multiResOutputWidth, pixHeight}, pixFmt});
-		auto destPixAddr = (Pixel*)img.pixmap().pixel({0,0});
-		auto lineWidth = spec.LineWidths + spec.DisplayRect.y;
-		if(multiResOutputWidth == 1024)
-		{
-			// scale 256x4, 341x3 + 1x4, 512x2
-			iterateTimes(pixHeight, h)
-			{
-				auto srcPixAddr = (Pixel*)srcPix.pixel({0,(int)h});
-				int width = lineWidth[h];
-				switch(width)
-				{
-					bdefault:
-						bug_unreachable("width == %d", width);
-					bcase 256:
-					{
-						iterateTimes(256, w)
-						{
-							*destPixAddr++ = *srcPixAddr;
-							*destPixAddr++ = *srcPixAddr;
-							*destPixAddr++ = *srcPixAddr;
-							*destPixAddr++ = *srcPixAddr++;
-						}
-					}
-					bcase 341:
-					{
-						iterateTimes(340, w)
-						{
-							*destPixAddr++ = *srcPixAddr;
-							*destPixAddr++ = *srcPixAddr;
-							*destPixAddr++ = *srcPixAddr++;
-						}
-						*destPixAddr++ = *srcPixAddr;
-						*destPixAddr++ = *srcPixAddr;
-						*destPixAddr++ = *srcPixAddr;
-						*destPixAddr++ = *srcPixAddr++;
-					}
-					bcase 512:
-					{
-						iterateTimes(512, w)
-						{
-							*destPixAddr++ = *srcPixAddr;
-							*destPixAddr++ = *srcPixAddr++;
-						}
-					}
-				}
-				destPixAddr += img.pixmap().paddingPixels();
-			}
-		}
-		else // 512 width
-		{
-			iterateTimes(pixHeight, h)
-			{
-				auto srcPixAddr = (Pixel*)srcPix.pixel({0,(int)h});
-				int width = lineWidth[h];
-				switch(width)
-				{
-					bdefault:
-						bug_unreachable("width == %d", width);
-					bcase 256:
-					{
-						iterateTimes(256, w)
-						{
-							*destPixAddr++ = *srcPixAddr;
-							*destPixAddr++ = *srcPixAddr++;
-						}
-					}
-					bcase 512:
-					{
-						memcpy(destPixAddr, srcPixAddr, 512 * sizeof(Pixel));
-						destPixAddr += 512;
-						srcPixAddr += 512;
-					}
-				}
-				destPixAddr += img.pixmap().paddingPixels();
-			}
-		}
-		img.endFrame();
+		if(srcPix.format() == IG::PIXEL_RGB565)
+			renderMultiresOutput<uint16_t>(spec, srcPix, multiResOutputWidth);
+		else
+			renderMultiresOutput<uint32_t>(spec, srcPix, multiResOutputWidth);
 	}
 	else
 	{
-		video.startFrameWithFormat(espec->task, srcPix);
+		spec.video->startFrameWithFormat(espec->task, srcPix);
 	}
 }
 
@@ -377,7 +385,7 @@ void MDFND_commitVideoFrame(EmulateSpecStruct *espec)
 
 void EmuSystem::runFrame(EmuSystemTask *task, EmuVideo *video, EmuAudio *audio)
 {
-	uint maxFrames = 48000/54;
+	unsigned maxFrames = 48000/54;
 	int16 audioBuff[maxFrames*2];
 	EmulateSpecStruct espec{};
 	if(audio)
@@ -385,7 +393,7 @@ void EmuSystem::runFrame(EmuSystemTask *task, EmuVideo *video, EmuAudio *audio)
 		espec.SoundBuf = audioBuff;
 		espec.SoundBufMaxSize = maxFrames;
 		const bool using263Lines = vce.CR & 0x04;
-		if(unlikely(prevUsing263Lines != using263Lines))
+		if(prevUsing263Lines != using263Lines) [[unlikely]]
 		{
 			configFrameTime(audio->format().rate);
 		}
@@ -400,7 +408,7 @@ void EmuSystem::runFrame(EmuSystemTask *task, EmuVideo *video, EmuAudio *audio)
 	emuSys->Emulate(&espec);
 	if(audio)
 	{
-		assert((uint)espec.SoundBufSize <= audio->format().bytesToFrames(sizeof(audioBuff)));
+		assert((unsigned)espec.SoundBufSize <= audio->format().bytesToFrames(sizeof(audioBuff)));
 		audio->writeFrames((uint8_t*)audioBuff, espec.SoundBufSize);
 	}
 }

@@ -21,10 +21,10 @@
 #include <emuframework/VController.hh>
 #include "private.hh"
 #include "privateInput.hh"
-#include <imagine/base/Base.hh>
-#include <imagine/base/platformExtras.hh>
+#include <imagine/base/ApplicationContext.hh>
 #include <imagine/gfx/Renderer.hh>
-#include <imagine/util/bits.h>
+#include <imagine/base/Screen.hh>
+#include <imagine/base/Window.hh>
 
 template<class T>
 bool optionFrameTimeIsValid(T val)
@@ -67,10 +67,6 @@ Byte1Option optionSoundBuffers(CFGKEY_SOUND_BUFFERS,
 	4, 0, optionIsValidWithMinMax<2, 8, uint8_t>);
 Byte1Option optionAddSoundBuffersOnUnderrun(CFGKEY_ADD_SOUND_BUFFERS_ON_UNDERRUN, 1, 0);
 
-#ifdef CONFIG_AUDIO_MANAGER_SOLO_MIX
-OptionAudioSoloMix optionAudioSoloMix(CFGKEY_AUDIO_SOLO_MIX, 1);
-#endif
-
 #ifdef CONFIG_AUDIO_MULTIPLE_SYSTEM_APIS
 Byte1Option optionAudioAPI(CFGKEY_AUDIO_API, 0);
 #endif
@@ -92,15 +88,11 @@ Byte1Option optionPauseUnfocused(CFGKEY_PAUSE_UNFOCUSED, 1,
 Byte1Option optionNotificationIcon(CFGKEY_NOTIFICATION_ICON, 1, !Config::envIsAndroid);
 Byte1Option optionTitleBar(CFGKEY_TITLE_BAR, 1, Config::envIsIOS);
 
-OptionBackNavigation
-	optionBackNavigation(CFGKEY_BACK_NAVIGATION, View::needsBackControlDefault, View::needsBackControlIsConst);
-
 Byte1Option optionSystemActionsIsDefaultMenu(CFGKEY_SYSTEM_ACTIONS_IS_DEFAULT_MENU, 1, 0);
 Byte1Option optionLowProfileOSNav(CFGKEY_LOW_PROFILE_OS_NAV, 1, !Config::envIsAndroid);
 Byte1Option optionHideOSNav(CFGKEY_HIDE_OS_NAV, 0, !Config::envIsAndroid);
 Byte1Option optionIdleDisplayPowerSave(CFGKEY_IDLE_DISPLAY_POWER_SAVE, 0, !Config::envIsAndroid && !Config::envIsIOS);
 Byte1Option optionHideStatusBar(CFGKEY_HIDE_STATUS_BAR, 1, !Config::envIsAndroid && !Config::envIsIOS);
-OptionSwappedGamepadConfirm optionSwappedGamepadConfirm(CFGKEY_SWAPPED_GAMEPAD_CONFIM, Input::SWAPPED_GAMEPAD_CONFIRM_DEFAULT);
 Byte1Option optionConsumeUnboundGamepadKeys(CFGKEY_CONSUME_UNBOUND_GAMEPAD_KEYS, 0, 0);
 Byte1Option optionConfirmOverwriteState(CFGKEY_CONFIRM_OVERWRITE_STATE, 1, 0);
 Byte1Option optionFastForwardSpeed(CFGKEY_FAST_FORWARD_SPEED, 4, 0, optionIsValidWithMinMax<2, 7>);
@@ -132,7 +124,6 @@ bool imageEffectPixelFormatIsValid(uint8_t val)
 {
 	switch(val)
 	{
-		case IG::PIXEL_NONE:
 		case IG::PIXEL_RGB565:
 		case IG::PIXEL_RGBA8888:
 			return true;
@@ -212,7 +203,6 @@ bool isValidOption2DOCenterBtn(_2DOrigin val)
 
 Byte1Option optionTouchCtrlBoundingBoxes(CFGKEY_TOUCH_CONTROL_BOUNDING_BOXES, 0);
 Byte1Option optionTouchCtrlShowOnTouch(CFGKEY_TOUCH_CONTROL_SHOW_ON_TOUCH, 1);
-OptionTouchCtrlScaledCoordinates optionTouchCtrlScaledCoordinates(CFGKEY_TOUCH_CONTROL_SCALED_COORDINATES, 1, !Config::envIsAndroid);
 
 OptionVControllerLayoutPosition optionVControllerLayoutPos;
 
@@ -241,87 +231,62 @@ Byte1Option optionTextureBufferMode{CFGKEY_TEXTURE_BUFFER_MODE, 0};
 Byte1Option optionSustainedPerformanceMode{CFGKEY_SUSTAINED_PERFORMANCE_MODE, 0};
 #endif
 
-#ifdef EMU_FRAMEWORK_WINDOW_PIXEL_FORMAT_OPTION
-bool windowPixelFormatIsValid(uint8_t val)
-{
-	switch(val)
-	{
-		case IG::PIXEL_NONE:
-		case IG::PIXEL_RGB565:
-		case IG::PIXEL_RGB888:
-		case IG::PIXEL_RGBX8888:
-		case IG::PIXEL_RGBA8888:
-			return true;
-	}
-	return false;
-}
-
-Byte1Option optionWindowPixelFormat(CFGKEY_WINDOW_PIXEL_FORMAT, IG::PIXEL_NONE, 0, windowPixelFormatIsValid);
-#endif
-
 PathOption optionSavePath(CFGKEY_SAVE_PATH, EmuSystem::savePath_, "");
-PathOption optionLastLoadPath(CFGKEY_LAST_DIR, lastLoadPath, "");
 Byte1Option optionCheckSavePathWriteAccess{CFGKEY_CHECK_SAVE_PATH_WRITE_ACCESS, 1};
 
 Byte1Option optionShowBundledGames(CFGKEY_SHOW_BUNDLED_GAMES, 1);
 
 [[gnu::weak]] PathOption optionFirmwarePath(0, nullptr, 0, nullptr);
 
-void initOptions()
+void EmuApp::initOptions(Base::ApplicationContext ctx)
 {
-	if(!strlen(lastLoadPath.data()))
-	{
-		lastLoadPath = Base::sharedStoragePath();
-	}
-
-	optionSoundRate.initDefault(IG::AudioManager::nativeRate());
+	optionSoundRate.initDefault(audioManager().nativeRate());
 
 	#ifdef CONFIG_BASE_IOS
-	if(Base::deviceIsIPad())
+	if(ctx.deviceIsIPad())
 		optionFontSize.initDefault(5000);
 	#endif
 
 	#ifdef CONFIG_INPUT_ANDROID_MOGA
-	if(Base::packageIsInstalled("com.bda.pivot.mogapgp"))
+	if(ctx.packageIsInstalled("com.bda.pivot.mogapgp"))
 	{
-		logMsg("MOGA Pivot app is present");
+		logMsg("MOGA Pivot ctx is present");
 		optionMOGAInputSystem.initDefault(1);
 	}
 	#endif
 
 	#ifdef CONFIG_BASE_ANDROID
-	if(Base::hasHardwareNavButtons())
+	if(ctx.hasHardwareNavButtons())
 	{
 		optionLowProfileOSNav.isConst = 1;
 		optionHideOSNav.isConst = 1;
 	}
 	else
 	{
-		optionBackNavigation.initDefault(1);
-		if(Base::androidSDK() >= 19)
+		if(ctx.androidSDK() >= 19)
 			optionHideOSNav.initDefault(1);
 	}
-	if(Base::androidSDK() >= 11)
+	if(ctx.androidSDK() >= 11)
 	{
 		optionNotificationIcon.initDefault(false);
-		if(Base::androidSDK() >= 17)
+		if(ctx.androidSDK() >= 17)
 			optionNotificationIcon.isConst = true;
 	}
-	if(Base::androidSDK() < 12)
+	if(ctx.androidSDK() < 12)
 	{
 		#ifdef CONFIG_INPUT_DEVICE_HOTSWAP
 		optionNotifyInputDeviceChange.isConst = 1;
 		#endif
 	}
-	if(!Base::hasVibrator())
+	if(!ctx.hasVibrator())
 	{
 		optionVibrateOnPush.isConst = 1;
 	}
-	if(Base::androidSDK() < 17)
+	if(ctx.androidSDK() < 17)
 	{
 		optionShowOnSecondScreen.isConst = true;
 	}
-	else if(FS::exists(FS::makePathStringPrintf("%s/emuex_disable_presentation_displays", Base::sharedStoragePath().data())))
+	else if(FS::exists(FS::makePathStringPrintf("%s/emuex_disable_presentation_displays", ctx.sharedStoragePath().data())))
 	{
 		logMsg("force-disabling presentation display support");
 		optionShowOnSecondScreen.initDefault(false);
@@ -334,21 +299,21 @@ void initOptions()
 		#endif
 	}
 	{
-		auto type = Base::sustainedPerformanceModeType();
+		auto type = ctx.sustainedPerformanceModeType();
 		if(type == Base::SustainedPerformanceType::NONE)
 		{
 			optionSustainedPerformanceMode.initDefault(0);
 			optionSustainedPerformanceMode.isConst = true;
 		}
 	}
-	if(Base::androidSDK() < 11)
+	if(ctx.androidSDK() < 11)
 	{
-		// never run app in onPaused state on Android 2.3
+		// never run ctx in onPaused state on Android 2.3
 		optionPauseUnfocused.isConst = true;
 	}
 	#endif
 
-	if(!Base::Screen::screen(0)->frameRateIsReliable())
+	if(!ctx.mainScreen().frameRateIsReliable())
 	{
 		optionFrameRate.initDefault(60);
 	}
@@ -384,7 +349,7 @@ void initOptions()
 
 	bool defaultToLargeControls = false;
 	#ifdef CONFIG_BASE_IOS
-	if(Base::deviceIsIPad())
+	if(ctx.deviceIsIPad())
 		defaultToLargeControls = true;
 	#endif
 	#ifdef CONFIG_EMUFRAMEWORK_VCONTROLS
@@ -415,12 +380,12 @@ bool OptionVControllerLayoutPosition::writeToIO(IO &io)
 	return 1;
 }
 
-static uint sizeofVControllerLayoutPositionEntry()
+static unsigned sizeofVControllerLayoutPositionEntry()
 {
 	return 1 + 1 + 4 + 4;
 }
 
-bool OptionVControllerLayoutPosition::readFromIO(IO &io, uint readSize_)
+bool OptionVControllerLayoutPosition::readFromIO(IO &io, unsigned readSize_)
 {
 	int readSize = readSize_;
 
@@ -441,7 +406,7 @@ bool OptionVControllerLayoutPosition::readFromIO(IO &io, uint readSize_)
 			}
 			else
 				e.origin = origin;
-			uint state = io.get<int8_t>();
+			unsigned state = io.get<int8_t>();
 			if(state > 2)
 			{
 				logWarn("invalid v-controller state from config file");
@@ -463,9 +428,9 @@ bool OptionVControllerLayoutPosition::readFromIO(IO &io, uint readSize_)
 	return 1;
 }
 
-uint OptionVControllerLayoutPosition::ioSize() const
+unsigned OptionVControllerLayoutPosition::ioSize() const
 {
-	uint positions = std::size(vController->layoutPosition()[0]) * std::size(vController->layoutPosition());
+	unsigned positions = std::size(vController->layoutPosition()[0]) * std::size(vController->layoutPosition());
 	return sizeof(key) + positions * sizeofVControllerLayoutPositionEntry();
 }
 
@@ -474,28 +439,12 @@ void OptionVControllerLayoutPosition::setVController(VController &v)
 	vController = &v;
 }
 
-bool vControllerUseScaledCoordinates()
-{
-	#ifdef CONFIG_BASE_ANDROID
-	return defaultVController().usesScaledCoordinates();
-	#else
-	return false;
-	#endif
-}
-
-void setVControllerUseScaledCoordinates(bool on)
-{
-	#ifdef CONFIG_BASE_ANDROID
-	defaultVController().setUsesScaledCoordinates(on);
-	#endif
-}
-
-void setupFont(Gfx::Renderer &r, Base::Window &win)
+void setupFont(ViewManager &manager, Gfx::Renderer &r, Base::Window &win)
 {
 	float size = optionFontSize / 1000.;
 	logMsg("setting up font size %f", (double)size);
-	View::defaultFace.setFontSettings(r, IG::FontSettings(win.heightSMMInPixels(size)));
-	View::defaultBoldFace.setFontSettings(r, IG::FontSettings(win.heightSMMInPixels(size)));
+	manager.defaultFace().setFontSettings(r, IG::FontSettings(win.heightSMMInPixels(size)));
+	manager.defaultBoldFace().setFontSettings(r, IG::FontSettings(win.heightSMMInPixels(size)));
 }
 
 bool OptionRecentGames::isDefault() const
@@ -509,14 +458,14 @@ bool OptionRecentGames::writeToIO(IO &io)
 	io.write(key);
 	for(auto &e : recentGameList)
 	{
-		uint len = strlen(e.path.data());
+		unsigned len = strlen(e.path.data());
 		io.write((uint16_t)len);
 		io.write(e.path.data(), len);
 	}
 	return true;
 }
 
-bool OptionRecentGames::readFromIO(IO &io, uint readSize_)
+bool OptionRecentGames::readFromIO(Base::ApplicationContext ctx, IO &io, unsigned readSize_)
 {
 	int readSize = readSize_;
 	while(readSize && !recentGameList.isFull())
@@ -547,7 +496,7 @@ bool OptionRecentGames::readFromIO(IO &io, uint readSize_)
 			continue; // don't add empty paths
 		info.path[bytesRead] = 0;
 		readSize -= len;
-		info.name = EmuSystem::fullGameNameForPath(info.path.data());
+		info.name = EmuSystem::fullGameNameForPath(ctx, info.path.data());
 		//logMsg("adding game to recent list: %s, name: %s", info.path, info.name);
 		recentGameList.push_back(info);
 	}
@@ -560,9 +509,9 @@ bool OptionRecentGames::readFromIO(IO &io, uint readSize_)
 	return true;
 }
 
-uint OptionRecentGames::ioSize() const
+unsigned OptionRecentGames::ioSize() const
 {
-	uint strSizes = 0;
+	unsigned strSizes = 0;
 	for(auto &e : recentGameList)
 	{
 		strSizes += 2;
@@ -573,7 +522,7 @@ uint OptionRecentGames::ioSize() const
 
 bool PathOption::writeToIO(IO &io)
 {
-	uint len = strlen(val);
+	unsigned len = strlen(val);
 	if(len > strSize-1)
 	{
 		logErr("option string too long to write");
@@ -590,7 +539,7 @@ bool PathOption::writeToIO(IO &io)
 	return true;
 }
 
-bool PathOption::readFromIO(IO &io, uint readSize)
+bool PathOption::readFromIO(IO &io, unsigned readSize)
 {
 	if(readSize > strSize-1)
 	{
@@ -609,7 +558,7 @@ bool PathOption::readFromIO(IO &io, uint readSize)
 	return 1;
 }
 
-uint PathOption::ioSize() const
+unsigned PathOption::ioSize() const
 {
 	return sizeof(KEY) + strlen(val);
 }

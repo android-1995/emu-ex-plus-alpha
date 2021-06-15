@@ -18,17 +18,15 @@ static_assert(__has_feature(objc_arc), "This file requires ARC");
 #import "MainApp.hh"
 #import <dlfcn.h>
 #import <unistd.h>
-#include <imagine/base/Base.hh>
+#include <imagine/base/Application.hh>
+#include <imagine/base/ApplicationContext.hh>
+#include <imagine/base/Screen.hh>
 #include <imagine/logger/logger.h>
 #include <imagine/util/algorithm.h>
 #include "private.hh"
 #include <imagine/fs/FS.hh>
 #include <imagine/time/Time.hh>
 #include <imagine/util/coreFoundation.h>
-#include <imagine/util/string.h>
-#include "../common/basePrivate.hh"
-#include "../common/windowPrivate.hh"
-#include "../common/screenPrivate.hh"
 #include "ios.hh"
 
 #import <UIKit/UIKit.h>
@@ -51,14 +49,24 @@ namespace Base
 namespace Input
 {
 	int GSEVENTKEY_KEYCODE = sizeof(NSInteger) == 8 ? GSEVENTKEY_KEYCODE_64_BIT : 15;
-	UITextField *vkbdField{};
-	InputTextDelegate vKeyboardTextDelegate;
-	IG::WindowRect textRect{8, 200, 8+304, 200+48};
+}
+
+namespace IG
+{
+
+void releaseCFObject(void *ptr)
+{
+	if(!ptr)
+		return;
+	CFRelease(ptr);
+}
+
 }
 
 namespace Base
 {
 
+Application *appPtr{};
 bool isIPad = false;
 static bool isRunningAsSystemApp = false;
 CGColorSpaceRef grayColorSpace{}, rgbColorSpace{};
@@ -85,62 +93,101 @@ static MFMailComposeViewController *composeController;
 #include "gameKit.h"
 #endif
 
-static Screen &setupUIScreen(UIScreen *screen, bool setOverscanCompensation)
+static Screen &setupUIScreen(ApplicationContext ctx, UIScreen *screen, bool setOverscanCompensation)
 {
 	// prevent overscan compensation
 	if(hasAtLeastIOS5() && setOverscanCompensation)
 		screen.overscanCompensation = UIScreenOverscanCompensationInsetApplicationFrame;
-	auto s = std::make_unique<Screen>(screen);
+	IOSScreen::InitParams initParams{(__bridge void*)screen};
+	auto s = std::make_unique<Screen>(ctx, initParams);
 	[s->displayLink() addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
-	return Screen::addScreen(std::move(s));
+	return ctx.application().addScreen(ctx, std::move(s), true);
+}
+
+IOSApplication::IOSApplication(ApplicationInitParams initParams):
+	BaseApplication{(__bridge UIApplication*)initParams.uiAppPtr}
+{
+	ApplicationContext ctx{(__bridge UIApplication*)initParams.uiAppPtr};
+	auto sharedApp = ctx.uiApp();
+	if(Config::DEBUG_BUILD)
+	{
+		//logMsg("in didFinishLaunchingWithOptions(), UUID %s", [[[UIDevice currentDevice] uniqueIdentifier] cStringUsingEncoding: NSASCIIStringEncoding]);
+		logMsg("iOS version %s", [[[UIDevice currentDevice] systemVersion] cStringUsingEncoding: NSASCIIStringEncoding]);
+	}
+	if(!Config::MACHINE_IS_GENERIC_ARMV6 && UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad)
+	{
+		isIPad = 1;
+		logMsg("running on iPad");
+	}
+	Input::init(ctx);
+	if(hasAtLeastIOS7())
+	{
+		#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 70000
+		[sharedApp setStatusBarStyle:UIStatusBarStyleLightContent animated:YES];
+		#endif
+		if(sizeof(NSInteger) == 4)
+			Input::GSEVENTKEY_KEYCODE = Input::GSEVENTKEY_KEYCODE_IOS7;
+	}
+	else
+	{
+		#if __IPHONE_OS_VERSION_MIN_REQUIRED < 70000
+		[sharedApp setStatusBarStyle:UIStatusBarStyleBlackOpaque animated:YES];
+		#endif
+	}
+
+	//[nCenter addObserver:self selector:@selector(keyboardWasShown:) name:UIKeyboardDidShowNotification object:nil];
+	//[nCenter addObserver:self selector:@selector(keyboardWillHide:) name:UIKeyboardWillHideNotification object:nil];
+	#ifdef CONFIG_BASE_MULTI_SCREEN
+	{
+		NSNotificationCenter *nCenter = [NSNotificationCenter defaultCenter];
+		[nCenter addObserverForName:UIScreenDidConnectNotification
+			object:nil queue:nil usingBlock:
+			^(NSNotification *note)
+			{
+				logMsg("screen connected");
+				UIScreen *screen = [note object];
+				if(findScreen((__bridge void*)screen))
+				{
+					logMsg("screen %p already in list", screen);
+					return;
+				}
+				auto &s = setupUIScreen(ctx, screen, true);
+			}];
+		[nCenter addObserverForName:UIScreenDidDisconnectNotification
+			object:nil queue:nil usingBlock:
+			^(NSNotification *note)
+			{
+				logMsg("screen disconnected");
+				UIScreen *screen = [note object];
+				if(auto removedScreen = removeScreen(ctx, (__bridge void*)screen, true);
+					removedScreen)
+				{
+					[removedScreen->displayLink() removeFromRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
+				}
+			}];
+		if(Config::DEBUG_BUILD)
+		{
+			[nCenter addObserverForName:UIScreenModeDidChangeNotification
+				object:nil queue:nil usingBlock:
+				^(NSNotification *note)
+				{
+					logMsg("screen mode change");
+				}];
+		}
+	}
+	for(UIScreen *screen in [UIScreen screens])
+	{
+		setupUIScreen(ctx, screen, screens().size());
+	}
+	#else
+	mainScreen().init([UIScreen mainScreen]);
+	[mainScreen().displayLink() addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
+	#endif
 }
 
 }
 
 @implementation MainApp
-
-#if defined IPHONE_VKEYBOARD
-/*- (BOOL)textView:(UITextView *)textView shouldChangeTextInRange:(NSRange)range replacementText:(NSString *)text
-{
-	if (textView.text.length >= 127 && range.length == 0)
-	{
-		logMsg("not changing text");
-		return NO;
-	}
-	return YES;
-}
-
-- (void)textViewDidEndEditing:(UITextView *)textView
-{
-	logMsg("editing ended");
-	Input::finishSysTextInput();
-}*/
-
-- (BOOL)textFieldShouldReturn:(UITextField *)textField
-{
-	logMsg("pushed return");
-	[textField resignFirstResponder];
-	return YES;
-}
-
-- (void)textFieldDidEndEditing:(UITextField *)textField
-{
-	using namespace Input;
-	logMsg("editing ended");
-	//inVKeyboard = 0;
-	auto delegate = std::exchange(vKeyboardTextDelegate, {});
-	char text[256];
-	string_copy(text, [textField.text UTF8String]);
-	[textField removeFromSuperview];
-	vkbdField = nil;
-	if(delegate)
-	{
-		logMsg("running text entry callback");
-		delegate(text);
-	}
-}
-
-#endif
 
 #if 0
 - (void)keyboardWasShown:(NSNotification *)notification
@@ -184,156 +231,78 @@ static Base::Orientation iOSOrientationToGfx(UIDeviceOrientation orientation)
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
 {
-	using namespace Base;
-	if(Config::DEBUG_BUILD)
-	{
-		//logMsg("in didFinishLaunchingWithOptions(), UUID %s", [[[UIDevice currentDevice] uniqueIdentifier] cStringUsingEncoding: NSASCIIStringEncoding]);
-		logMsg("iOS version %s", [[[UIDevice currentDevice] systemVersion] cStringUsingEncoding: NSASCIIStringEncoding]);
-	}
-	mainApp = self;
-	sharedApp = [UIApplication sharedApplication];
-	if(!Config::MACHINE_IS_GENERIC_ARMV6 && UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad)
-	{
-		isIPad = 1;
-		logMsg("running on iPad");
-	}
-	Input::init();
-	if(hasAtLeastIOS7())
-	{
-		#if __IPHONE_OS_VERSION_MAX_ALLOWED >= 70000
-		[sharedApp setStatusBarStyle:UIStatusBarStyleLightContent animated:YES];
-		#endif
-		if(sizeof(NSInteger) == 4)
-			Input::GSEVENTKEY_KEYCODE = Input::GSEVENTKEY_KEYCODE_IOS7;
-	}
-	else
-	{
-		#if __IPHONE_OS_VERSION_MIN_REQUIRED < 70000
-		[sharedApp setStatusBarStyle:UIStatusBarStyleBlackOpaque animated:YES];
-		#endif
-	}
-
-	//[nCenter addObserver:self selector:@selector(keyboardWasShown:) name:UIKeyboardDidShowNotification object:nil];
-	//[nCenter addObserver:self selector:@selector(keyboardWillHide:) name:UIKeyboardWillHideNotification object:nil];
-	#ifdef CONFIG_BASE_MULTI_SCREEN
-	{
-		NSNotificationCenter *nCenter = [NSNotificationCenter defaultCenter];
-		[nCenter addObserverForName:UIScreenDidConnectNotification
-			object:nil queue:nil usingBlock:
-			^(NSNotification *note)
-			{
-				logMsg("screen connected");
-				UIScreen *screen = [note object];
-				for(const auto &s : screen_)
-				{
-					if(s->uiScreen() == screen)
-					{
-						logMsg("screen %p already in list", screen);
-						return;
-					}
-				}
-				auto &s = setupUIScreen(screen, true);
-				if(Screen::onChange)
-					Screen::onChange(s, {Screen::Change::ADDED});
-			}];
-		[nCenter addObserverForName:UIScreenDidDisconnectNotification
-			object:nil queue:nil usingBlock:
-			^(NSNotification *note)
-			{
-				logMsg("screen disconnected");
-				UIScreen *screen = [note object];
-				if(auto removedScreen = IG::moveOutIf(screen_, [&](auto &s){ return s->uiScreen() == screen; });
-					removedScreen)
-				{
-					if(Screen::onChange)
-						Screen::onChange(*removedScreen, { Screen::Change::REMOVED });
-					[removedScreen->displayLink() removeFromRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
-				}
-			}];
-		if(Config::DEBUG_BUILD)
-		{
-			[nCenter addObserverForName:UIScreenModeDidChangeNotification
-				object:nil queue:nil usingBlock:
-				^(NSNotification *note)
-				{
-					logMsg("screen mode change");
-				}];
-		}
-	}
-	for(UIScreen *screen in [UIScreen screens])
-	{
-		setupUIScreen(screen, Screen::screens());
-	}
-	#else
-	mainScreen().init([UIScreen mainScreen]);
-	[mainScreen().displayLink() addToRunLoop:[NSRunLoop currentRunLoop] forMode:NSDefaultRunLoopMode];
-	#endif
 	// TODO: use NSProcessInfo
-	onInit(0, nullptr);
-	if(!deviceWindow())
-		bug_unreachable("no main window exists");
+	using namespace Base;
+	mainApp = self;
+	auto uiApp = [UIApplication sharedApplication];
+	ApplicationInitParams initParams{.uiAppPtr = (__bridge void*)uiApp};
+	ApplicationContext ctx{uiApp};
+	ctx.onInit(initParams);
+	if(!ctx.windows().size())
+		logWarn("didn't create a window");
 	logMsg("exiting didFinishLaunchingWithOptions");
 	return YES;
 }
 
 - (void)applicationWillResignActive:(UIApplication *)application
 {
-	using namespace Base;
 	logMsg("resign active");
-	iterateTimes(Window::windows(), i)
+	Base::ApplicationContext ctx{application};
+	for(auto &w : ctx.windows())
 	{
-		Window::window(i)->dispatchFocusChange(false);
+		w->dispatchFocusChange(false);
 	}
-	Input::deinitKeyRepeatTimer();
+	ctx.application().deinitKeyRepeatTimer();
 }
 
 - (void)applicationDidBecomeActive:(UIApplication *)application
 {
-	using namespace Base;
 	logMsg("became active");
-	iterateTimes(Window::windows(), i)
+	Base::ApplicationContext ctx{application};
+	for(auto &w : ctx.windows())
 	{
-		Window::window(i)->dispatchFocusChange(true);
+		w->dispatchFocusChange(true);
 	}
 }
 
 - (void)applicationWillTerminate:(UIApplication *)application
 {
-	using namespace Base;
 	logMsg("app exiting");
-	setExitingActivityState();
-	dispatchOnExit(false);
+	Base::ApplicationContext ctx{application};
+	ctx.application().setExitingActivityState();
+	ctx.dispatchOnExit(false);
 	logMsg("app exited");
 }
 
 - (void)applicationDidEnterBackground:(UIApplication *)application
 {
-	using namespace Base;
 	logMsg("entering background");
-	setPausedActivityState();
-	dispatchOnExit(true);
-	Base::Screen::setActiveAll(false);
-	Input::deinitKeyRepeatTimer();
+	Base::ApplicationContext ctx{application};
+	ctx.application().setPausedActivityState();
+	ctx.dispatchOnExit(true);
+	ctx.application().setActiveForAllScreens(false);
+	ctx.application().deinitKeyRepeatTimer();
 	logMsg("entered background");
 }
 
 - (void)applicationWillEnterForeground:(UIApplication *)application
 {
-	using namespace Base;
 	logMsg("entered foreground");
-	setRunningActivityState();
-	Base::Screen::setActiveAll(true);
-	iterateTimes(Window::windows(), i)
+	Base::ApplicationContext ctx{application};
+	ctx.application().setRunningActivityState();
+	ctx.application().setActiveForAllScreens(true);
+	for(auto &w : ctx.windows())
 	{
-		Window::window(i)->postDraw();
+		w->postDraw();
 	}
-	dispatchOnResume(true);
+	ctx.dispatchOnResume(true);
 }
 
 - (void)applicationDidReceiveMemoryWarning:(UIApplication *)application
 {
 	logMsg("got memory warning");
-	Base::dispatchOnFreeCaches(Base::appIsRunning());
+	Base::ApplicationContext ctx{application};
+	ctx.dispatchOnFreeCaches(ctx.isRunning());
 }
 
 @end
@@ -349,7 +318,7 @@ static Base::Orientation iOSOrientationToGfx(UIDeviceOrientation orientation)
 {
 	[super sendEvent:event];
 	if(sizeof(NSInteger) == 4 && Input::GSEVENTKEY_KEYCODE != Input::GSEVENTKEY_KEYCODE_IOS7)
-		Input::handleKeyEvent(event);
+		Input::handleKeyEvent({self}, event);
 }
 #endif
 
@@ -357,7 +326,7 @@ static Base::Orientation iOSOrientationToGfx(UIDeviceOrientation orientation)
 - (void)handleKeyUIEvent:(UIEvent *)event
 {
 	[super handleKeyUIEvent:event];
-	Input::handleKeyEvent(event);
+	Input::handleKeyEvent({self}, event);
 }
 #endif
 
@@ -366,31 +335,24 @@ static Base::Orientation iOSOrientationToGfx(UIDeviceOrientation orientation)
 namespace Base
 {
 
-void updateWindowSizeAndContentRect(Window &win, int width, int height, UIApplication *sharedApp)
+static void setStatusBarHidden(ApplicationContext ctx, bool hidden)
 {
-	win.updateSize({width, height});
-	win.updateContentRect(win.width(), win.height(), win.softOrientation(), sharedApp);
-}
-
-static void setStatusBarHidden(bool hidden)
-{
-	assert(sharedApp);
 	logMsg("setting status bar hidden: %d", (int)hidden);
-	[sharedApp setStatusBarHidden: (hidden ? YES : NO) withAnimation: UIStatusBarAnimationFade];
-	if(deviceWindow())
+	[ctx.uiApp() setStatusBarHidden: (hidden ? YES : NO) withAnimation: UIStatusBarAnimationFade];
+	if(ctx.deviceWindow())
 	{
-		auto &win = *deviceWindow();
-		win.updateContentRect(win.width(), win.height(), win.softOrientation(), sharedApp);
+		auto &win = *ctx.deviceWindow();
+		win.updateContentRect(win.width(), win.height(), win.softOrientation());
 		win.postDraw();
 	}
 }
 
-void setSysUIStyle(uint32_t flags)
+void ApplicationContext::setSysUIStyle(uint32_t flags)
 {
-	setStatusBarHidden(flags & SYS_UI_STYLE_HIDE_STATUS);
+	setStatusBarHidden(uiApp(), flags & SYS_UI_STYLE_HIDE_STATUS);
 }
 
-bool hasTranslucentSysUI()
+bool ApplicationContext::hasTranslucentSysUI() const
 {
 	return hasAtLeastIOS7();
 }
@@ -407,7 +369,7 @@ UIInterfaceOrientation gfxOrientationToUIInterfaceOrientation(uint32_t orientati
 	}
 }
 
-void setDeviceOrientationChangeSensor(bool enable)
+void ApplicationContext::setDeviceOrientationChangeSensor(bool enable)
 {
 	UIDevice *currDev = [UIDevice currentDevice];
 	auto notificationsAreOn = currDev.generatesDeviceOrientationNotifications;
@@ -423,7 +385,7 @@ void setDeviceOrientationChangeSensor(bool enable)
 	}
 }
 
-void setOnDeviceOrientationChanged(DeviceOrientationChangedDelegate onOrientationChanged)
+void ApplicationContext::setOnDeviceOrientationChanged(DeviceOrientationChangedDelegate onOrientationChanged)
 {
 	if(onOrientationChanged)
 	{
@@ -439,7 +401,7 @@ void setOnDeviceOrientationChanged(DeviceOrientationChangedDelegate onOrientatio
 		                              	auto o = iOSOrientationToGfx([[UIDevice currentDevice] orientation]);
 		                              	if(o)
 		                              	{
-		                              		onOrientationChanged(o);
+		                              		onOrientationChanged(*this, o);
 		                              	}
 		                               }];
 	}
@@ -451,63 +413,57 @@ void setOnDeviceOrientationChanged(DeviceOrientationChangedDelegate onOrientatio
 
 }
 
-void setSystemOrientation(Orientation o)
+void ApplicationContext::setSystemOrientation(Orientation o)
 {
 	logMsg("setting system orientation %s", orientationToStr(o));
-	using namespace Input;
-	if(vKeyboardTextDelegate) // TODO: allow orientation change without aborting text input
-	{
-		logMsg("aborting active text input");
-		vKeyboardTextDelegate(nullptr);
-		vKeyboardTextDelegate = {};
-	}
-	assert(sharedApp);
+	auto sharedApp = uiApp();
 	[sharedApp setStatusBarOrientation:gfxOrientationToUIInterfaceOrientation(o) animated:YES];
 	if(deviceWindow())
 	{
 		auto &win = *deviceWindow();
-		win.updateContentRect(win.width(), win.height(), win.softOrientation(), sharedApp);
+		win.updateContentRect(win.width(), win.height(), win.softOrientation());
 		win.postDraw();
 	}
 }
 
-Orientation defaultSystemOrientations()
+Orientation ApplicationContext::defaultSystemOrientations() const
 {
 	return Base::isIPad ? VIEW_ROTATE_ALL : VIEW_ROTATE_ALL_BUT_UPSIDE_DOWN;
 }
 
-void setOnSystemOrientationChanged(SystemOrientationChangedDelegate del)
+void ApplicationContext::setOnSystemOrientationChanged(SystemOrientationChangedDelegate del)
 {
 	// TODO
 }
 
-void exit(int returnVal)
+void ApplicationContext::exit(int returnVal)
 {
-	setExitingActivityState();
+	application().setExitingActivityState();
 	dispatchOnExit(false);
 	::exit(returnVal);
 }
-void abort() { ::abort(); }
 
-void openURL(const char *url)
+void ApplicationContext::openURL(const char *url) const
 {
-	[sharedApp openURL:[NSURL URLWithString:
+	[uiApp() openURL:[NSURL URLWithString:
 		[NSString stringWithCString:url encoding:NSASCIIStringEncoding]]];
 }
 
-void setIdleDisplayPowerSave(bool on)
+void ApplicationContext::setIdleDisplayPowerSave(bool on)
 {
-	assert(sharedApp);
-	sharedApp.idleTimerDisabled = on ? NO : YES;
-	logMsg("set idleTimerDisabled %d", (int)sharedApp.idleTimerDisabled);
+	uiApp().idleTimerDisabled = on ? NO : YES;
+	if(Config::DEBUG_BUILD)
+	{
+		logMsg("set idleTimerDisabled %d", (int)uiApp().idleTimerDisabled);
+	}
 }
 
-void endIdleByUserActivity()
+void ApplicationContext::endIdleByUserActivity()
 {
-	if(!sharedApp.idleTimerDisabled)
+	if(!uiApp().idleTimerDisabled)
 	{
-		sharedApp.idleTimerDisabled = YES;
-		sharedApp.idleTimerDisabled = NO;
+		uiApp().idleTimerDisabled = YES;
+		uiApp().idleTimerDisabled = NO;
 	}
 }
 
@@ -526,19 +482,19 @@ static FS::PathString makeSearchPath(NSSearchPathDirectory dir, NSSearchPathDoma
 	return FS::makePathString(dirStr.UTF8String);
 }
 
-FS::PathString assetPath(const char *) { return appPath; }
+FS::PathString ApplicationContext::assetPath(const char *) const { return appPath; }
 
-FS::PathString supportPath(const char *appName)
+FS::PathString ApplicationContext::supportPath(const char *appName) const
 {
 	return makeSearchPath(NSApplicationSupportDirectory, NSUserDomainMask, isRunningAsSystemApp ? appName : nullptr);
 }
 
-FS::PathString cachePath(const char *appName)
+FS::PathString ApplicationContext::cachePath(const char *appName) const
 {
 	return makeSearchPath(NSCachesDirectory, NSUserDomainMask, isRunningAsSystemApp ? appName : nullptr);
 }
 
-FS::PathString sharedStoragePath()
+FS::PathString ApplicationContext::sharedStoragePath() const
 {
 	if(isRunningAsSystemApp)
 		return {"/User/Media"};
@@ -546,7 +502,7 @@ FS::PathString sharedStoragePath()
 		return makeSearchPath(NSDocumentDirectory, NSUserDomainMask);
 }
 
-FS::PathLocation sharedStoragePathLocation()
+FS::PathLocation ApplicationContext::sharedStoragePathLocation() const
 {
 	auto path = sharedStoragePath();
 	if(isRunningAsSystemApp)
@@ -555,7 +511,7 @@ FS::PathLocation sharedStoragePathLocation()
 		return {path, FS::makeFileString("Documents"), {FS::makeFileString("Documents"), strlen(path.data())}};
 }
 
-std::vector<FS::PathLocation> rootFileLocations()
+std::vector<FS::PathLocation> ApplicationContext::rootFileLocations() const
 {
 	return
 		{
@@ -563,17 +519,27 @@ std::vector<FS::PathLocation> rootFileLocations()
 		};
 }
 
-FS::PathString libPath(const char *)
+FS::PathString ApplicationContext::libPath(const char *) const
 {
 	return appPath;
 }
 
-bool deviceIsIPad()
+void IOSApplicationContext::setApplicationPtr(Application *appPtr_)
+{
+	appPtr = appPtr_;
+}
+
+Application &IOSApplicationContext::application() const
+{
+	return *appPtr;
+}
+
+bool IOSApplicationContext::deviceIsIPad() const
 {
 	return isIPad;
 }
 
-bool isSystemApp()
+bool IOSApplicationContext::isSystemApp() const
 {
 	return isRunningAsSystemApp;
 }
@@ -595,34 +561,12 @@ bool hasAtLeastIOS8()
 			kCFCoreFoundationVersionNumber >= kCFCoreFoundationVersionNumber_iOS_8_0;
 }
 
-bool usesPermission(Permission p)
-{
-	return false;
-}
-
-bool requestPermission(Permission p)
-{
-	return false;
-}
-
-void registerInstance(const char *appID, int argc, char** argv) {}
-
-void setAcceptIPC(const char *appID, bool on) {}
-
-void addNotification(const char *onShow, const char *title, const char *message) {}
-
-void addLauncherIcon(const char *name, const char *path) {}
-
-bool hasVibrator() { return false; }
-
-void vibrate(uint32_t ms) {}
-
-void exitWithErrorMessageVPrintf(int exitVal, const char *format, va_list args)
+void ApplicationContext::exitWithErrorMessageVPrintf(int exitVal, const char *format, va_list args)
 {
 	std::array<char, 512> msg{};
 	auto result = vsnprintf(msg.data(), msg.size(), format, args);
 	logErr("%s", msg.data());
-	exit(exitVal);
+	::exit(exitVal);
 }
 
 #ifdef CONFIG_BASE_IOS_SETUID
@@ -657,9 +601,19 @@ void *operator new(unsigned long size, std::align_val_t align)
 	return ptr;
 }
 
+void *operator new[](unsigned long size, std::align_val_t align)
+{
+	return ::operator new[](size);
+}
+
 void operator delete(void* ptr, std::align_val_t align)
 {
 	::free(ptr);
+}
+
+void operator delete[](void* ptr, std::align_val_t align)
+{
+	::operator delete[](ptr);
 }
 #endif
 
@@ -675,8 +629,7 @@ int main(int argc, char *argv[])
 	#ifdef CONFIG_BASE_IOS_SETUID
 	setupUID();
 	#endif
-	engineInit();
-	logger_init();
+	logger_setLogDirectoryPrefix("/var/mobile");
 	appPath = FS::makeAppPathFromLaunchCommand(argv[0]);
 	
 	#ifdef CONFIG_BASE_IOS_SETUID

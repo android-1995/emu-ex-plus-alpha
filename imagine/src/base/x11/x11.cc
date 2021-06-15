@@ -16,43 +16,83 @@
 #define LOGTAG "X11"
 #include <imagine/input/Input.hh>
 #include <imagine/logger/logger.h>
-#include <imagine/base/Base.hh>
+#include <imagine/base/ApplicationContext.hh>
+#include <imagine/base/Application.hh>
+#include <imagine/base/Window.hh>
 #include <imagine/util/string.h>
-#include "../common/windowPrivate.hh"
-#include "../common/screenPrivate.hh"
-#include "../common/basePrivate.hh"
-#include "x11.hh"
-#include "internal.hh"
 #include "xdnd.hh"
 #include "xlibutils.h"
 
-#define ASCII_LF 0xA
-#define ASCII_CR 0xD
+static constexpr char ASCII_LF = 0xA;
+static constexpr char ASCII_CR = 0xD;
 
 namespace Base
 {
 
-Display *xDisplay{};
+struct XGlibSource : public GSource
+{
+	::Display *xDisplay{};
+	XApplication *appPtr{};
+};
 
 static GSourceFuncs x11SourceFuncs
 {
-	[](GSource *, gint *timeout)
+	.prepare
 	{
-		*timeout = -1;
-		return (gboolean)XPending(xDisplay);
+		[](GSource *src, gint *timeout)
+		{
+			*timeout = -1;
+			auto xDisplay = static_cast<XGlibSource*>(src)->xDisplay;
+			return (gboolean)XPending(xDisplay);
+		}
 	},
-	[](GSource *)
+	.check
 	{
-		return (gboolean)XPending(xDisplay);
+		[](GSource *src)
+		{
+			auto xDisplay = static_cast<XGlibSource*>(src)->xDisplay;
+			return (gboolean)XPending(xDisplay);
+		}
 	},
-	[](GSource *, GSourceFunc, gpointer)
+	.dispatch
 	{
-		//logMsg("events for X fd");
-		runX11Events(xDisplay);
-		return (gboolean)TRUE;
+		[](GSource *src, GSourceFunc, gpointer)
+		{
+			//logMsg("events for X fd");
+			auto &xGlibSrc = *static_cast<XGlibSource*>(src);
+			xGlibSrc.appPtr->runX11Events(xGlibSrc.xDisplay);
+			return (gboolean)TRUE;
+		}
 	},
-	nullptr
+	.finalize{},
+	.closure_callback{},
+	.closure_marshal{},
 };
+
+XApplication::XApplication(ApplicationInitParams initParams):
+	LinuxApplication{initParams},
+	supportedFrameTimer{testFrameTimers()}
+{
+	xEventSrc = makeXDisplayConnection(initParams.eventLoop);
+}
+
+XApplication::~XApplication()
+{
+	deinitWindows();
+	deinitInputSystem();
+	logMsg("closing X display");
+	XCloseDisplay(dpy);
+}
+
+void XApplicationContext::setApplicationPtr(Application *appPtr_)
+{
+	appPtr = appPtr_;
+}
+
+Application &XApplicationContext::application() const
+{
+	return *static_cast<Application*>(appPtr);
+}
 
 // TODO: move into generic header after testing
 static void fileURLToPath(char *url)
@@ -93,39 +133,20 @@ static void fileURLToPath(char *url)
 	url[destPos] = '\0';
 }
 
-static void ewmhFullscreen(Display *dpy, ::Window win, int action)
+Window *XApplication::windowForXWindow(::Window xWin) const
 {
-	assert(action == _NET_WM_STATE_REMOVE || action == _NET_WM_STATE_ADD || action == _NET_WM_STATE_TOGGLE);
-
-	XEvent xev{};
-	xev.xclient.type = ClientMessage;
-	xev.xclient.send_event = True;
-	xev.xclient.message_type = XInternAtom(dpy, "_NET_WM_STATE", False);
-	xev.xclient.window = win;
-	xev.xclient.format = 32;
-	xev.xclient.data.l[0] = action;
-	xev.xclient.data.l[1] = XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", False);
-
-	// TODO: test if DefaultRootWindow(dpy) works on other screens
-	XWindowAttributes attr;
-	XGetWindowAttributes(dpy, win, &attr);
-	if(!XSendEvent(dpy, attr.root, False,
-		SubstructureRedirectMask | SubstructureNotifyMask, &xev))
+	for(auto &w : windows())
 	{
-		logWarn("couldn't send root window NET_WM_STATE message");
+		if(w->nativeObject() == xWin)
+			return w.get();
 	}
+	return nullptr;
 }
 
-void toggleFullScreen(Display *dpy, ::Window xWin)
-{
-	logMsg("toggle fullscreen");
-	ewmhFullscreen(dpy, xWin, _NET_WM_STATE_TOGGLE);
-}
-
-static int eventHandler(Display *dpy, XEvent &event)
+bool XApplication::eventHandler(XEvent event)
 {
 	//logMsg("got event type %s (%d)", xEventTypeToString(event.type), event.type);
-	
+
 	switch(event.type)
 	{
 		bcase Expose:
@@ -160,10 +181,10 @@ static int eventHandler(Display *dpy, XEvent &event)
 					logMsg("unknown WM_PROTOCOLS message");
 				}
 			}
-			else if(Config::Base::XDND && dndInit)
+			else if(Config::Base::XDND && xdndIsInit())
 			{
 				auto [draggerXWin, dragAction] = win.xdndData();
-				handleXDNDEvent(dpy, event.xclient, win.nativeObject(), draggerXWin, dragAction);
+				handleXDNDEvent(dpy, xdndAtom, event.xclient, win.nativeObject(), draggerXWin, dragAction);
 			}
 			XFree(clientMsgName);
 		}
@@ -186,7 +207,7 @@ static int eventHandler(Display *dpy, XEvent &event)
 				logMsg("property read %lu items, in %d format, %lu bytes left", numItems, format, bytesAfter);
 				logMsg("property is %s", prop);
 				auto [draggerXWin, dragAction] = win.xdndData();
-				sendDNDFinished(dpy, win.nativeObject(), draggerXWin, dragAction);
+				sendDNDFinished(win.nativeObject(), draggerXWin, dragAction);
 				auto filename = (char*)prop;
 				fileURLToPath(filename);
 				win.dispatchDragDrop(filename);
@@ -203,7 +224,7 @@ static int eventHandler(Display *dpy, XEvent &event)
 		}
 		bcase GenericEvent:
 		{
-			Input::handleXI2GenericEvent(dpy, event);
+			handleXI2GenericEvent(event);
 		}
 		bdefault:
 		{
@@ -212,73 +233,74 @@ static int eventHandler(Display *dpy, XEvent &event)
 		break;
 	}
 
-	return 1;
+	return true;
 }
 
-void runX11Events(Display *dpy)
+void XApplication::runX11Events(_XDisplay *dpy)
 {
 	while(XPending(dpy))
 	{
 		XEvent event;
 		XNextEvent(dpy, &event);
-		eventHandler(dpy, event);
+		eventHandler(event);
 	}
 }
 
-void initXScreens(Display *dpy)
+void XApplication::runX11Events()
+{
+	runX11Events(dpy);
+}
+
+::Display *XApplication::xDisplay() const
+{
+	return dpy;
+}
+
+NativeDisplayConnection ApplicationContext::nativeDisplayConnection() const
+{
+	return (NativeDisplayConnection)application().xDisplay();
+}
+
+void XApplication::setWindowCursor(::Window xWin, bool on)
+{
+	auto cursor = on ? normalCursor : blankCursor;
+	XDefineCursor(dpy, xWin, cursor);
+}
+
+void initXScreens(ApplicationContext ctx, Display *dpy)
 {
 	auto defaultScreenIdx = DefaultScreen(dpy);
-	Screen::addScreen(std::make_unique<Screen>(ScreenOfDisplay(dpy, defaultScreenIdx)));
+	ctx.application().addScreen(ctx, std::make_unique<Screen>(ctx, Screen::InitParams{ScreenOfDisplay(dpy, defaultScreenIdx)}), false);
 	if constexpr(Config::BASE_MULTI_SCREEN)
 	{
 		iterateTimes(ScreenCount(dpy), i)
 		{
 			if((int)i == defaultScreenIdx)
 				continue;
-			Screen::addScreen(std::make_unique<Screen>(ScreenOfDisplay(dpy, i)));
+			ctx.application().addScreen(ctx, std::make_unique<Screen>(ScreenOfDisplay(dpy, i)), false);
 		}
 	}
 }
 
-Display *initX11(EventLoop loop)
+FDEventSource XApplication::makeXDisplayConnection(EventLoop loop)
 {
 	XInitThreads();
-	auto dpy = XOpenDisplay(0);
-	if(!dpy)
+	auto xDisplay = XOpenDisplay(0);
+	if(!xDisplay)
 	{
 		logErr("couldn't open display");
 		return {};
 	}
-	xDisplay = dpy;
-	initXScreens(dpy);
-	initFrameTimer(loop, Base::mainScreen());
-	Input::init(dpy);
-	Base::addOnExit(
-		[dpy](bool backgrounded)
-		{
-			if(!backgrounded)
-			{
-				Base::deinitWindows();
-				Input::deinit(dpy);
-				logMsg("closing X display");
-				XCloseDisplay(dpy);
-			}
-			return true;
-		}, 10000);
-	return dpy;
-}
-
-FDEventSource makeAttachedX11EventSource(Display *dpy, EventLoop loop)
-{
-	FDEventSource x11Src{"XServer", ConnectionNumber(dpy)};
-	x11Src.attach(loop, nullptr, &x11SourceFuncs);
+	dpy = xDisplay;
+	ApplicationContext appCtx{*this};
+	initXScreens(appCtx, xDisplay);
+	initInputSystem();
+	FDEventSource x11Src{"XServer", ConnectionNumber(xDisplay)};
+	auto source = (XGlibSource*)g_source_new(&x11SourceFuncs, sizeof(XGlibSource));
+	source->xDisplay = xDisplay;
+	source->appPtr = this;
+	x11Src.attach(loop, source);
 	return x11Src;
 }
-
-void setSysUIStyle(uint32_t flags) {}
-
-bool hasTranslucentSysUI() { return false; }
-
-bool hasHardwareNavButtons() { return false; }
 
 }

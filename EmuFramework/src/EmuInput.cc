@@ -13,32 +13,27 @@
 	You should have received a copy of the GNU General Public License
 	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <imagine/base/Base.hh>
-#include <imagine/util/algorithm.h>
-#include <imagine/util/math/int.hh>
-#include <imagine/data-type/image/sys.hh>
-#include <imagine/gfx/Renderer.hh>
 #include <emuframework/EmuSystem.hh>
-#include "EmuOptions.hh"
 #include <emuframework/EmuApp.hh>
 #include <emuframework/InputManagerView.hh>
-#include "private.hh"
 #include "privateInput.hh"
+#include "WindowData.hh"
+#include "EmuOptions.hh"
+#include <imagine/base/ApplicationContext.hh>
+#include <imagine/util/algorithm.h>
+#include <imagine/util/math/int.hh>
+#include <imagine/gfx/Renderer.hh>
 #include <cstdlib>
 
 struct RelPtr  // for Android trackball
 {
 	int x = 0, y = 0;
-	uint xAction = 0, yAction = 0;
+	unsigned xAction = 0, yAction = 0;
 };
 static RelPtr relPtr{};
 
-TurboInput turboActions{};
-std::vector<InputDeviceConfig> inputDevConf{};
 std::list<InputDeviceSavedConfig> savedInputDevList{};
 std::list<KeyConfig> customKeyConfig{};
-KeyMapping keyMapping{};
-uint pointerInputPlayer = 0;
 
 #ifdef CONFIG_EMUFRAMEWORK_VCONTROLS
 
@@ -54,8 +49,10 @@ static int vControllerPixelSize(const SysVController &vController, const Base::W
 }
 #endif
 
-void initVControls(VController &vController, Gfx::Renderer &r)
+void EmuApp::initVControls()
 {
+	auto &r = renderer;
+	auto &app = vController.app();
 	auto &winData = vController.windowData();
 	auto &win = vController.window();
 	#ifdef CONFIG_VCONTROLS_GAMEPAD
@@ -63,31 +60,32 @@ void initVControls(VController &vController, Gfx::Renderer &r)
 	gp.dPad().setDeadzone(r, vController.xMMSizeToPixel(win, int(optionTouchDpadDeadzone) / 100.), vController.windowData());
 	gp.dPad().setDiagonalSensitivity(r, optionTouchDpadDiagonalSensitivity / 1000., vController.windowData());
 	vController.setBoundingAreaVisible(optionTouchCtrlBoundingBoxes);
-	vController.init((int)optionTouchCtrlAlpha / 255.0, vControllerPixelSize(vController, win), View::defaultFace.nominalHeight()*1.75, winData.projection.plane());
+	vController.init((int)optionTouchCtrlAlpha / 255.0, vControllerPixelSize(vController, win), vController.face().nominalHeight()*1.75, winData.projection.plane());
 	#else
-	vController.init((int)optionTouchCtrlAlpha / 255.0, IG::makeEvenRoundedUp(vController.xMMSizeToPixel(win, 8.5)), View::defaultFace.nominalHeight()*1.75, winData.projectionPlane);
+	vController.init((int)optionTouchCtrlAlpha / 255.0, IG::makeEvenRoundedUp(vController.xMMSizeToPixel(win, 8.5)), vController.face().nominalHeight()*1.75, winData.projection.plane());
 	#endif
 
 	if(!vController.layoutPositionChanged()) // setup default positions if not provided in config file
 		resetVControllerPositions(vController);
-	vController.updateMapping(0);
-	EmuControls::updateVControlImg(vController);
-	vController.setMenuImage(getAsset(r, ASSET_MENU));
-	vController.setFastForwardImage(getAsset(r, ASSET_FAST_FORWARD));
+	vController.setInputPlayer(0);
+	app.updateVControlImg(vController);
+	vController.setMenuImage(app.asset(EmuApp::AssetID::MENU));
+	vController.setFastForwardImage(app.asset(EmuApp::AssetID::FAST_FORWARD));
 }
 
 void resetVControllerPositions(VController &vController)
 {
+	auto app = vController.appContext();
 	auto &win = vController.window();
 	logMsg("resetting on-screen controls to default positions & states");
-	uint initFastForwardState = (Config::envIsIOS || (Config::envIsAndroid  && !Base::hasHardwareNavButtons()))
+	unsigned initFastForwardState = (Config::envIsIOS || (Config::envIsAndroid  && !app.hasHardwareNavButtons()))
 		? VControllerLayoutPosition::SHOWN : VControllerLayoutPosition::OFF;
-	uint initMenuState = (Config::envIsAndroid && Base::hasHardwareNavButtons())
+	unsigned initMenuState = (Config::envIsAndroid && app.hasHardwareNavButtons())
 		? VControllerLayoutPosition::HIDDEN : VControllerLayoutPosition::SHOWN;
 	#ifdef CONFIG_VCONTROLS_GAMEPAD
-	uint initGamepadState = (Config::envIsAndroid || Config::envIsIOS || (int)optionTouchCtrl == 1) ? VControllerLayoutPosition::SHOWN : VControllerLayoutPosition::OFF;
+	unsigned initGamepadState = (Config::envIsAndroid || Config::envIsIOS || (int)optionTouchCtrl == 1) ? VControllerLayoutPosition::SHOWN : VControllerLayoutPosition::OFF;
 	#else
-	uint initGamepadState = VControllerLayoutPosition::OFF;
+	unsigned initGamepadState = VControllerLayoutPosition::OFF;
 	#endif
 	bool isLandscape = true;
 	for(auto &e : vController.layoutPosition())
@@ -128,7 +126,6 @@ void resetAllVControllerOptions(VController &vController, EmuViewController &emu
 {
 	#ifdef CONFIG_VCONTROLS_GAMEPAD
 	optionTouchCtrl.reset();
-	pointerInputPlayer = 0;
 	optionTouchCtrlSize.reset();
 	optionTouchDpadDeadzone.reset();
 	optionTouchDpadDiagonalSensitivity.reset();
@@ -138,26 +135,24 @@ void resetAllVControllerOptions(VController &vController, EmuViewController &emu
 	optionTouchCtrlTriggerBtnPos.reset();
 	optionTouchCtrlBoundingBoxes.reset();
 	optionVibrateOnPush.reset();
-		#ifdef CONFIG_BASE_ANDROID
-		optionTouchCtrlScaledCoordinates.reset();
-		#endif
+	vController.resetUsesScaledCoordinates();
 	optionTouchCtrlShowOnTouch.reset();
 	#endif
 	resetVControllerOptions(vController);
 	optionTouchCtrlAlpha.reset();
 	emuViewController.updateAutoOnScreenControlVisible();
-	vController.updateMapping(pointerInputPlayer);
+	vController.setInputPlayer(0);
 }
 
 VControllerLayoutPosition vControllerPixelToLayoutPos(IG::Point2D<int> pos, IG::Point2D<int> size, IG::WindowRect viewBounds)
 {
-	IG::WindowRect bound { pos.x - size.x/2, pos.y - size.y/2, pos.x + size.x/2, pos.y + size.y/2 };
+	IG::WindowRect bound {pos - size/2, pos + size/2};
 
 	const auto &rect = viewBounds;
-	IG::WindowRect ltQuadrantRect{rect.x, rect.y, rect.xCenter(), rect.yCenter()};
-	IG::WindowRect rtQuadrantRect{rect.xCenter(), rect.y, rect.x2, rect.yCenter()};
-	IG::WindowRect lbQuadrantRect{rect.x, rect.yCenter(), rect.xCenter(), rect.y2};
-	IG::WindowRect rbQuadrantRect{rect.xCenter(), rect.yCenter(), rect.x2, rect.y2};
+	IG::WindowRect ltQuadrantRect{{rect.x, rect.y}, rect.center()};
+	IG::WindowRect rtQuadrantRect{{rect.xCenter(), rect.y}, {rect.x2, rect.yCenter()}};
+	IG::WindowRect lbQuadrantRect{{rect.x, rect.yCenter()}, {rect.xCenter(), rect.y2}};
+	IG::WindowRect rbQuadrantRect{rect.center(), {rect.x2, rect.y2}};
 	bool ltQuadrant = bound.overlaps(ltQuadrantRect);
 	bool rtQuadrant = bound.overlaps(rtQuadrantRect);
 	bool lbQuadrant = bound.overlaps(lbQuadrantRect);
@@ -189,18 +184,18 @@ IG::Point2D<int> vControllerLayoutToPixelPos(VControllerLayoutPosition lPos, Gfx
 
 #else
 
-void initVControls(Gfx::Renderer &r) {}
+void EmuApp::initVControls() {}
 
 #endif // CONFIG_EMUFRAMEWORK_VCONTROLS
 
-void processRelPtr(Input::Event e)
+static void processRelPtr(EmuApp &app, Input::Event e)
 {
 	using namespace IG;
 	if(relPtr.x != 0 && sign(relPtr.x) != sign(e.pos().x))
 	{
 		//logMsg("reversed trackball X direction");
 		relPtr.x = e.pos().x;
-		EmuSystem::handleInputAction(Input::RELEASED, relPtr.xAction);
+		EmuSystem::handleInputAction(&app, Input::Action::RELEASED, relPtr.xAction);
 	}
 	else
 		relPtr.x += e.pos().x;
@@ -208,14 +203,14 @@ void processRelPtr(Input::Event e)
 	if(e.pos().x)
 	{
 		relPtr.xAction = EmuSystem::translateInputAction(e.pos().x > 0 ? EmuControls::systemKeyMapStart+1 : EmuControls::systemKeyMapStart+3);
-		EmuSystem::handleInputAction(Input::PUSHED, relPtr.xAction);
+		EmuSystem::handleInputAction(&app, Input::Action::PUSHED, relPtr.xAction);
 	}
 
 	if(relPtr.y != 0 && sign(relPtr.y) != sign(e.pos().y))
 	{
 		//logMsg("reversed trackball Y direction");
 		relPtr.y = e.pos().y;
-		EmuSystem::handleInputAction(Input::RELEASED, relPtr.yAction);
+		EmuSystem::handleInputAction(&app, Input::Action::RELEASED, relPtr.yAction);
 	}
 	else
 		relPtr.y += e.pos().y;
@@ -223,22 +218,15 @@ void processRelPtr(Input::Event e)
 	if(e.pos().y)
 	{
 		relPtr.yAction = EmuSystem::translateInputAction(e.pos().y > 0 ? EmuControls::systemKeyMapStart+2 : EmuControls::systemKeyMapStart);
-		EmuSystem::handleInputAction(Input::PUSHED, relPtr.yAction);
+		EmuSystem::handleInputAction(&app, Input::Action::PUSHED, relPtr.yAction);
 	}
 
 	//logMsg("trackball event %d,%d, rel ptr %d,%d", e.x, e.y, relPtr.x, relPtr.y);
 }
 
-void commonInitInput(EmuViewController &emuViewController)
+void TurboInput::update(EmuApp *app)
 {
-	relPtr = {};
-	turboActions = {};
-	emuViewController.setFastForwardActive(false);
-}
-
-void TurboInput::update()
-{
-	static const uint turboFrames = 4;
+	static const unsigned turboFrames = 4;
 
 	for(auto e : activeAction)
 	{
@@ -247,12 +235,12 @@ void TurboInput::update()
 			if(clock == 0)
 			{
 				//logMsg("turbo push for player %d, action %d", e.player, e.action);
-				EmuSystem::handleInputAction(Input::PUSHED, e.action);
+				EmuSystem::handleInputAction(app, Input::Action::PUSHED, e.action);
 			}
 			else if(clock == turboFrames/2)
 			{
 				//logMsg("turbo release for player %d, action %d", e.player, e.action);
-				EmuSystem::handleInputAction(Input::RELEASED, e.action);
+				EmuSystem::handleInputAction(app, Input::Action::RELEASED, e.action);
 			}
 		}
 	}
@@ -284,25 +272,11 @@ void commonUpdateInput()
 #endif
 }
 
-bool isMenuDismissKey(Input::Event e, EmuViewController &emuViewController)
-{
-	using namespace Input;
-	Key dismissKey = Keycode::MENU;
-	Key dismissKey2 = Keycode::GAME_Y;
-	if(Config::MACHINE_IS_PANDORA && e.device()->subtype() == Device::SUBTYPE_PANDORA_HANDHELD)
-	{
-		if(emuViewController.hasModalView()) // make sure not performing text input
-			return false;
-		dismissKey = Keycode::SPACE;
-	}
-	return e.key() == dismissKey || e.key() == dismissKey2;
-}
-
-void updateInputDevices()
+void EmuApp::updateInputDevices(Base::ApplicationContext ctx)
 {
 	int i = 0;
 	inputDevConf.clear();
-	for(auto &e : Input::deviceList())
+	for(auto &e : ctx.inputDevices())
 	{
 		logMsg("input device %d: name: %s, id: %d, map: %d", i, e->name(), e->enumId(), (int)e->map());
 		inputDevConf.emplace_back(e);
@@ -316,8 +290,17 @@ void updateInputDevices()
 		}
 		i++;
 	}
-	onUpdateInputDevices.callCopySafe();
-	keyMapping.buildAll();
+	onUpdateInputDevices_.callCopySafe();
+	keyMapping.buildAll(inputDevConf, ctx.inputDevices());
+}
+
+void EmuApp::setOnUpdateInputDevices(DelegateFunc<void ()> del)
+{
+	if(del)
+	{
+		assert(!onUpdateInputDevices_);
+	}
+	onUpdateInputDevices_ = del;
 }
 
 // KeyConfig
@@ -330,7 +313,7 @@ const KeyConfig &KeyConfig::defaultConfigForDevice(const Input::Device &dev)
 		case Input::Map::SYSTEM:
 		{
 			#if defined CONFIG_BASE_ANDROID || defined CONFIG_BASE_X11
-			uint confs = 0;
+			unsigned confs = 0;
 			auto conf = defaultConfigsForDevice(dev, confs);
 			iterateTimes(confs, i)
 			{
@@ -346,7 +329,7 @@ const KeyConfig &KeyConfig::defaultConfigForDevice(const Input::Device &dev)
 	}
 }
 
-const KeyConfig *KeyConfig::defaultConfigsForInputMap(Input::Map map, uint &size)
+const KeyConfig *KeyConfig::defaultConfigsForInputMap(Input::Map map, unsigned &size)
 {
 	switch(map)
 	{
@@ -386,7 +369,7 @@ const KeyConfig *KeyConfig::defaultConfigsForInputMap(Input::Map map, uint &size
 	}
 }
 
-const KeyConfig *KeyConfig::defaultConfigsForDevice(const Input::Device &dev, uint &size)
+const KeyConfig *KeyConfig::defaultConfigsForDevice(const Input::Device &dev, unsigned &size)
 {
 	auto conf = defaultConfigsForInputMap(dev.map(), size);
 	if(!conf)
@@ -399,7 +382,7 @@ const KeyConfig *KeyConfig::defaultConfigsForDevice(const Input::Device &dev, ui
 
 const KeyConfig *KeyConfig::defaultConfigsForDevice(const Input::Device &dev)
 {
-	uint size;
+	unsigned size;
 	return defaultConfigsForDevice(dev, size);
 }
 
@@ -462,17 +445,17 @@ bool InputDeviceConfig::iCadeMode()
 }
 #endif
 
-uint InputDeviceConfig::joystickAxisAsDpadBits()
+unsigned InputDeviceConfig::joystickAxisAsDpadBits()
 {
 	return dev->joystickAxisAsDpadBits();
 }
 
-void InputDeviceConfig::setJoystickAxisAsDpadBits(uint axisMask)
+void InputDeviceConfig::setJoystickAxisAsDpadBits(unsigned axisMask)
 {
 	dev->setJoystickAxisAsDpadBits(axisMask);
 }
 
-const KeyConfig &InputDeviceConfig::keyConf()
+const KeyConfig &InputDeviceConfig::keyConf() const
 {
 	if(savedConf && savedConf->keyConf)
 	{
@@ -512,7 +495,7 @@ KeyConfig *InputDeviceConfig::mutableKeyConf()
 	return nullptr;
 }
 
-KeyConfig *InputDeviceConfig::makeMutableKeyConf()
+KeyConfig *InputDeviceConfig::makeMutableKeyConf(EmuApp &app)
 {
 	auto conf = mutableKeyConf();
 	if(!conf)
@@ -521,7 +504,7 @@ KeyConfig *InputDeviceConfig::makeMutableKeyConf()
 		char name[96];
 		uniqueCustomConfigName(name);
 		conf = setKeyConfCopiedFromExisting(name);
-		EmuApp::printfMessage(3, false, "Automatically created profile: %s", conf->name);
+		app.printfMessage(3, false, "Automatically created profile: %s", conf->name);
 	}
 	return conf;
 }
@@ -569,9 +552,9 @@ void InputDeviceConfig::setSavedConf(InputDeviceSavedConfig *savedConf)
 	}
 }
 
-bool InputDeviceConfig::setKey(Input::Key mapKey, const KeyCategory &cat, int keyIdx)
+bool InputDeviceConfig::setKey(EmuApp &app, Input::Key mapKey, const KeyCategory &cat, int keyIdx)
 {
-	auto conf = makeMutableKeyConf();
+	auto conf = makeMutableKeyConf(app);
 	if(!conf)
 		return false;
 	auto &keyEntry = conf->key(cat)[keyIdx];
@@ -583,21 +566,21 @@ bool InputDeviceConfig::setKey(Input::Key mapKey, const KeyCategory &cat, int ke
 
 // KeyMapping
 
-void KeyMapping::buildAll()
+void KeyMapping::buildAll(const std::vector<InputDeviceConfig> &inputDevConf, const Base::InputDeviceContainer &inputDevices)
 {
 	if(!inputDevConf.size())
 		return;
-	assert(inputDevConf.size() == Input::deviceList().size());
+	assert(inputDevConf.size() == inputDevices.size());
 	inputDevActionTable.resize(0);
-	inputDevActionTablePtr = std::make_unique<ActionGroup*[]>(Input::deviceList().size());
+	inputDevActionTablePtr = std::make_unique<ActionGroup*[]>(inputDevices.size());
 	// calculate & allocate complete map including all devices
 	{
-		uint totalKeys = 0;
-		for(auto &e : Input::deviceList())
+		unsigned totalKeys = 0;
+		for(auto &e : inputDevices)
 		{
 			totalKeys += Input::Event::mapNumKeys(e->map());
 		}
-		if(unlikely(!totalKeys))
+		if(!totalKeys) [[unlikely]]
 		{
 			logMsg("no keys in mapping");
 			inputDevActionTablePtr[0] = nullptr;
@@ -606,9 +589,9 @@ void KeyMapping::buildAll()
 		logMsg("allocating key mapping with %d keys", totalKeys);
 		inputDevActionTable.resize(totalKeys);
 	}
-	uint totalKeys = 0;
+	unsigned totalKeys = 0;
 	int i = 0;
-	for(auto &e : Input::deviceList())
+	for(auto &e : inputDevices)
 	{
 		// set the offset for this device from the full action table
 		inputDevActionTablePtr[i] = &inputDevActionTable[totalKeys];
@@ -654,7 +637,7 @@ KeyMapping::operator bool() const
 namespace EmuControls
 {
 
-void generic2PlayerTranspose(KeyConfig::KeyArray &key, uint player, uint startCategory)
+void generic2PlayerTranspose(KeyConfig::KeyArray &key, unsigned player, unsigned startCategory)
 {
 	if(player == 0)
 	{
@@ -669,7 +652,7 @@ void generic2PlayerTranspose(KeyConfig::KeyArray &key, uint player, uint startCa
 	}
 }
 
-void genericMultiplayerTranspose(KeyConfig::KeyArray &key, uint player, uint startCategory)
+void genericMultiplayerTranspose(KeyConfig::KeyArray &key, unsigned player, unsigned startCategory)
 {
 	iterateTimes(EmuSystem::maxPlayers, i)
 	{
@@ -728,10 +711,10 @@ void setupVControllerVars(VController &vController)
 			gp.setRowShift(-(btnSize + gp.spacing()));
 			gp.setRowShiftPixels(-(btnSizePixels + gp.spacingPixels()));
 	}
-	vController.setBaseBtnSize(vControllerPixelSize(vController, win), View::defaultFace.nominalHeight()*1.75, winData.projection.plane());
+	vController.setBaseBtnSize(vControllerPixelSize(vController, win), vController.face().nominalHeight()*1.75, winData.projection.plane());
 	vController.setBoundingAreaVisible(optionTouchCtrlBoundingBoxes);
 	#else
-	vController.init((int)optionTouchCtrlAlpha / 255.0, IG::makeEvenRoundedUp(vController.xMMSizeToPixel(winData.win, 8.5)), View::defaultFace.nominalHeight()*1.75, winData.projectionPlane);
+	vController.init((int)optionTouchCtrlAlpha / 255.0, IG::makeEvenRoundedUp(vController.xMMSizeToPixel(win, 8.5)), vController.face().nominalHeight()*1.75, winData.projection.plane());
 	#endif
 
 	auto &layoutPos = vController.layoutPosition()[winData.viewport().isPortrait() ? 1 : 0];
@@ -743,72 +726,54 @@ void setupVControllerVars(VController &vController)
 }
 #endif
 
-void updateVControlImg(VController &vController)
+}
+
+void EmuApp::updateVControlImg(VController &vController)
 {
-	auto &r = vController.renderer();
 	#ifdef CONFIG_VCONTROLS_GAMEPAD
 	{
-		static Gfx::PixmapTexture overlayImg;
-		PngFile png;
-		auto filename =	"overlays128.png";
-		if(auto ec = png.loadAsset(filename, appName());
-			ec)
-		{
-			logErr("couldn't load overlay png");
-		}
-		overlayImg = r.makePixmapTexture(png, &r.make(View::imageCommonTextureSampler));
-		vController.setImg(overlayImg);
+		vController.setImg(asset(AssetID::GAMEPAD_OVERLAY));
 	}
 	#endif
 	if(EmuSystem::inputHasKeyboard)
 	{
-		static Gfx::PixmapTexture kbOverlayImg;
-		PngFile png;
-		if(auto ec = png.loadAsset("kbOverlay.png", appName());
-			ec)
-		{
-			logErr("couldn't load kb overlay png");
-		}
-		kbOverlayImg = r.makePixmapTexture(png, &r.make(View::imageCommonTextureSampler));
-		vController.setKeyboardImage(kbOverlayImg);
+		vController.setKeyboardImage(asset(AssetID::KEYBOARD_OVERLAY));
 	}
 }
 
-void setActiveFaceButtons(uint btns)
+void EmuApp::setActiveFaceButtons(unsigned btns)
 {
 	#ifdef CONFIG_VCONTROLS_GAMEPAD
 	auto &vController = defaultVController();
 	vController.gamePad().setActiveFaceButtons(btns);
 	if(!vController.hasWindow())
 		return;
-	setupVControllerVars(vController);
+	EmuControls::setupVControllerVars(vController);
 	vController.place();
-	EmuSystem::clearInputBuffers(emuViewController().inputView());
+	EmuSystem::clearInputBuffers(emuViewController->inputView());
 	#endif
 }
 
-void updateKeyboardMapping()
+void EmuApp::updateKeyboardMapping()
 {
 	#ifdef CONFIG_VCONTROLS_GAMEPAD
 	defaultVController().updateKeyboardMapping();
 	#endif
 }
 
-void toggleKeyboard()
+void EmuApp::toggleKeyboard()
 {
 	#ifdef CONFIG_VCONTROLS_GAMEPAD
 	defaultVController().toggleKeyboard();
 	#endif
 }
 
-void updateVControllerMapping()
+void EmuApp::updateVControllerMapping()
 {
-	defaultVController().updateMapping(pointerInputPlayer);
+	defaultVController().updateMapping();
 }
 
-}
-
-void TurboInput::addEvent(uint action)
+void TurboInput::addEvent(unsigned action)
 {
 	Action *slot = IG::find_if(activeAction, [](Action a){ return a == 0; });
 	if(slot != activeAction.end())
@@ -818,7 +783,7 @@ void TurboInput::addEvent(uint action)
 	}
 }
 
-void TurboInput::removeEvent(uint action)
+void TurboInput::removeEvent(unsigned action)
 {
 	for(auto &e : activeAction)
 	{

@@ -15,23 +15,26 @@
 	You should have received a copy of the GNU General Public License
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <type_traits>
-#include <imagine/io/IO.hh>
-
+#include <imagine/config/defs.hh>
 #include <imagine/io/PosixFileIO.hh>
 using FileIO = PosixFileIO;
 
 #ifdef __ANDROID__
 #include <imagine/io/AAssetIO.hh>
-using AssetIO = AAssetIO;
+using AssetIOImpl = AAssetIO;
 #else
-using AssetIO = FileIO;
+using AssetIOImpl = FileIO;
 #endif
+
+class AssetIO final: public AssetIOImpl
+{
+public:
+	using AssetIOImpl::AssetIOImpl;
+};
 
 namespace FileUtils
 {
 
-AssetIO openAppAsset(const char *name, IO::AccessHint access, const char *appName);
 ssize_t writeToPath(const char *path, void *data, size_t size, std::error_code *ecOut = nullptr);
 ssize_t writeToPath(const char *path, IO &io, std::error_code *ecOut = nullptr);
 ssize_t readFromPath(const char *path, void *data, size_t size);

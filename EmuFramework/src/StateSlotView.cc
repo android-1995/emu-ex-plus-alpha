@@ -14,8 +14,9 @@
 	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <emuframework/StateSlotView.hh>
-#include <imagine/logger/logger.h>
+#include <emuframework/EmuSystem.hh>
 #include "private.hh"
+#include <imagine/logger/logger.h>
 
 StateSlotView::StateSlotView(ViewAttachParams attach):
 	TableView
@@ -26,7 +27,7 @@ StateSlotView::StateSlotView(ViewAttachParams attach):
 		{
 			return stateSlots;
 		},
-		[this](const TableView &, uint idx) -> MenuItem&
+		[this](const TableView &, unsigned idx) -> MenuItem&
 		{
 			return stateSlot[idx];
 		}
@@ -50,12 +51,12 @@ StateSlotView::StateSlotView(ViewAttachParams attach):
 			}
 			else
 				string_printf(str, "%s", stateNameStr(slot));
-			stateSlot[idx] = {str.data(), nullptr};
+			stateSlot[idx] = {str.data(), &defaultFace(), nullptr};
 			stateSlot[idx].setActive(fileExists);
 		}
 		else
 		{
-			stateSlot[idx] = {string_makePrintf<40>("%s", stateNameStr(slot)).data(), nullptr};
+			stateSlot[idx] = {string_makePrintf<40>("%s", stateNameStr(slot)).data(), &defaultFace(), nullptr};
 			stateSlot[idx].setActive(false);
 		}
 

@@ -24,16 +24,16 @@ class TestTableEntry : public DualTextMenuItem
 public:
 	bool redText{};
 
-	TestTableEntry(SelectDelegate selectDel);
-	void draw(Gfx::RendererCommands &cmds, Gfx::GC xPos, Gfx::GC yPos, Gfx::GC xSize, Gfx::GC ySize,
-		_2DOrigin align, const Gfx::ProjectionPlane &projP, Gfx::Color color) const final;
+	TestTableEntry(Gfx::GlyphTextureSet *face, SelectDelegate);
+	void draw(Gfx::RendererCommands &, Gfx::GC xPos, Gfx::GC yPos, Gfx::GC xSize, Gfx::GC ySize,
+		Gfx::GC xIndent, _2DOrigin align, const Gfx::ProjectionPlane &, Gfx::Color) const final;
 };
 
 class TestPicker : public TableView
 {
 public:
 	TestPicker(ViewAttachParams attach);
-	void setTests(const TestDesc *testParams, uint tests);
+	void setTests(const TestDesc *testParams, unsigned tests);
 
 private:
 	std::vector<TestTableEntry> testEntry{};

@@ -20,6 +20,7 @@
 #include <imagine/io/FileIO.hh>
 #include <imagine/io/BufferMapIO.hh>
 #include <imagine/fs/ArchiveFS.hh>
+#include <imagine/base/ApplicationContext.hh>
 
 BundledGamesView::BundledGamesView(ViewAttachParams attach):
 	TableView
@@ -30,31 +31,31 @@ BundledGamesView::BundledGamesView(ViewAttachParams attach):
 		{
 			return 1;
 		},
-		[this](const TableView &, uint idx) -> MenuItem&
+		[this](const TableView &, unsigned idx) -> MenuItem&
 		{
 			return game[0];
 		}
 	}
 {
 	auto &info = EmuSystem::bundledGameInfo(0);
-	game[0] = {info.displayName,
+	game[0] = {info.displayName, &defaultFace(),
 		[this, &info](Input::Event e)
 		{
-			auto file = EmuApp::openAppAssetIO(info.assetName, IO::AccessHint::ALL);
+			auto file = app().openAppAssetIO(appContext(), info.assetName, IO::AccessHint::ALL);
 			if(!file)
 			{
 				logErr("error opening bundled game asset: %s", info.assetName);
 				return;
 			}
-			EmuApp::createSystemWithMedia(file.makeGeneric(), "", info.assetName, e, {}, attachParams(),
-				[](Input::Event e)
+			app().createSystemWithMedia(file.makeGeneric(), "", info.assetName, e, {}, attachParams(),
+				[this](Input::Event e)
 				{
-					EmuApp::launchSystemWithResumePrompt(e, false);
+					app().launchSystemWithResumePrompt(e, false);
 				});
 		}};
 }
 
-[[gnu::weak]] const BundledGameInfo &EmuSystem::bundledGameInfo(uint idx)
+[[gnu::weak]] const BundledGameInfo &EmuSystem::bundledGameInfo(unsigned idx)
 {
 	static const BundledGameInfo info[]
 	{

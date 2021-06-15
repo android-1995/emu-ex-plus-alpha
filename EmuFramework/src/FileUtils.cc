@@ -14,12 +14,10 @@
 	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <emuframework/FileUtils.hh>
-#include <imagine/base/Base.hh>
+#include <imagine/base/ApplicationContext.hh>
 #include <imagine/logger/logger.h>
-#include "private.hh"
 #if defined CONFIG_BASE_IOS
 #include <spawn.h>
-#include <imagine/base/platformExtras.hh>
 #endif
 
 extern "C"
@@ -27,10 +25,10 @@ extern "C"
 	extern char **environ;
 }
 
-void fixFilePermissions(const char *path)
+void fixFilePermissions(Base::ApplicationContext ctx, const char *path)
 {
 	#if defined CONFIG_BASE_IOS
-	if(!Base::isSystemApp())
+	if(!ctx.isSystemApp())
 		return;
 	// try to fix permissions if using jailbreak environment
 	if(FS::access(path, FS::acc::w) == 0)
@@ -40,7 +38,7 @@ void fixFilePermissions(const char *path)
 	else
 		return;
 
-	auto execPath = FS::makePathStringPrintf("%s/fixMobilePermission", EmuApp::assetPath().data());
+	auto execPath = FS::makePathStringPrintf("%s/fixMobilePermission", ctx.assetPath().data());
 	//logMsg("executing %s", execPath);
 	auto fixMobilePermissionStr = FS::makeFileString("fixMobilePermission");
 	auto pathStr = FS::makePathString(path);

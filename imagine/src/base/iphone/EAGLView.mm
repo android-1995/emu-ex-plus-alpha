@@ -18,10 +18,9 @@ static_assert(__has_feature(objc_arc), "This file requires ARC");
 #import "MainApp.hh"
 #import <OpenGLES/EAGLDrawable.h>
 #import <QuartzCore/CAEAGLLayer.h>
-#include <imagine/base/Base.hh>
+#include <imagine/base/ApplicationContext.hh>
 #include <imagine/time/Time.hh>
 #include <imagine/logger/logger.h>
-#include "../common/windowPrivate.hh"
 #include <imagine/input/Input.hh>
 #include <imagine/base/GLContext.hh>
 #include <imagine/util/algorithm.h>
@@ -57,7 +56,7 @@ EAGLViewDeleteRenderbufferDelegate deleteRenderbuffer{};
 
 static void bindGLRenderbuffer(GLuint colorRenderbuffer, GLuint depthRenderbuffer)
 {
-	assert(Base::GLContext::current({}));
+	assert([EAGLContext currentContext]);
 	glBindRenderbuffer(GL_RENDERBUFFER, colorRenderbuffer);
 	runGLChecked([&]()
 	{
@@ -163,11 +162,11 @@ static void bindGLRenderbuffer(GLuint colorRenderbuffer, GLuint depthRenderbuffe
 - (void)layoutSubviews
 {
 	logMsg("in layoutSubviews");
+	[self deleteDrawable];
 	assumeExpr(Base::makeRenderbuffer);
 	auto size = Base::makeRenderbuffer((__bridge void*)self.layer, _colorRenderbuffer, _depthRenderbuffer);
-	auto &win = *Base::windowForUIWindow(self.window);
-	win.resetSurface();
-	updateWindowSizeAndContentRect(win, size.x, size.y, Base::sharedApp);
+	auto &win = *Base::windowForUIWindow({[UIApplication sharedApplication]}, self.window);
+	win.updateWindowSizeAndContentRect(size.x, size.y);
 	win.postDraw();
 	//logMsg("exiting layoutSubviews");
 }
@@ -176,7 +175,7 @@ static void bindGLRenderbuffer(GLuint colorRenderbuffer, GLuint depthRenderbuffe
 {
 	using namespace Base;
 	using namespace Input;
-	auto &win = *Base::deviceWindow();
+	auto &win = *Base::ApplicationContext{[UIApplication sharedApplication]}.deviceWindow();
 	for(UITouch* touch in touches)
 	{
 		iterateTimes(std::size(m), i) // find a free touch element
@@ -189,8 +188,8 @@ static void bindGLRenderbuffer(GLuint colorRenderbuffer, GLuint depthRenderbuffe
 				pos.x *= win.pointScale;
 				pos.y *= win.pointScale;
 				auto time = IG::FloatSeconds((double)[touch timestamp]);
-				auto transPos = transformInputPos(win, {(int)pos.x, (int)pos.y});
-				win.dispatchInputEvent(Input::Event{i, Map::POINTER, Input::Pointer::LBUTTON, 1, PUSHED, transPos.x, transPos.y, (int)i, Input::Source::TOUCHSCREEN, time, nullptr});
+				auto transPos = win.transformInputPos({(int)pos.x, (int)pos.y});
+				win.dispatchInputEvent(Input::Event{i, Map::POINTER, Input::Pointer::LBUTTON, 1, Action::PUSHED, transPos.x, transPos.y, (int)i, Input::Source::TOUCHSCREEN, time, nullptr});
 				break;
 			}
 		}
@@ -201,7 +200,7 @@ static void bindGLRenderbuffer(GLuint colorRenderbuffer, GLuint depthRenderbuffe
 {
 	using namespace Base;
 	using namespace Input;
-	auto &win = *Base::deviceWindow();
+	auto &win = *Base::ApplicationContext{[UIApplication sharedApplication]}.deviceWindow();
 	for(UITouch* touch in touches)
 	{
 		iterateTimes(std::size(m), i) // find the touch element
@@ -213,8 +212,8 @@ static void bindGLRenderbuffer(GLuint colorRenderbuffer, GLuint depthRenderbuffe
 				pos.x *= win.pointScale;
 				pos.y *= win.pointScale;
 				auto time = IG::FloatSeconds((double)[touch timestamp]);
-				auto transPos = transformInputPos(win, {(int)pos.x, (int)pos.y});
-				win.dispatchInputEvent(Input::Event{i, Map::POINTER, Input::Pointer::LBUTTON, 1, MOVED, transPos.x, transPos.y, (int)i, Input::Source::TOUCHSCREEN, time, nullptr});
+				auto transPos = win.transformInputPos({(int)pos.x, (int)pos.y});
+				win.dispatchInputEvent(Input::Event{i, Map::POINTER, Input::Pointer::LBUTTON, 1, Action::MOVED, transPos.x, transPos.y, (int)i, Input::Source::TOUCHSCREEN, time, nullptr});
 				break;
 			}
 		}
@@ -225,7 +224,7 @@ static void bindGLRenderbuffer(GLuint colorRenderbuffer, GLuint depthRenderbuffe
 {
 	using namespace Base;
 	using namespace Input;
-	auto &win = *Base::deviceWindow();
+	auto &win = *Base::ApplicationContext{[UIApplication sharedApplication]}.deviceWindow();
 	for(UITouch* touch in touches)
 	{
 		iterateTimes(std::size(m), i) // find the touch element
@@ -238,8 +237,8 @@ static void bindGLRenderbuffer(GLuint colorRenderbuffer, GLuint depthRenderbuffe
 				pos.x *= win.pointScale;
 				pos.y *= win.pointScale;
 				auto time = IG::FloatSeconds((double)[touch timestamp]);
-				auto transPos = transformInputPos(win, {(int)pos.x, (int)pos.y});
-				win.dispatchInputEvent(Input::Event{i, Map::POINTER, Input::Pointer::LBUTTON, 0, RELEASED, transPos.x, transPos.y, (int)i, Input::Source::TOUCHSCREEN, time, nullptr});
+				auto transPos = win.transformInputPos({(int)pos.x, (int)pos.y});
+				win.dispatchInputEvent(Input::Event{i, Map::POINTER, Input::Pointer::LBUTTON, 0, Action::RELEASED, transPos.x, transPos.y, (int)i, Input::Source::TOUCHSCREEN, time, nullptr});
 				break;
 			}
 		}

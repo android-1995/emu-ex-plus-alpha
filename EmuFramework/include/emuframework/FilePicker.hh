@@ -15,20 +15,25 @@
 	You should have received a copy of the GNU General Public License
 	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <imagine/gui/FSPicker.hh>
 #include <emuframework/EmuSystem.hh>
+#include <emuframework/EmuAppHelper.hh>
+#include <imagine/gui/FSPicker.hh>
 
-class EmuFilePicker : public FSPicker
+class EmuFilePicker : public FSPicker, public EmuAppHelper<EmuFilePicker>
 {
 public:
-	EmuFilePicker(ViewAttachParams attach, const char *startingPath, bool pickingDir,
-		EmuSystem::NameFilterFunc filter, FS::RootPathInfo rootInfo,
-		Input::Event e, bool singleDir = false, bool includeArchives = true);
-	static std::unique_ptr<EmuFilePicker> makeForBenchmarking(ViewAttachParams attach, Input::Event e, bool singleDir = false);
-	static std::unique_ptr<EmuFilePicker> makeForLoading(ViewAttachParams attach, Input::Event e, bool singleDir = false, EmuSystemCreateParams params = {});
-	static std::unique_ptr<EmuFilePicker> makeForMediaChange(ViewAttachParams attach, Input::Event e, const char *path,
-		EmuSystem::NameFilterFunc filter, FSPicker::OnSelectFileDelegate onSelect);
-	static std::unique_ptr<EmuFilePicker> makeForMediaCreation(ViewAttachParams attach, Input::Event e, bool singleDir = false);
-	bool inputEvent(Input::Event e) final;
+	EmuFilePicker(ViewAttachParams, const char *startingPath, bool pickingDir,
+		EmuSystem::NameFilterFunc, FS::RootPathInfo,
+		Input::Event, bool singleDir = false, bool includeArchives = true);
+	EmuFilePicker(ViewAttachParams, EmuApp &, const char *startingPath, bool pickingDir,
+		EmuSystem::NameFilterFunc, FS::RootPathInfo,
+		Input::Event, bool singleDir = false, bool includeArchives = true);
+	static std::unique_ptr<EmuFilePicker> makeForBenchmarking(ViewAttachParams, Input::Event, bool singleDir = false);
+	static std::unique_ptr<EmuFilePicker> makeForLoading(ViewAttachParams, Input::Event, bool singleDir = false, EmuSystemCreateParams params = {});
+	static std::unique_ptr<EmuFilePicker> makeForMediaChange(ViewAttachParams, Input::Event, const char *path,
+		EmuSystem::NameFilterFunc filter, FSPicker::OnSelectFileDelegate);
+	static std::unique_ptr<EmuFilePicker> makeForMediaCreation(ViewAttachParams, Input::Event, bool singleDir = false);
+	static std::unique_ptr<EmuFilePicker> makeForMediaCreation(ViewAttachParams, bool singleDir = false);
+	bool inputEvent(Input::Event) final;
 	void setIncludeArchives(bool on);
 };

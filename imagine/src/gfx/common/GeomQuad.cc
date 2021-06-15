@@ -15,6 +15,7 @@
 
 #include <imagine/gfx/GeomQuad.hh>
 #include <imagine/gfx/RendererCommands.hh>
+#include <imagine/gfx/ProjectionPlane.hh>
 
 namespace Gfx
 {
@@ -58,14 +59,13 @@ static void setColorAlpha(std::array<Vtx, 4> &v, ColorComp a, uint32_t edges)
 template<class Vtx>
 void QuadGeneric<Vtx>::setPos(IG::WindowRect b, ProjectionPlane proj)
 {
-	auto pos = proj.unProjectRect(b);
-	setPos({pos.x, pos.y, pos.x2, pos.y2});
+	setPos(proj.unProjectRect(b));
 }
 
 template<class Vtx>
 void QuadGeneric<Vtx>::setPosRel(GC x, GC y, GC xSize, GC ySize)
 {
-	setPos({x, y, x+xSize, y+ySize});
+	setPos({{x, y}, {x+xSize, y+ySize}});
 }
 
 

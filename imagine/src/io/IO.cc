@@ -17,7 +17,6 @@
 #include <imagine/io/FileIO.hh>
 #include <imagine/io/api/stdio.hh>
 #include <imagine/fs/FS.hh>
-#include <imagine/base/Base.hh>
 #include <imagine/logger/logger.h>
 #include "IOUtils.hh"
 
@@ -26,7 +25,7 @@ template class IOUtils<GenericIO>;
 
 IO::~IO() {}
 
-const char *IO::mmapConst() { return nullptr; };
+const uint8_t *IO::mmapConst() { return nullptr; };
 
 std::error_code IO::truncate(off_t offset) { return {ENOSYS, std::system_category()}; };
 
@@ -41,6 +40,23 @@ ssize_t IO::readAtPos(void *buff, size_t bytes, off_t offset, std::error_code *e
 	auto bytesRead = read(buff, bytes, ecOut);
 	seekS(savedOffset);
 	return bytesRead;
+}
+
+GenericIO::GenericIO(std::unique_ptr<IO> io): io{std::move(io)} {}
+
+GenericIO::operator IO*()
+{
+	return io.get();
+}
+
+GenericIO::operator IO&()
+{
+	return *io;
+}
+
+IO *GenericIO::release()
+{
+	return io.release();
 }
 
 FILE *GenericIO::moveToFileStream(const char *opentype)
@@ -132,7 +148,7 @@ ssize_t GenericIO::readAtPos(void *buff, size_t bytes, off_t offset, std::error_
 	return io->readAtPos(buff, bytes, offset, ecOut);
 }
 
-const char *GenericIO::mmapConst()
+const uint8_t *GenericIO::mmapConst()
 {
 	return io ? io->mmapConst() : nullptr;
 }
@@ -199,17 +215,6 @@ GenericIO::operator bool() const
 
 namespace FileUtils
 {
-
-AssetIO openAppAsset(const char *name, IO::AccessHint access, const char *appName)
-{
-	AssetIO io;
-	#ifdef __ANDROID__
-	io.open(name, access);
-	#else
-	io.open(FS::makePathStringPrintf("%s/%s", Base::assetPath(appName).data(), name).data(), access);
-	#endif
-	return io;
-}
 
 ssize_t writeToPath(const char *path, void *data, size_t bytes, std::error_code *ecOut)
 {

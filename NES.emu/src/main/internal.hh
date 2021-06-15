@@ -7,7 +7,7 @@ class EmuAudio;
 
 namespace EmuControls
 {
-extern const uint gamepadKeys;
+extern const unsigned gamepadKeys;
 }
 
 extern FS::PathString fdsBiosPath;
@@ -21,7 +21,7 @@ extern Byte1Option optionSoundQuality;
 extern Byte1Option optionCompatibleFrameskip;
 extern FS::PathString defaultPalettePath;
 extern ESI nesInputPortDev[2];
-extern uint autoDetectedRegion;
+extern unsigned autoDetectedRegion;
 extern uint32 zapperData[3];
 extern bool usingZapper;
 
@@ -31,5 +31,5 @@ void setupNESFourScore();
 void connectNESInput(int port, ESI type);
 const char *regionToStr(int region);
 void emulateSound(EmuAudio *audio);
-void setDefaultPalette(const char *palPath);
+void setDefaultPalette(Base::ApplicationContext, const char *palPath);
 void setRegion(int region, int defaultRegion, int detectedRegion);

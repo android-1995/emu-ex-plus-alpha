@@ -18,6 +18,7 @@
 #include <imagine/config/defs.hh>
 #include <imagine/base/BaseWindow.hh>
 #include <imagine/base/iphone/config.h>
+#include <imagine/util/rectangle2.h>
 #import <CoreGraphics/CGBase.h>
 #include <compare>
 
@@ -40,22 +41,24 @@ static constexpr uint32_t screenPointScale = 1;
 class IOSWindow : public BaseWindow
 {
 public:
-	void *uiWin_ = nullptr; // UIWindow in ObjC
-	IG::WindowRect contentRect; // active window content
+	void *uiWin_{}; // UIWindow in ObjC
+	IG::WindowRect contentRect{}; // active window content
 	#ifdef CONFIG_BASE_IOS_RETINA_SCALE
 	CGFloat pointScale{1.};
 	#else
 	static constexpr CGFloat pointScale{1.};
 	#endif
 
-	constexpr IOSWindow() {}
+	using BaseWindow::BaseWindow;
 	~IOSWindow();
 	#ifdef __OBJC__
-	void updateContentRect(int width, int height, uint32_t softOrientation, UIApplication *sharedApp);
-	UIWindow *uiWin() { return (__bridge UIWindow*)uiWin_; }
+	void updateContentRect(int width, int height, uint32_t softOrientation);
+	UIWindow *uiWin() const { return (__bridge UIWindow*)uiWin_; }
+	UIApplication *uiApp() const;
 	#endif
 
-	void resetSurface();
+	void updateWindowSizeAndContentRect(int width, int height);
+	bool isDeviceWindow() const;
 
 	explicit operator bool() const
 	{

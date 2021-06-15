@@ -17,15 +17,18 @@
 
 #include <imagine/config/defs.hh>
 #include <imagine/util/rectangle2.h>
-#include <imagine/input/Input.hh>
 #include <imagine/gfx/defs.hh>
-#include <imagine/gfx/ProjectionPlane.hh>
 #include <imagine/gui/ScrollView.hh>
 #include <iterator>
 
 namespace Base
 {
 class Window;
+}
+
+namespace Input
+{
+class Event;
 }
 
 namespace Gfx
@@ -41,7 +44,6 @@ public:
 	using ItemsDelegate = DelegateFunc<int (const TableView &view)>;
 	using ItemDelegate = DelegateFunc<MenuItem& (const TableView &view, uint32_t idx)>;
 	using SelectElementDelegate = DelegateFunc<void (Input::Event e, uint32_t i, MenuItem &item)>;
-	static Gfx::GC globalXIndent;
 
 	TableView(ViewAttachParams attach, ItemsDelegate items, ItemDelegate item);
 	TableView(NameString name, ViewAttachParams attach, ItemsDelegate items, ItemDelegate item);
@@ -79,9 +81,6 @@ public:
 	IG::WP cellSize() const;
 	void highlightCell(int idx);
 	void setAlign(_2DOrigin align);
-	static float defaultXIndentMM(const Base::Window &win);
-	static void setDefaultXIndent(const Base::Window &win, Gfx::ProjectionPlane projP);
-	static void setXIndentMM(float indent, Gfx::ProjectionPlane projP);
 	static MenuItem& derefMenuItem(MenuItem *item)
 	{
 		return *item;
@@ -110,5 +109,5 @@ protected:
 	int nextSelectableElement(int start, int items);
 	int prevSelectableElement(int start, int items);
 	bool handleTableInput(Input::Event e, bool &movedSelected);
-	virtual void drawElement(Gfx::RendererCommands &cmds, uint32_t i, MenuItem &item, Gfx::GCRect rect) const;
+	virtual void drawElement(Gfx::RendererCommands &cmds, uint32_t i, MenuItem &item, Gfx::GCRect rect, Gfx::GC xIndent) const;
 };

@@ -22,7 +22,6 @@
 #include <imagine/thread/Thread.hh>
 #include <imagine/thread/Semaphore.hh>
 #include <imagine/gui/AlertView.hh>
-#include <imagine/base/Base.hh>
 #include "internal.hh"
 #include <sys/time.h>
 
@@ -73,6 +72,8 @@ FS::PathString firmwareBasePath{};
 FS::PathString sysFilePath[Config::envIsLinux ? 5 : 3]{};
 VicePlugin plugin{};
 ViceSystem currSystem = VICE_SYSTEM_C64;
+Base::ApplicationContext appContext{};
+IG::PixelFormat pixFmt{};
 
 bool EmuSystem::hasPALVideoSystem = true;
 bool EmuSystem::hasResetModes = true;
@@ -136,8 +137,8 @@ static bool sysIsPal()
 		case MACHINE_SYNC_PAL:
 		case MACHINE_SYNC_PALN:
 			return true;
+		default: return false;
 	}
-	return false;
 }
 
 static void setModel(int model)
@@ -409,28 +410,28 @@ static void saveSnapshotTrap(uint16_t, void *data)
 		snapData->hasError = false;
 }
 
-EmuSystem::Error EmuSystem::saveState(const char *path)
+EmuSystem::Error EmuSystem::saveState(EmuApp &app, const char *path)
 {
 	SnapshotTrapData data;
 	data.pathStr = path;
 	plugin.interrupt_maincpu_trigger_trap(saveSnapshotTrap, (void*)&data);
-	skipFrames(nullptr, 1, nullptr); // execute cpu trap
+	app.skipFrames(nullptr, 1, nullptr); // execute cpu trap
 	return data.hasError ? makeFileWriteError() : Error{};
 }
 
-EmuSystem::Error EmuSystem::loadState(const char *path)
+EmuSystem::Error EmuSystem::loadState(EmuApp &app, const char *path)
 {
 	plugin.resources_set_int("WarpMode", 0);
 	SnapshotTrapData data;
 	data.pathStr = path;
-	skipFrames(nullptr, 1, nullptr); // run extra frame in case C64 was just started
+	app.skipFrames(nullptr, 1, nullptr); // run extra frame in case C64 was just started
 	plugin.interrupt_maincpu_trigger_trap(loadSnapshotTrap, (void*)&data);
-	skipFrames(nullptr, 1, nullptr); // execute cpu trap, snapshot load may cause reboot from a C64 model change
+	app.skipFrames(nullptr, 1, nullptr); // execute cpu trap, snapshot load may cause reboot from a C64 model change
 	if(data.hasError)
 		return makeFileReadError();
 	// reload snapshot in case last load caused a reboot
 	plugin.interrupt_maincpu_trigger_trap(loadSnapshotTrap, (void*)&data);
-	skipFrames(nullptr, 1, nullptr); // execute cpu trap
+	app.skipFrames(nullptr, 1, nullptr); // execute cpu trap
 	bool hasError = data.hasError;
 	return hasError ? makeFileReadError() : Error{};
 }
@@ -473,18 +474,18 @@ static const char *mainROMFilename(ViceSystem system)
 	}
 }
 
-static EmuSystem::Error c64FirmwareError()
+static EmuSystem::Error c64FirmwareError(Base::ApplicationContext app)
 {
 	return EmuSystem::makeError("System files missing, place C64, DRIVES, & PRINTER directories from VICE"
 		" in a path below, or set a custom path in options:\n"
 		#if defined CONFIG_ENV_LINUX && !defined CONFIG_MACHINE_PANDORA
-		"%s\n%s\n%s", EmuApp::assetPath().data(), "~/.local/share/C64.emu", "/usr/share/games/vice");
+		"%s\n%s\n%s", EmuApp::assetPath(app).data(), "~/.local/share/C64.emu", "/usr/share/games/vice");
 		#else
-		"%s/C64.emu", Base::sharedStoragePath().data());
+		"%s/C64.emu", app.sharedStoragePath().data());
 		#endif
 }
 
-static bool initC64()
+static bool initC64(EmuApp &app)
 {
 	if(c64IsInit)
 		return true;
@@ -500,7 +501,7 @@ static bool initC64()
   	return false;
 	}
 	c64IsInit = true;
-	updateKeyMappingArray();
+	updateKeyMappingArray(app);
 	return true;
 }
 
@@ -510,7 +511,7 @@ bool EmuApp::willCreateSystem(ViewAttachParams attach, Input::Event e)
 		return true;
 	pushAndShowNewYesNoAlertView(attach, e,
 		"A previous system file load failed, you must restart the app to run any C64 software",
-		"Exit Now", "Cancel", []() { Base::exit(); }, nullptr);
+		"Exit Now", "Cancel", [](View &v) { v.appContext().exit(); }, nullptr);
 	return false;
 }
 
@@ -556,11 +557,11 @@ static FS::FileString vic20ExtraCartName(const char *baseCartName, const char *s
 	return {};
 }
 
-EmuSystem::Error EmuSystem::loadGame(IO &, EmuSystemCreateParams params, OnLoadProgressDelegate)
+EmuSystem::Error EmuSystem::loadGame(Base::ApplicationContext ctx, IO &, EmuSystemCreateParams params, OnLoadProgressDelegate)
 {
-	if(!initC64())
+	if(!initC64(EmuApp::get(ctx)))
 	{
-		return c64FirmwareError();
+		return c64FirmwareError(ctx);
 	}
 	applyInitialOptionResources();
 	bool shouldAutostart = !(params.systemFlags & SYSTEM_FLAG_NO_AUTOSTART) && optionAutostartOnLaunch;
@@ -570,7 +571,7 @@ EmuSystem::Error EmuSystem::loadGame(IO &, EmuSystemCreateParams params, OnLoadP
 		if(string_hasDotExtension(fullGamePath(), "prg"))
 		{
 			// needed to store AutostartPrgDisk.d64
-			makeDefaultBaseSavePath();
+			makeDefaultBaseSavePath(ctx);
 		}
 		if(plugin.autostart_autodetect(fullGamePath(), nullptr, 0, AUTOSTART_MODE_RUN) != 0)
 		{
@@ -642,6 +643,11 @@ void EmuSystem::runFrame(EmuSystemTask *task, EmuVideo *video, EmuAudio *audio)
 	audioPtr = {};
 }
 
+void EmuSystem::renderFramebuffer(EmuVideo &video)
+{
+	video.startFrameWithFormat({}, canvasSrcPix);
+}
+
 void EmuSystem::configAudioRate(IG::FloatSeconds frameTime, uint32_t rate)
 {
 	logMsg("set audio rate %d", rate);
@@ -675,10 +681,11 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 void EmuApp::onMainWindowCreated(ViewAttachParams attach, Input::Event e)
 {
 	sysFilePath[0] = firmwareBasePath;
-	EmuControls::updateKeyboardMapping();
+	plugin.init();
+	updateKeyboardMapping();
 	setSysModel(optionDefaultModel(currSystem));
 	plugin.resources_set_string("AutostartPrgDiskImage",
-		FS::makePathStringPrintf("%s/AutostartPrgDisk.d64", EmuSystem::baseDefaultGameSavePath().data()).data());
+		FS::makePathStringPrintf("%s/AutostartPrgDisk.d64", EmuSystem::baseDefaultGameSavePath(attach.appContext()).data()).data());
 }
 
 void EmuSystem::onPrepareAudio(EmuAudio &audio)
@@ -686,7 +693,16 @@ void EmuSystem::onPrepareAudio(EmuAudio &audio)
 	audio.setStereo(false);
 }
 
-EmuSystem::Error EmuSystem::onInit()
+void EmuSystem::onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat fmt)
+{
+	pixFmt = fmt;
+	if(activeCanvas)
+	{
+		updateCanvasPixelFormat(activeCanvas, fmt);
+	}
+}
+
+EmuSystem::Error EmuSystem::onInit(Base::ApplicationContext ctx)
 {
 	IG::makeDetachedThread(
 		[]()
@@ -695,16 +711,17 @@ EmuSystem::Error EmuSystem::onInit()
 			logMsg("starting maincpu_mainloop()");
 			plugin.maincpu_mainloop();
 		});
+	appContext = ctx; // saved for sysfile_* functions
 
 	#if defined CONFIG_ENV_LINUX && !defined CONFIG_MACHINE_PANDORA
-	sysFilePath[1] = EmuApp::assetPath();
-	sysFilePath[2] = FS::makePathStringPrintf("%s/C64.emu.zip", EmuApp::assetPath().data());
+	sysFilePath[1] = EmuApp::assetPath(ctx);
+	sysFilePath[2] = FS::makePathStringPrintf("%s/C64.emu.zip", EmuApp::assetPath(ctx).data());
 	sysFilePath[3] = {"~/.local/share/C64.emu"};
 	sysFilePath[4] = {"/usr/share/games/vice"};
 	#else
 	{
-		sysFilePath[1] = FS::makePathStringPrintf("%s/C64.emu", Base::sharedStoragePath().data());
-		sysFilePath[2] = FS::makePathStringPrintf("%s/C64.emu.zip", Base::sharedStoragePath().data());
+		sysFilePath[1] = FS::makePathStringPrintf("%s/C64.emu", ctx.sharedStoragePath().data());
+		sysFilePath[2] = FS::makePathStringPrintf("%s/C64.emu.zip", ctx.sharedStoragePath().data());
 	}
 	#endif
 

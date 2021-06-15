@@ -15,17 +15,21 @@
 
 #define LOGTAG "BitmapFactory"
 
-#include <imagine/data-type/image/Android.hh>
-#include <assert.h>
-#include <imagine/logger/logger.h>
-#include <imagine/util/jni.hh>
+#include <imagine/data-type/image/PixmapReader.hh>
+#include <imagine/data-type/image/PixmapWriter.hh>
 #include "../../base/android/android.hh"
+#include <imagine/base/ApplicationContext.hh>
+#include <imagine/base/Application.hh>
+#include <imagine/pixmap/Pixmap.hh>
+#include <imagine/util/jni.hh>
+#include <imagine/logger/logger.h>
 
-using namespace IG;
+namespace IG::Data
+{
 
 static jclass jBitmapFactory{};
-static JavaClassMethod<jobject(jstring)> jDecodeFile{};
-static JavaInstMethod<jobject(jstring)> jDecodeAsset{};
+static JNI::ClassMethod<jobject(jstring)> jDecodeFile{};
+static JNI::InstMethod<jobject(jstring)> jDecodeAsset{};
 
 uint32_t BitmapFactoryImage::width()
 {
@@ -42,19 +46,19 @@ bool BitmapFactoryImage::isGrayscale()
 	return info.format == ANDROID_BITMAP_FORMAT_A_8;
 }
 
-PixelFormat BitmapFactoryImage::pixelFormat() const
+IG::PixelFormat BitmapFactoryImage::pixelFormat() const
 {
 	return Base::makePixelFormatFromAndroidFormat(info.format);
 }
 
-std::error_code BitmapFactoryImage::load(const char *name)
+std::error_code PixmapReader::load(const char *name)
 {
 	freeImageData();
-	auto env = Base::jEnvForThread();
+	auto env = ctx.thisThreadJniEnv();
 	if(!jBitmapFactory)
 	{
 		jBitmapFactory = (jclass)env->NewGlobalRef(env->FindClass("android/graphics/BitmapFactory"));
-		jDecodeFile.setup(env, jBitmapFactory, "decodeFile", "(Ljava/lang/String;)Landroid/graphics/Bitmap;");
+		jDecodeFile = {env, jBitmapFactory, "decodeFile", "(Ljava/lang/String;)Landroid/graphics/Bitmap;"};
 	}
 	auto nameJStr = env->NewStringUTF(name);
 	bitmap = jDecodeFile(env, jBitmapFactory, nameJStr);
@@ -65,22 +69,21 @@ std::error_code BitmapFactoryImage::load(const char *name)
 		return {EINVAL, std::system_category()};
 	}
 	AndroidBitmap_getInfo(env, bitmap, &info);
-	bitmap = env->NewGlobalRef(bitmap);
 	return {};
 }
 
-std::error_code BitmapFactoryImage::loadAsset(const char *name)
+std::error_code PixmapReader::loadAsset(const char *name, const char *)
 {
 	freeImageData();
 	logMsg("loading PNG asset: %s", name);
-	auto env = Base::jEnvForThread();
-	using namespace Base;
-	if(!jDecodeAsset)
+	auto env = ctx.thisThreadJniEnv();
+	auto baseActivity = ctx.baseActivityObject();
+	if(!jDecodeAsset) [[unlikely]]
 	{
-		jDecodeAsset.setup(env, jBaseActivityCls, "bitmapDecodeAsset", "(Ljava/lang/String;)Landroid/graphics/Bitmap;");
+		jDecodeAsset = {env, baseActivity, "bitmapDecodeAsset", "(Ljava/lang/String;)Landroid/graphics/Bitmap;"};
 	}
 	auto nameJStr = env->NewStringUTF(name);
-	bitmap = jDecodeAsset(env, jBaseActivity, nameJStr);
+	bitmap = jDecodeAsset(env, baseActivity, nameJStr);
 	env->DeleteLocalRef(nameJStr);
 	if(!bitmap)
 	{
@@ -89,7 +92,6 @@ std::error_code BitmapFactoryImage::loadAsset(const char *name)
 	}
 	AndroidBitmap_getInfo(env, bitmap, &info);
 	//logMsg("%d %d %d", info.width, info.height, info.stride);
-	bitmap = env->NewGlobalRef(bitmap);
 	return {};
 }
 
@@ -100,8 +102,8 @@ bool BitmapFactoryImage::hasAlphaChannel()
 
 std::errc BitmapFactoryImage::readImage(IG::Pixmap dest)
 {
-	assert(dest.format() == pixelFormat());
-	auto env = Base::jEnvForThread();
+	assumeExpr(dest.format() == pixelFormat());
+	auto env = ctx.thisThreadJniEnv();
 	void *buff;
 	AndroidBitmap_lockPixels(env, bitmap, &buff);
 	IG::Pixmap src{{{(int)info.width, (int)info.height}, pixelFormat()}, buff, {info.stride, IG::Pixmap::BYTE_UNITS}};
@@ -114,53 +116,71 @@ void BitmapFactoryImage::freeImageData()
 {
 	if(bitmap)
 	{
-		auto env = Base::jEnvForThread();
-		Base::recycleBitmap(env, bitmap);
-		env->DeleteGlobalRef(bitmap);
-		bitmap = nullptr;
+		auto env = ctx.thisThreadJniEnv();
+		ctx.application().recycleBitmap(env, bitmap);
+		env->DeleteLocalRef(std::exchange(bitmap, {}));
 	}
 }
 
-BitmapFactoryImage::operator bool() const
+PixmapReader::operator bool() const
 {
 	return (bool)bitmap;
 }
 
-PngFile::PngFile() {}
-
-PngFile::~PngFile()
+BitmapFactoryImage::~BitmapFactoryImage()
 {
-	deinit();
+	freeImageData();
 }
 
-std::errc PngFile::write(IG::Pixmap dest)
+std::errc PixmapReader::write(IG::Pixmap dest)
 {
-	return(png.readImage(dest));
+	return(readImage(dest));
 }
 
-IG::Pixmap PngFile::pixmapView()
+IG::Pixmap PixmapReader::pixmapView()
 {
-	return {{{(int)png.width(), (int)png.height()}, png.pixelFormat()}, {}};
+	return {{{(int)width(), (int)height()}, pixelFormat()}, {}};
 }
 
-std::error_code PngFile::load(const char *name)
+void PixmapReader::reset()
 {
-	deinit();
-	return png.load(name);
+	freeImageData();
 }
 
-std::error_code PngFile::loadAsset(const char *name, const char *appName)
+BitmapWriter::BitmapWriter(Base::ApplicationContext ctx):
+	ctx{ctx}
 {
-	deinit();
-	return png.loadAsset(name);
+	auto env = ctx.mainThreadJniEnv();
+	auto baseActivity = ctx.baseActivityObject();
+	auto baseActivityCls = env->GetObjectClass(baseActivity);
+	jMakeBitmap = {env, baseActivityCls, "makeBitmap", "(III)Landroid/graphics/Bitmap;"};
+	jWritePNG = {env, baseActivityCls, "writePNG", "(Landroid/graphics/Bitmap;Ljava/lang/String;)Z"};
 }
 
-void PngFile::deinit()
+bool PixmapWriter::writeToFile(IG::Pixmap pix, const char *path)
 {
-	png.freeImageData();
+	using namespace Base;
+	auto env = ctx.thisThreadJniEnv();
+	auto baseActivity = ctx.baseActivityObject();
+	auto aFormat = pix.format().id() == PIXEL_RGB565 ? ANDROID_BITMAP_FORMAT_RGB_565 : ANDROID_BITMAP_FORMAT_RGBA_8888;
+	auto bitmap = jMakeBitmap(env, baseActivity, pix.w(), pix.h(), aFormat);
+	if(!bitmap)
+	{
+		logErr("error allocating bitmap");
+		return false;
+	}
+	void *buffer;
+	AndroidBitmap_lockPixels(env, bitmap, &buffer);
+	Base::makePixmapView(env, bitmap, buffer, pix.format()).writeConverted(pix, {});
+	AndroidBitmap_unlockPixels(env, bitmap);
+	auto pathJStr = env->NewStringUTF(path);
+	auto writeOK = jWritePNG(env, baseActivity, bitmap, pathJStr);
+	if(!writeOK)
+	{
+		logErr("error writing PNG");
+		return false;
+	}
+	return true;
 }
 
-PngFile::operator bool() const
-{
-	return (bool)png;
 }

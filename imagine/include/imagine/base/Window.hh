@@ -16,19 +16,24 @@
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <imagine/config/defs.hh>
-#include <imagine/base/baseDefs.hh>
+#include <imagine/base/ApplicationContext.hh>
 #include <imagine/base/WindowConfig.hh>
 #include <imagine/pixmap/PixelFormat.hh>
 #include <imagine/util/rectangle2.h>
 #include <imagine/util/DelegateFunc.hh>
-#include <imagine/util/bits.h>
-#include <imagine/input/Input.hh>
 #include <imagine/base/Error.hh>
+
+namespace Input
+{
+class Event;
+}
 
 namespace Base
 {
 
 class Screen;
+class ApplicationContext;
+class Application;
 
 class Window : public WindowImpl
 {
@@ -40,9 +45,7 @@ public:
 		RENDERER,
 	};
 
-	constexpr Window() {}
-	static Window *makeWindow(WindowConfig config, InitDelegate);
-	IG::ErrorCode init(const WindowConfig &config, InitDelegate);
+	Window(ApplicationContext, WindowConfig, InitDelegate);
 	void show();
 	void dismiss();
 	void setAcceptDnd(bool on);
@@ -53,21 +56,26 @@ public:
 	void postDraw(uint8_t priority = 0);
 	void unpostDraw();
 	void postFrameReady();
+	void postDrawToMainThread(uint8_t priority = 0);
+	void postFrameReadyToMainThread();
 	uint8_t setDrawEventPriority(uint8_t = 0);
 	uint8_t drawEventPriority() const;
 	void drawNow(bool needsSync = false);
 	Screen *screen() const;
-	static uint32_t windows();
-	static Window *window(uint32_t idx);
-	static PixelFormat defaultPixelFormat();
 	NativeWindow nativeObject() const;
 	void setIntendedFrameRate(double rate);
 	void setFormat(NativeWindowFormat);
+	void setFormat(IG::PixelFormat);
+	IG::PixelFormat pixelFormat() const;
 	bool operator ==(Window const &rhs) const;
 	bool addOnFrame(Base::OnFrameDelegate del, FrameTimeSource src = {}, int priority = 0);
 	bool removeOnFrame(Base::OnFrameDelegate del, FrameTimeSource src = {});
 	void resetAppData();
 	void resetRendererData();
+	bool isMainWindow() const;
+	ApplicationContext appContext() const;
+	Application &application() const;
+	void setCursorVisible(bool);
 
 	template <class T, class... Args>
 	T &makeAppData(Args&&... args)
@@ -134,6 +142,7 @@ public:
 	int widthSMMInPixels(float mm) const;
 	int heightSMMInPixels(float mm) const;
 	IG::WindowRect bounds() const;
+	IG::Point2D<int> transformInputPos(IG::Point2D<int> srcPos) const;
 
 	// content in these bounds isn't blocked by system overlays and receives pointer input
 	IG::WindowRect contentBounds() const;
@@ -142,7 +151,6 @@ public:
 	Orientation validSoftOrientations() const;
 	bool requestOrientationChange(Orientation o);
 	bool setValidOrientations(Orientation oMask);
-	static bool systemAnimatesRotation();
 
 	bool updateSize(IG::Point2D<int> surfaceSize);
 	bool updatePhysicalSize(IG::Point2D<float> surfaceSizeMM);
@@ -150,12 +158,14 @@ public:
 	bool updatePhysicalSizeWithCurrentSize();
 	bool hasSurface() const;
 	bool dispatchInputEvent(Input::Event event);
+	bool dispatchRepeatableKeyInputEvent(Input::Event event);
 	void dispatchFocusChange(bool in);
 	void dispatchDragDrop(const char *filename);
 	void dispatchDismissRequest();
 	void dispatchOnDraw(bool needsSync = false);
 	void dispatchOnFrame();
-	void dispatchSurfaceChange();
+	void dispatchSurfaceCreated();
+	void dispatchSurfaceChanged();
 	void dispatchSurfaceDestroyed();
 
 private:

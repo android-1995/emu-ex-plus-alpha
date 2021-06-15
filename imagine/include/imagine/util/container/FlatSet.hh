@@ -19,21 +19,19 @@
 #include <iterator>
 #include <utility>
 
+namespace IG
+{
+
 template <class T, class COMPARE = std::less<T>>
 class FlatSet
 {
-protected:
-	using VectorType = std::vector<T>;
-
-	VectorType v{};
-	COMPARE c;
-
 public:
+	using VectorType = std::vector<T>;
 	using key_type = T;
 	using value_type = T;
 	using size_type = typename VectorType::size_type;
 	using iterator = typename VectorType::iterator;
-	using const_iterator = typename VectorType::iterator;
+	using const_iterator = typename VectorType::const_iterator;
 	using reverse_iterator = typename VectorType::reverse_iterator;
 	using const_reverse_iterator = typename VectorType::const_reverse_iterator;
 
@@ -112,6 +110,10 @@ public:
 		const_iterator i = std::lower_bound(begin(), end(), val, c);
 		return i == end() || c(val, *i) ? end() : i;
 	}
+
+protected:
+	VectorType v{};
+	[[no_unique_address]] COMPARE c;
 };
 
 template <class T, class COMPARE = std::less<T>>
@@ -134,3 +136,5 @@ public:
 		return i;
 	}
 };
+
+}

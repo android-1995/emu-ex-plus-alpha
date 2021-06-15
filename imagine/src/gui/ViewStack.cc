@@ -17,6 +17,7 @@
 #include <imagine/gui/ViewStack.hh>
 #include <imagine/gui/NavView.hh>
 #include <imagine/base/Window.hh>
+#include <imagine/input/Input.hh>
 #include <imagine/logger/logger.h>
 #include <imagine/util/math/int.hh>
 #include <imagine/util/ScopeGuard.hh>
@@ -103,7 +104,7 @@ void ViewStack::setNavView(std::unique_ptr<NavView> navView)
 	nav = std::move(navView);
 	if(nav)
 	{
-		nav->setController(this, Input::defaultEvent());
+		nav->setController(this);
 		showNavLeftBtn();
 	}
 }
@@ -238,6 +239,12 @@ void ViewStack::push(std::unique_ptr<View> v, Input::Event e)
 		navViewHasFocus = false;
 		nav->clearSelection();
 	}
+}
+
+void ViewStack::push(std::unique_ptr<View> v)
+{
+	auto e = v->appContext().defaultInputEvent();
+	push(std::move(v), e);
 }
 
 void ViewStack::pushAndShow(std::unique_ptr<View> v, Input::Event e, bool needsNavView, bool isModal)

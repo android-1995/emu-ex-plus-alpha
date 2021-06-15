@@ -13,16 +13,12 @@
 	You should have received a copy of the GNU General Public License
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <imagine/util/bits.h>
+#include <imagine/base/Application.hh>
+#include <imagine/util/bitset.hh>
 #include <imagine/util/algorithm.h>
 #include <imagine/util/utility.h>
-#include <imagine/util/preprocessor/enum.h>
 #include "xdnd.hh"
 #include <imagine/logger/logger.h>
-
-using namespace IG;
-
-bool dndInit = false;
 
 enum
 {
@@ -48,63 +44,104 @@ enum
 	dndMsgFinishedAction
 };
 
-// TODO: fix extra string added to end
-ENUM(xdndAtomStr, 11,
-     (
-      XdndAware,
-      XdndEnter,
-      XdndPosition,
-      XdndDrop,
-      XdndStatus,
-      XdndActionCopy,
-      XdndActionMove,
-      XdndActionPrivate,
-      XdndSelection,
-      XdndFinished,
-      iSelectionProperty
-     ),
-     static char xdndAtomStr[][sizeof("iSelectionProperty")]);
+enum
+{
+	XdndAware,
+	XdndEnter,
+	XdndPosition,
+	XdndDrop,
+	XdndStatus,
+	XdndActionCopy,
+	XdndActionMove,
+	XdndActionPrivate,
+	XdndSelection,
+	XdndFinished,
+	iSelectionProperty
+};
 
-static Atom xdndAtom[std::size(xdndAtomStr)];
 static constexpr Atom currentDNDVersion = 5;
 
-void registerXdndAtoms(Display *dpy)
+namespace Base
 {
-	uint32_t atoms = std::size(xdndAtomStr);
-	char *strPtr[atoms];
-	iterateTimes(atoms, i)
+
+using XdndAtoms = XApplication::XdndAtoms;
+
+void XApplication::setXdnd(::Window win, bool on)
+{
+	if(!xdndIsInit())
 	{
-		strPtr[i] = xdndAtomStr[i];
+		logMsg("initializing Xdnd");
+		if(!initXdnd())
+			return;
 	}
-	//logMsg("%d atoms, last %s", atoms, xdndAtomStr[atoms-1]);
-	if(!XInternAtoms(dpy, strPtr, atoms, False, xdndAtom))
+	if(on)
 	{
-		logWarn("error making XDND atoms, drag & drop may not function");
+		logMsg("enabling Xdnd on window:%lu", win);
+		XChangeProperty(dpy, win, xdndAtom[XdndAware], XA_ATOM, 32, PropModeReplace,
+			(unsigned char*)&currentDNDVersion, 1);
+	}
+	else
+	{
+		logMsg("disabling Xdnd on window:%lu", win);
+		XDeleteProperty(dpy, win, xdndAtom[XdndAware]);
 	}
 }
 
-void enableXdnd(Display *dpy, ::Window win)
+bool XApplication::initXdnd()
 {
-	if(!dndInit)
+	static constexpr int xdndAtomsSize = XdndAtoms().size();
+	static_assert(iSelectionProperty == xdndAtomsSize - 1);
+	char atomStr[xdndAtomsSize][sizeof("iSelectionProperty")]
 	{
-		logMsg("setting up Xdnd");
-		registerXdndAtoms(dpy);
-		dndInit = 1;
+		"XdndAware",
+		"XdndEnter",
+		"XdndPosition",
+		"XdndDrop",
+		"XdndStatus",
+		"XdndActionCopy",
+		"XdndActionMove",
+		"XdndActionPrivate",
+		"XdndSelection",
+		"XdndFinished",
+		"iSelectionProperty",
+	};
+	char *atomStrPtr[xdndAtomsSize];
+	std::copy_n(atomStr, xdndAtomsSize, atomStrPtr);
+	if(!XInternAtoms(dpy, atomStrPtr, xdndAtomsSize, False, xdndAtom.data()))
+	{
+		logErr("error making XDND atoms");
+		return false;
 	}
-	logMsg("enabling Xdnd on window");
-	XChangeProperty(dpy, win, xdndAtom[XdndAware], XA_ATOM, 32, PropModeReplace,
-		(unsigned char*)&currentDNDVersion, 1);
+	return true;
 }
 
-void disableXdnd(Display *dpy, ::Window win)
+bool XApplication::xdndIsInit() const
 {
-	logMsg("disabling Xdnd on window");
-	XDeleteProperty(dpy, win, xdndAtom[XdndAware]);
+	return xdndAtom[0];
 }
 
-void sendDNDStatus(Display *dpy, ::Window win, ::Window srcWin, int willAcceptDrop, Atom action)
+void XApplication::sendDNDFinished(::Window win, ::Window srcWin, Atom action)
 {
-	XEvent xEvent = { 0 };
+	if(srcWin == None)
+		return;
+	XEvent xEvent{};
+	xEvent.xclient.type = ClientMessage;
+	xEvent.xclient.display = dpy;
+	xEvent.xclient.window = srcWin;
+	xEvent.xclient.message_type = xdndAtom[XdndFinished];
+	xEvent.xclient.format = 32;
+
+	xEvent.xclient.data.l[ dndMsgFinishedWindow ] = win;
+	xEvent.xclient.data.l[ dndMsgFinishedFlags ]  = IG::bit(0);
+	xEvent.xclient.data.l[ dndMsgFinishedAction ]  = action;
+
+	XSendEvent(dpy, srcWin, 0, 0, &xEvent);
+	logMsg("sent xdnd finished");
+}
+
+static void sendDNDStatus(Display *dpy, XdndAtoms xdndAtom, ::Window win, ::Window srcWin, int willAcceptDrop, Atom action)
+{
+	XEvent xEvent{};
 	xEvent.xclient.type = ClientMessage;
 	xEvent.xclient.display = dpy;
 	xEvent.xclient.window = srcWin;
@@ -121,32 +158,12 @@ void sendDNDStatus(Display *dpy, ::Window win, ::Window srcWin, int willAcceptDr
 	logMsg("sent xdnd status");
 }
 
-void sendDNDFinished(Display *dpy, ::Window win, ::Window srcWin, Atom action)
-{
-	if (srcWin != None)
-	{
-		XEvent xEvent = { 0 };
-		xEvent.xclient.type = ClientMessage;
-		xEvent.xclient.display = dpy;
-		xEvent.xclient.window = srcWin;
-		xEvent.xclient.message_type = xdndAtom[XdndFinished];
-		xEvent.xclient.format = 32;
-
-		xEvent.xclient.data.l[ dndMsgFinishedWindow ] = win;
-		xEvent.xclient.data.l[ dndMsgFinishedFlags ]  = bit(0);
-		xEvent.xclient.data.l[ dndMsgFinishedAction ]  = action;
-
-		XSendEvent(dpy, srcWin, 0, 0, &xEvent);
-		logMsg("sent xdnd finished");
-	}
-}
-
-void receiveDrop(Display *dpy, ::Window win, Time time)
+static void receiveDrop(Display *dpy, XdndAtoms xdndAtom, ::Window win, ::Time time)
 {
 	XConvertSelection(dpy, xdndAtom[XdndSelection], XA_STRING, xdndAtom[iSelectionProperty], win, time);
 }
 
-void handleXDNDEvent(Display *dpy, const XClientMessageEvent &message, ::Window win, ::Window &draggerWin, Atom &dragAction)
+void handleXDNDEvent(Display *dpy, XdndAtoms xdndAtom, const XClientMessageEvent &message, ::Window win, ::Window &draggerWin, Atom &dragAction)
 {
 	auto type = message.message_type;
 	if(type == xdndAtom[XdndEnter])
@@ -160,18 +177,20 @@ void handleXDNDEvent(Display *dpy, const XClientMessageEvent &message, ::Window 
 			|| (Atom)message.data.l[4] == xdndAtom[XdndActionMove])
 		{
 			dragAction = (Atom)message.data.l[4];
-			sendDNDStatus(dpy, win, message.data.l[dndMsgDropWindow], 1, dragAction);
+			sendDNDStatus(dpy, xdndAtom, win, message.data.l[dndMsgDropWindow], 1, dragAction);
 		}
 		else
 		{
 			char *action = XGetAtomName(dpy, message.data.l[4]);
 			logMsg("rejecting drag & drop with unknown action %s", action);
 			XFree(action);
-			sendDNDStatus(dpy, win, message.data.l[dndMsgDropWindow], 0, dragAction);
+			sendDNDStatus(dpy, xdndAtom, win, message.data.l[dndMsgDropWindow], 0, dragAction);
 		}
 	}
 	else if(type == xdndAtom[XdndDrop])
 	{
-		receiveDrop(dpy, win, message.data.l[dndMsgDropTimeStamp]);
+		receiveDrop(dpy, xdndAtom, win, message.data.l[dndMsgDropTimeStamp]);
 	}
+}
+
 }

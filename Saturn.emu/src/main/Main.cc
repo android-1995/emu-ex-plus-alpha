@@ -201,7 +201,12 @@ yabauseinit_struct yinit
 	mpegPath,
 	cartPath,
 	nullptr,
-	VIDEOFORMATTYPE_NTSC
+	VIDEOFORMATTYPE_NTSC,
+	0,
+	0,
+	0,
+	0,
+	0
 };
 
 const char *EmuSystem::shortSystemName()
@@ -222,12 +227,12 @@ static constexpr auto pixFmt = IG::PIXEL_FMT_RGBA8888;
 CLINK void YuiSwapBuffers()
 {
 	//logMsg("YuiSwapBuffers");
-	if(likely(emuVideo))
+	if(emuVideo) [[likely]]
 	{
 		int height, width;
 		VIDCore->GetGlSize(&width, &height);
 		IG::Pixmap srcPix = {{{width, height}, pixFmt}, dispbuffer};
-		emuVideo->startFrameWithFormat(emuSysTask, srcPix);
+		emuVideo->startFrameWithAltFormat(emuSysTask, srcPix);
 		emuVideo = {};
 		emuSysTask = {};
 	}
