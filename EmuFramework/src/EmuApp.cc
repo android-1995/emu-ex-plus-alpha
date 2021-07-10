@@ -513,9 +513,6 @@ void launchSystem(bool tryAutoState, bool addToRecent)
 			logErr("game was closed while trying to load auto-state");
 			return;
 		}
-        //手动重置金手指
-        std::list<std::string> emptyCheats;
-        Base::setCheatListAiWu(emptyCheats);
 	}
 	if(addToRecent)
 		addRecentGame();
