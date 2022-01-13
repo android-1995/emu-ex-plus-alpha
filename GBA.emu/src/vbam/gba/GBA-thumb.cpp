@@ -854,6 +854,7 @@ static INSN_REGPARM int thumb45_3(ARM7TDMI &cpu, u32 opcode, u32 oldArmNextPC)
   return calcTicksFromOldPC(cpu, oldArmNextPC);
 }
 
+//从小鸡那边复制的，修复一些游戏卡死的问题
 // MOV Rd, Rs
 static INSN_REGPARM int thumb46_0(ARM7TDMI &cpu, u32 opcode, u32 oldArmNextPC)
 {
