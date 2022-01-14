@@ -127,7 +127,7 @@ const char *saveSlotCharAiWu(int slot)
 
 FS::PathString EmuSystem::sprintStateFilename(int slot, const char *statePath, const char *gameName)
 {
-	return FS::makePathStringPrintf("%s/%s.0%c.gp", statePath, gameName, saveSlotCharAiWu(slot));
+	return FS::makePathStringPrintf("%s/%s.%c.gp", statePath, gameName, saveSlotCharAiWu(slot));
 }
 
 static FS::PathString sprintSaveFilename()
