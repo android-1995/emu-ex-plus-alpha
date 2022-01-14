@@ -83,14 +83,14 @@ class ConsoleOptionView : public TableView
 
 	TextMenuItem videoSystemItem[3]
 	{
-		{"Auto", [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(0, e); }},
+		{"自动", [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(0, e); }},
 		{"NTSC", [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(1, e); }},
 		{"PAL", [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(2, e); }},
 	};
 
 	MultiChoiceMenuItem videoSystem
 	{
-		"Video System",
+		"视频系统",
 		[this](int idx, Gfx::Text &t)
 		{
 			if(idx == 0)
@@ -113,7 +113,7 @@ class ConsoleOptionView : public TableView
 
 	TextMenuItem regionItem[4]
 	{
-		{"Auto", [this](TextMenuItem &, View &, Input::Event e){ setRegion(0, e); }},
+		{"自动", [this](TextMenuItem &, View &, Input::Event e){ setRegion(0, e); }},
 		{"USA", [this](TextMenuItem &, View &, Input::Event e){ setRegion(1, e); }},
 		{"Europe", [this](TextMenuItem &, View &, Input::Event e){ setRegion(2, e); }},
 		{"Japan", [this](TextMenuItem &, View &, Input::Event e){ setRegion(3, e); }},
@@ -121,7 +121,7 @@ class ConsoleOptionView : public TableView
 
 	MultiChoiceMenuItem region
 	{
-		"Game Region",
+		"游戏地区",
 		[this](int idx, Gfx::Text &t)
 		{
 			if(idx == 0)
@@ -164,7 +164,7 @@ public:
 	ConsoleOptionView(ViewAttachParams attach):
 		TableView
 		{
-			"Console Options",
+			"控制台选项",
 			attach,
 			menuItem
 		}
@@ -176,7 +176,7 @@ class CustomSystemActionsView : public EmuSystemActionsView
 private:
 	TextMenuItem options
 	{
-		"Console Options",
+		"控制台选项",
 		[this](TextMenuItem &, View &, Input::Event e)
 		{
 			if(EmuSystem::gameIsRunning())
@@ -224,9 +224,9 @@ class CustomSystemOptionView : public SystemOptionView
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
 			auto ynAlertView = makeView<YesNoAlertView>(
-				"Warning, this changes the format of SRAM saves files. "
-				"Turn on to make them compatible with other emulators like Gens. "
-				"Any SRAM loaded with the incorrect setting will be corrupted.");
+				"警告，这会改变 SRAM 保存文件的格式。"
+				"开启后将与 Gens 等其他模拟器兼容。"
+				"任何加载了错误设置的 SRAM 都将被损坏。");
 			ynAlertView->setOnYes(
 				[this, &item]()
 				{
