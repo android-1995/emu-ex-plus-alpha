@@ -710,3 +710,10 @@ void EmuCheatsView::loadCheatItems()
 		++it;
 	}
 }
+
+//region爱吾
+void setCheatListForAiWu(std::list<std::string> cheats)
+{
+
+}
+//endregion
