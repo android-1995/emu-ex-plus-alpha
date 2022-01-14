@@ -90,14 +90,14 @@ jobs:
         make -f $EMUFRAMEWORK_PATH/android-release.mk config -j2
         make -f $EMUFRAMEWORK_PATH/android-release.mk install V=1 -j2
 
-    - name: Build NES.emu
+    - name: Build MD.emu
       run: |
-        cd NES.emu
+        cd MD.emu
         make -f android-release.mk V=1 -j2
 
     - name: Copy Artifacts
       run: |
-        cp NES.emu/target/android-release/build/outputs/apk/release/NesEmu-release.apk EX-Emulators/NesEmu-release.apk
+        cp MD.emu/target/android-release/build/outputs/apk/release/MdEmu-release.apk EX-Emulators/MdEmu-release.apk
         
     - name: Upload Artifacts
       uses: actions/upload-artifact@v2
@@ -105,8 +105,8 @@ jobs:
         name: EX-Emulators
         path: EX-Emulators/
 
-    - name: Upload NES.emu Artifact
+    - name: Upload MD.emu Artifact
       uses: actions/upload-artifact@v2
       with:
-        name: NESemu
-        path: ${{ github.workspace }}/NES.emu/target/android-release/build/outputs/apk/release/NesEmu-release.apk
+        name: MDemu
+        path: ${{ github.workspace }}/MD.emu/target/android-release/build/outputs/apk/release/MdEmu-release.apk
