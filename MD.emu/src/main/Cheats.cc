@@ -750,6 +750,7 @@ void setCheatListForAiWu(std::list<std::string> cheats)
 				continue;
 			}
 			string_copy(c.name, "Unnamed Cheat");
+			c.toggleOn();
 			cheatList.push_back(c);
         }
         updateCheats();
