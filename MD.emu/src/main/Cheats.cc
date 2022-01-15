@@ -742,18 +742,15 @@ void setCheatListForAiWu(std::list<std::string> cheats)
         for (std::list<std::string>::iterator it = cheats.begin(); it != cheats.end(); it++)
         {
             std::string& cheat = *it;
-            const char *str = cheat.c_str();
-            MdCheat cheat;
-            string_copy(cheat.code, cheat.c_str());
-            string_toUpper(cheat.code);
-			if(!decodeCheat(cheat.code, cheat.address, cheat.data, cheat.origData))
+            MdCheat c;
+            string_copy(c.code, cheat.c_str());
+            string_toUpper(c.code);
+			if(!decodeCheat(c.code, c.address, c.data, c.origData))
 			{
 				continue;
 			}
-			string_copy(cheat.name, "Unnamed Cheat");
-			cheatList.push_back(cheat);
-			logMsg("read cheat %s : %s", cheat.name, cheat.code);
-			cheatList.push_back(cheat);
+			string_copy(c.name, "Unnamed Cheat");
+			cheatList.push_back(c);
         }
         updateCheats();
     }
