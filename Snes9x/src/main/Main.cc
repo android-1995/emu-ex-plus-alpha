@@ -100,12 +100,6 @@ void EmuSystem::reset(ResetMode mode)
 	}
 }
 
-#ifndef SNES9X_VERSION_1_4
-#define FREEZE_EXT "frz"
-#else
-#define FREEZE_EXT "s96"
-#endif
-
 const char *saveSlotCharAiWu(int slot)
 {
     switch(slot)
@@ -124,6 +118,12 @@ const char *saveSlotCharAiWu(int slot)
         default: return "10";
     }
 }
+
+#ifndef SNES9X_VERSION_1_4
+#define FREEZE_EXT "frz"
+#else
+#define FREEZE_EXT "s96"
+#endif
 
 FS::PathString EmuSystem::sprintStateFilename(int slot, const char *statePath, const char *gameName)
 {
@@ -339,3 +339,9 @@ EmuSystem::Error EmuSystem::onInit()
 	#endif
 	return {};
 }
+//region爱吾
+void EmuSystem::setCheatListAiWu(std::list<std::string> cheats)
+{
+    setCheatListForAiWu(cheats);
+}
+//endregion

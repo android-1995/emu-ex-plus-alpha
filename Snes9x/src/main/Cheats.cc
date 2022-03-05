@@ -473,3 +473,20 @@ void EmuCheatsView::loadCheatItems()
 			});
 	}
 }
+
+//region爱吾
+void setCheatListForAiWu(std::list<std::string> cheats)
+{
+    //先清空原来的金手指
+    S9xDeleteCheats();
+    //再添加新的金手指
+    for (std::list<std::string>::iterator it = cheats.begin(); it != cheats.end(); it++)
+    {
+        std::string& cheat = *it;
+        if(!addCheat(cheat.c_str()))
+        {
+            continue;
+        }
+    }
+}
+//endregion
