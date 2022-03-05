@@ -488,5 +488,9 @@ void setCheatListForAiWu(std::list<std::string> cheats)
             continue;
         }
     }
+    for (uint32 i = 0; i < numCheats(); i++)
+    {
+        enableCheat(i);
+    }
 }
 //endregion
