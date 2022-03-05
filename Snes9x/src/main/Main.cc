@@ -176,7 +176,8 @@ void EmuSystem::saveBackupMem() // for manually saving when not closing game
 			logMsg("no cheats present, removing .cht file if present");
 		else
 			logMsg("saving %u cheat(s)", numCheats());
-		S9xSaveCheatFile(cheatsStr.data());
+		//去掉保存金手指文件的操作
+		//S9xSaveCheatFile(cheatsStr.data());
 	}
 }
 
