@@ -163,18 +163,18 @@ static bool addCheat(const char *cheatStr)
 	uint8 numBytes;
 	if(!S9xGameGenieToRaw(cheatStr, address, byte))
 	{
-		S9xAddCheat(false, true, address, byte);
+		S9xAddCheat(true, true, address, byte);
 		return true;
 	}
 	else if(!S9xProActionReplayToRaw (cheatStr, address, byte))
 	{
-		S9xAddCheat(false, true, address, byte);
+		S9xAddCheat(true, true, address, byte);
 		return true;
 	}
 	else if(!S9xGoldFingerToRaw(cheatStr, address, sram, numBytes, bytes))
 	{
 		iterateTimes(numBytes, i)
-			S9xAddCheat(false, true, address + i, bytes[i]);
+			S9xAddCheat(true, true, address + i, bytes[i]);
 		// TODO: handle cheat names for multiple codes added at once
 		return true;
 	}
