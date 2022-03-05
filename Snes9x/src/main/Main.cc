@@ -127,7 +127,7 @@ const char *saveSlotCharAiWu(int slot)
 
 FS::PathString EmuSystem::sprintStateFilename(int slot, const char *statePath, const char *gameName)
 {
-	return FS::makePathStringPrintf("%s/%s.%c." FREEZE_EXT, statePath, gameName, saveSlotCharAiWu(slot));
+	return FS::makePathStringPrintf("%s/%s.%s." FREEZE_EXT, statePath, gameName, saveSlotCharAiWu(slot));
 }
 
 #undef FREEZE_EXT
