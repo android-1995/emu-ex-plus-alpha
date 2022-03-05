@@ -33,7 +33,7 @@ class CustomAudioOptionView : public AudioOptionView
 
 	MultiChoiceMenuItem dspInterpolation
 	{
-		"DSP Interpolation",
+		"DSP 插值",
 		optionAudioDSPInterpolation,
 		dspInterpolationItem
 	};
@@ -51,7 +51,7 @@ class ConsoleOptionView : public TableView
 {
 	BoolMenuItem multitap
 	{
-		"5-Player Adapter",
+		"5玩家模式",
 		(bool)optionMultitap,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -73,7 +73,7 @@ class ConsoleOptionView : public TableView
 
 	MultiChoiceMenuItem inputPorts
 	{
-		"Input Ports",
+		"输入端口",
 		[]()
 		{
 			constexpr int SNES_JOYPAD_MENU_IDX = HAS_NSRT ? 1 : 0;
@@ -100,7 +100,7 @@ class ConsoleOptionView : public TableView
 
 	TextMenuItem videoSystemItem[4]
 	{
-		{"Auto", [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(0, e); }},
+		{"自动", [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(0, e); }},
 		{"NTSC", [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(1, e); }},
 		{"PAL", [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(2, e); }},
 		{"NTSC + PAL Spoof", [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(3, e); }},
@@ -108,7 +108,7 @@ class ConsoleOptionView : public TableView
 
 	MultiChoiceMenuItem videoSystem
 	{
-		"Video System",
+		"视频系统",
 		optionVideoSystem,
 		videoSystemItem
 	};
@@ -121,11 +121,11 @@ class ConsoleOptionView : public TableView
 	}
 
 	#ifndef SNES9X_VERSION_1_4
-	TextHeadingMenuItem emulationHacks{"Emulation Hacks"};
+	TextHeadingMenuItem emulationHacks{"模拟器黑科技"};
 
 	BoolMenuItem blockInvalidVRAMAccess
 	{
-		"Allow Invalid VRAM Access",
+		"允许无效的 VRAM 访问",
 		(bool)!optionBlockInvalidVRAMAccess,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -137,7 +137,7 @@ class ConsoleOptionView : public TableView
 
 	BoolMenuItem separateEchoBuffer
 	{
-		"Separate Echo Buffer From Ram",
+		"将回波缓冲区与 Ram 分开",
 		(bool)optionSeparateEchoBuffer,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -157,10 +157,10 @@ class ConsoleOptionView : public TableView
 	TextMenuItem superFXClockItem[2]
 	{
 		{"100%", [this]() { setSuperFXClock(100); }},
-		{"Custom Value",
+		{"自定义值",
 			[this](Input::Event e)
 			{
-				EmuApp::pushAndShowNewCollectValueInputView<int>(attachParams(), e, "Input 5 to 250", "",
+				EmuApp::pushAndShowNewCollectValueInputView<int>(attachParams(), e, "输入 5 到 250", "",
 					[this](auto val)
 					{
 						if(optionSuperFXClockMultiplier.isValidVal(val))
@@ -172,7 +172,7 @@ class ConsoleOptionView : public TableView
 						}
 						else
 						{
-							EmuApp::postErrorMessage("Value not in range");
+							EmuApp::postErrorMessage("值不在范围内");
 							return false;
 						}
 					});
@@ -183,7 +183,7 @@ class ConsoleOptionView : public TableView
 
 	MultiChoiceMenuItem superFXClock
 	{
-		"SuperFX Clock Multiplier",
+		"SuperFX 时钟倍频",
 		[this](uint32_t idx, Gfx::Text &t)
 		{
 			t.setString(string_makePrintf<5>("%u%%", optionSuperFXClockMultiplier.val).data());
@@ -217,7 +217,7 @@ public:
 	ConsoleOptionView(ViewAttachParams attach):
 		TableView
 		{
-			"Console Options",
+			"控制台选项",
 			attach,
 			menuItem
 		}
@@ -229,7 +229,7 @@ class CustomSystemActionsView : public EmuSystemActionsView
 private:
 	TextMenuItem options
 	{
-		"Console Options",
+		"控制台选项",
 		[this](TextMenuItem &, View &, Input::Event e)
 		{
 			if(EmuSystem::gameIsRunning())

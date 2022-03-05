@@ -35,7 +35,7 @@ Byte1Option optionAudioDSPInterpolation{CFGKEY_AUDIO_DSP_INTERPOLATON, DSP_INTER
 #endif
 const AspectRatioInfo EmuSystem::aspectRatioInfo[] =
 {
-		{"4:3 (Original)", 4, 3},
+		{"4:3 (初始)", 4, 3},
 		{"8:7", 8, 7},
 		EMU_SYSTEM_DEFAULT_ASPECT_RATIO_INFO_INIT
 };
