@@ -135,8 +135,8 @@ Screen &mainScreen();
 Window &mainWindow();
 
 //region爱吾调用
-void onKeyPress(uint emuKey);
-void onKeyRelease(uint emuKey);
+void onKeyPress(uint emuKey,uint player);
+void onKeyRelease(uint emuKey,uint player);
 void showSetting();
 void changeEmulatorState(bool pause);
 void reset();

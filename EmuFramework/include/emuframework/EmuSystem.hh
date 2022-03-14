@@ -213,6 +213,7 @@ public:
 	static void configFrameTime();
 	static void clearInputBuffers(EmuInputView &view);
 	static void handleInputAction(uint state, uint emuKey);
+	static void handleInputActionAiWu(uint state, uint emuKey, uint player);
 	static uint translateInputAction(uint input, bool &turbo);
 	static uint translateInputAction(uint input)
 	{

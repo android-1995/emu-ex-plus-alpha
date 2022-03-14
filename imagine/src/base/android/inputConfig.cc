@@ -583,8 +583,7 @@ static void aiWuInit()
                             (void*)(void (*)(JNIEnv*, jobject, jint, jint))
                                     ([](JNIEnv* env, jobject thiz, jint keyCode, jint player)
                                     {
-                                        uint playerMask = player << 29;
-                                        Base::onKeyPress(keyCode | playerMask);
+                                        Base::onKeyPress(keyCode, player);
                                     })
                     },
                     {
@@ -592,8 +591,7 @@ static void aiWuInit()
                             (void*)(void (*)(JNIEnv*, jobject, jint, jint))
                                     ([](JNIEnv* env, jobject thiz, jint keyCode, jint player)
                                     {
-                                        uint playerMask = player << 29;
-                                        Base::onKeyRelease(keyCode | playerMask);
+                                        Base::onKeyRelease(keyCode, player);
                                     })
                     },
                     {

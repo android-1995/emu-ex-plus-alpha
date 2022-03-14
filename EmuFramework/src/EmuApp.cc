@@ -984,17 +984,17 @@ void onInit(int argc, char** argv)
 	mainInitCommon(argc, argv);
 }
 //region 爱吾
-void onKeyPress(uint emuKey)
+void onKeyPress(uint emuKey,uint player)
 {
     if(!EmuSystem::gameIsRunning())
         return;
-    EmuSystem::handleInputAction(Input::PUSHED, emuKey);
+    EmuSystem::handleInputActionAiWu(Input::PUSHED, emuKey, player);
 }
-void onKeyRelease(uint emuKey)
+void onKeyRelease(uint emuKey,uint player)
 {
     if(!EmuSystem::gameIsRunning())
         return;
-    EmuSystem::handleInputAction(Input::RELEASED, emuKey);
+    EmuSystem::handleInputActionAiWu(Input::RELEASED, emuKey, player);
 }
 void showSetting()
 {
