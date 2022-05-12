@@ -169,6 +169,10 @@ private:
 	void processInputWithHasEvents(AInputQueue *);
 	void processInputCommon(AInputQueue *inputQueue, AInputEvent* event);
 	void handleDocumentIntentResult(const char *uri, const char *name);
+
+	//region 爱吾
+	void aiWuFunInit(JNIEnv *, jobject baseActivity, jclass baseActivityClass);
+	//endregion
 };
 
 using ApplicationImpl = AndroidApplication;
