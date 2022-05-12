@@ -34,6 +34,7 @@
 #include <imagine/util/memory/UniqueFileDescriptor.hh>
 #include <vector>
 #include <optional>
+#include <list>
 
 namespace IG::Input
 {
