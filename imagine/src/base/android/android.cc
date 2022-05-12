@@ -537,6 +537,166 @@ const char *aHardwareBufferFormatStr(uint32_t format)
 	return "Unknown";
 }
 
+//region爱吾的一些native方法
+static std::string GetJString(JNIEnv* env, jstring jstr)
+{
+    if (!jstr) {
+        return {};
+    }
+    const char *s = env->GetStringUTFChars(jstr, nullptr);
+    std::string result = s;
+    env->ReleaseStringUTFChars(jstr, s);
+    return result;
+}
+
+static void aiWuFunInit(JNIEnv *env)
+{
+    JNINativeMethod method[]
+            {
+                    {
+                            "onKeyPress", "(I)V",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz, jint keyCode)
+                            {
+                                onKeyPressAiWu(bit(keyCode));
+                            }
+                    },
+                    {
+                            "onKeyRelease", "(I)V",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz, jint keyCode)
+                            {
+                                onKeyReleaseAiWu(bit(keyCode));
+                            }
+                    },
+                    {
+                            "motionEvent", "(IIIIIIIJ)V",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint x, jint y, jint pointerId, jint pointerCount, jlong eventTime)
+                            {
+                                //todo
+                                //Input::processMotionEventAiWu(source,action,deviceId,x,y,pointerId,pointerCount,eventTime,*Base::deviceWindow());
+                            }
+                    },
+                    {
+                            "keyEvent", "(IIIIIIJ)V",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint keyCode, jint repeatCount, jint metaState, jlong eventTime)
+                            {
+                                //todo
+                                //Input::processKeyEventAiWu(source,action,deviceId,keyCode,repeatCount,metaState,eventTime,*Base::deviceWindow());
+                            }
+                    },
+                    {
+                            "showSetting", "()V",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz)
+                            {
+                                showSettingAiWu();
+                            }
+                    },
+                    {
+                            "changeEmulatorState", "(Z)V",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz,jboolean pause)
+                            {
+                                changeEmulatorStateAiWu(pause);
+                            }
+                    },
+                    {
+                            "reset", "()V",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz)
+                            {
+                                resetAiWu();
+                            }
+                    },
+                    {
+                            "exit", "()V",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz)
+                            {
+                                exit();
+                            }
+                    },
+                    {
+                            "isSoundEnabled", "()Z",
+                            (void *)
+                            +[](JNIEnv* env, jobject thiz)
+                            {
+                                return isSoundEnabledAiWu();
+                            }
+                    },
+                    {
+                            "setSoundEnabled", "(Z)V",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz,jboolean enabled)
+                            {
+                                setSoundEnabledAiWu(enabled);
+                            }
+                    },
+                    {
+                            "screenshot", "(Ljava/lang/String;)V",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz,jstring jPath)
+                            {
+                                const char *path = GetJString(env,jPath).c_str();
+                                screenshotAiWu(path);
+                            }
+                    },
+                    {
+                            "fastForward", "(I)V",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz,jint jSpeed)
+                            {
+                                fastForwardAiWu(jSpeed);
+                            }
+                    },
+                    {
+                            "saveState", "(Ljava/lang/String;)V",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz,jstring jPath)
+                            {
+                                const char *path = GetJString(env,jPath).c_str();
+                                saveStateAiWu(path);
+                            }
+                    },
+                    {
+                            "loadState", "(Ljava/lang/String;)V",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz,jstring jPath)
+                            {
+                                const char *path = GetJString(env,jPath).c_str();
+                                loadStateAiWu(path);
+                            }
+                    },
+                    {
+                            "updateCheat", "([Ljava/lang/String;)V",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz,jobjectArray jCheats)
+                            {
+                                //支持GS 1-2的金手指 格式XXXXXXXXYYYYYYYY
+                                //支持GS 3的金手指 格式XXXXXXXX-YYYYYYYY
+                                //支持AR的金手指 格式XXXXXXXX YYYY
+                                std::list<std::string> internalCheats;
+                                if( jCheats == NULL || env->GetArrayLength(jCheats) == 0 ){
+                                    setCheatListAiWu(internalCheats);
+                                    return;
+                                }
+                                jsize cheatCount = env->GetArrayLength(jCheats);
+                                for (int i = 0; i < cheatCount; ++i) {
+                                    jstring code = (jstring) (env->GetObjectArrayElement(jCheats, i));
+                                    const std::string codeString = GetJString(env,code);
+                                    internalCheats.push_back(codeString);
+                                }
+                                setCheatListAiWu(internalCheats);
+                            }
+                    }
+            };
+    env->RegisterNatives(baseActivityClass, method, std::size(method));
+}
+//endregion
+
 void AndroidApplication::initActivity(JNIEnv *env, jobject baseActivity, jclass baseActivityClass, int32_t androidSDK)
 {
 	pthread_key_create(&jEnvKey,
@@ -703,6 +863,9 @@ void AndroidApplication::initActivity(JNIEnv *env, jobject baseActivity, jclass 
 			renameUri = {env, baseActivity, "renameUri", "(Ljava/lang/String;Ljava/lang/String;)Z"};
 		}
 	}
+    //region注册爱吾的一些native方法
+    aiWuFunInit(env);
+    //endregion
 }
 
 JNIEnv* AndroidApplication::thisThreadJniEnv() const

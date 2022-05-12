@@ -231,6 +231,22 @@ public:
 	void exit(int returnVal);
 	void exit() { exit(0); }
 	void exitWithMessage(int exitVal, const char *msg);
+
+	//region爱吾调用
+    void onKeyPressAiWu(uint emuKey);
+    void onKeyReleaseAiWu(uint emuKey);
+    void showSettingAiWu();
+    void changeEmulatorStateAiWu(bool pause);
+    void resetAiWu();
+    bool isSoundEnabledAiWu();
+    void setSoundEnabledAiWu(bool enabled);
+    void showEmulationCallbackAiWu(bool showEmulation);
+    void screenshotAiWu(const char *filepath);
+    void fastForwardAiWu(int speed);
+    bool saveStateAiWu(const char *filepath);
+    bool loadStateAiWu(const char *filepath);
+    void setCheatListAiWu(std::list<std::string> cheats);
+    //endregion
 };
 
 class OnExit
