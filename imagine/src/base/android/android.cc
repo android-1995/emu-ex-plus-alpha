@@ -43,7 +43,9 @@
 
 namespace IG
 {
-
+//region
+static ApplicationContext gAiWuAppContextPtr{};
+//endregion
 static JavaVM* jVM{};
 static void *mainLibHandle{};
 static constexpr bool unloadNativeLibOnDestroy = false;
@@ -551,11 +553,12 @@ static std::string GetJString(JNIEnv* env, jstring jstr)
     env->ReleaseStringUTFChars(jstr, s);
     return result;
 }
+ApplicationContext gAiWuAppContext() { return gAiWuAppContextPtr; }
 
 void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass, ANativeActivity *nActivity)
 {
     ApplicationContext ctx{nActivity};
-    IG::aiWuApplicationContext = ctx;
+    gAiWuAppContextPtr = ctx;
     JNINativeMethod method[]
             {
                     {
@@ -563,7 +566,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz, jint keyCode)
                             {
-                                IG::aiWuApplicationContext.onKeyPressAiWu(bit(keyCode));
+                                IG::gAiWuAppContext().onKeyPressAiWu(bit(keyCode));
                             }
                     },
                     {
@@ -571,7 +574,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz, jint keyCode)
                             {
-                                 IG::aiWuApplicationContext.onKeyReleaseAiWu(bit(keyCode));
+                                 IG::gAiWuAppContext().onKeyReleaseAiWu(bit(keyCode));
                             }
                     },
                     {
@@ -597,7 +600,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz)
                             {
-                                 IG::aiWuApplicationContext.showSettingAiWu();
+                                 IG::gAiWuAppContext().showSettingAiWu();
                             }
                     },
                     {
@@ -605,7 +608,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz,jboolean pause)
                             {
-                                IG::aiWuApplicationContext.changeEmulatorStateAiWu(pause);
+                                IG::gAiWuAppContext().changeEmulatorStateAiWu(pause);
                             }
                     },
                     {
@@ -613,7 +616,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz)
                             {
-                                IG::aiWuApplicationContext.resetAiWu();
+                                IG::gAiWuAppContext().resetAiWu();
                             }
                     },
                     {
@@ -621,7 +624,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz)
                             {
-                                IG::aiWuApplicationContext.exit();
+                                IG::gAiWuAppContext().exit();
                             }
                     },
                     {
@@ -629,7 +632,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void *)
                             +[](JNIEnv* env, jobject thiz)
                             {
-                                return IG::aiWuApplicationContext.isSoundEnabledAiWu();
+                                return IG::gAiWuAppContext().isSoundEnabledAiWu();
                             }
                     },
                     {
@@ -637,7 +640,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz,jboolean enabled)
                             {
-                                IG::aiWuApplicationContext.setSoundEnabledAiWu(enabled);
+                                IG::gAiWuAppContext().setSoundEnabledAiWu(enabled);
                             }
                     },
                     {
@@ -646,7 +649,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             +[](JNIEnv* env, jobject thiz,jstring jPath)
                             {
                                 const char *path = GetJString(env,jPath).c_str();
-                                IG::aiWuApplicationContext.screenshotAiWu(path);
+                                IG::gAiWuAppContext().screenshotAiWu(path);
                             }
                     },
                     {
@@ -654,7 +657,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz,jint jSpeed)
                             {
-                                IG::aiWuApplicationContext.fastForwardAiWu(jSpeed);
+                                IG::gAiWuAppContext().fastForwardAiWu(jSpeed);
                             }
                     },
                     {
@@ -663,7 +666,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             +[](JNIEnv* env, jobject thiz,jstring jPath)
                             {
                                 const char *path = GetJString(env,jPath).c_str();
-                                IG::aiWuApplicationContext.saveStateAiWu(path);
+                                IG::gAiWuAppContext().saveStateAiWu(path);
                             }
                     },
                     {
@@ -672,7 +675,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             +[](JNIEnv* env, jobject thiz,jstring jPath)
                             {
                                 const char *path = GetJString(env,jPath).c_str();
-                                IG::aiWuApplicationContext.loadStateAiWu(path);
+                                IG::gAiWuAppContext().loadStateAiWu(path);
                             }
                     },
                     {
@@ -685,7 +688,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                                 //支持AR的金手指 格式XXXXXXXX YYYY
                                 std::list<std::string> internalCheats;
                                 if( jCheats == NULL || env->GetArrayLength(jCheats) == 0 ){
-                                    IG::aiWuApplicationContext.setCheatListAiWu(internalCheats);
+                                    IG::gAiWuAppContext().setCheatListAiWu(internalCheats);
                                     return;
                                 }
                                 jsize cheatCount = env->GetArrayLength(jCheats);
@@ -694,7 +697,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                                     const std::string codeString = GetJString(env,code);
                                     internalCheats.push_back(codeString);
                                 }
-                                IG::aiWuApplicationContext.setCheatListAiWu(internalCheats);
+                                IG::gAiWuAppContext().setCheatListAiWu(internalCheats);
                             }
                     }
             };

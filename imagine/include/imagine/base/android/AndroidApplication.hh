@@ -50,9 +50,6 @@ struct ApplicationInitParams
 	constexpr CommandArgs commandArgs() const	{ return {}; }
 };
 
-//region 爱吾
-extern ApplicationContext aiWuApplicationContext;
-//endregion
 class AndroidApplication : public BaseApplication
 {
 public:
@@ -177,6 +174,9 @@ private:
 	void aiWuFunInit(JNIEnv *, jobject baseActivity, jclass baseActivityClass, ANativeActivity *nActivity);
 	//endregion
 };
+//region 爱吾
+ApplicationContext gAiWuAppContext();
+//endregion
 using ApplicationImpl = AndroidApplication;
 
 }
