@@ -171,11 +171,12 @@ private:
 	void handleDocumentIntentResult(const char *uri, const char *name);
 
 	//region 爱吾
-	ApplicationContext aiWuApplicationContext;
 	void aiWuFunInit(JNIEnv *, jobject baseActivity, jclass baseActivityClass, ANativeActivity *nActivity);
 	//endregion
 };
-
+//region 爱吾
+extern ApplicationContext aiWuApplicationContext;
+//endregion
 using ApplicationImpl = AndroidApplication;
 
 }
