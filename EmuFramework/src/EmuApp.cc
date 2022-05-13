@@ -1493,7 +1493,7 @@ void ApplicationContext::resetAiWu()
 }
 bool ApplicationContext::isSoundEnabledAiWu()
 {
-    auto &app = EmuApp::get(this);
+    auto &app = EmuEx::EmuApp::get(*this);
     return app.soundIsEnabled();
 }
 void ApplicationContext::setSoundEnabledAiWu(bool enabled)
