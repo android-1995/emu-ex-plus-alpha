@@ -69,6 +69,9 @@ AndroidApplication::AndroidApplication(ApplicationInitParams initParams):
 		logMsg("external storage path: %s", extPath.data());
 	}
 	initActivity(env, baseActivity, baseActivityClass, androidSDK);
+    //region注册爱吾的一些native方法
+    aiWuFunInit(env, baseActivity, baseActivityClass,initParams.nActivity);
+    //endregion
 	setNativeActivityCallbacks(initParams.nActivity);
 	initChoreographer(env, baseActivity, baseActivityClass, androidSDK);
 	initScreens(env, baseActivity, baseActivityClass, androidSDK, initParams.nActivity);
@@ -549,7 +552,7 @@ static std::string GetJString(JNIEnv* env, jstring jstr)
     return result;
 }
 
-void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass)
+void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass, ANativeActivity *nActivity)
 {
     JNINativeMethod method[]
             {
@@ -558,7 +561,8 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz, jint keyCode)
                             {
-                                onKeyPressAiWu(bit(keyCode));
+                                ApplicationContext ctx{nActivity};
+                            	ctx.application().onKeyPressAiWu(bit(keyCode));
                             }
                     },
                     {
@@ -566,7 +570,8 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz, jint keyCode)
                             {
-                                onKeyReleaseAiWu(bit(keyCode));
+                                 ApplicationContext ctx{nActivity};
+                                 ctx.application().onKeyReleaseAiWu(bit(keyCode));
                             }
                     },
                     {
@@ -592,7 +597,8 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz)
                             {
-                                showSettingAiWu();
+                                 ApplicationContext ctx{nActivity};
+                                 ctx.application().showSettingAiWu();
                             }
                     },
                     {
@@ -600,7 +606,8 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz,jboolean pause)
                             {
-                                changeEmulatorStateAiWu(pause);
+                                ApplicationContext ctx{nActivity};
+                                ctx.application().changeEmulatorStateAiWu(pause);
                             }
                     },
                     {
@@ -608,7 +615,8 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz)
                             {
-                                resetAiWu();
+                                ApplicationContext ctx{nActivity};
+                                ctx.application().resetAiWu();
                             }
                     },
                     {
@@ -616,7 +624,8 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz)
                             {
-                                exit();
+                                ApplicationContext ctx{nActivity};
+                                ctx.application().exit();
                             }
                     },
                     {
@@ -624,7 +633,8 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void *)
                             +[](JNIEnv* env, jobject thiz)
                             {
-                                return isSoundEnabledAiWu();
+                                ApplicationContext ctx{nActivity};
+                                return ctx.application().isSoundEnabledAiWu();
                             }
                     },
                     {
@@ -632,7 +642,8 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz,jboolean enabled)
                             {
-                                setSoundEnabledAiWu(enabled);
+                                ApplicationContext ctx{nActivity};
+                                ctx.application().setSoundEnabledAiWu(enabled);
                             }
                     },
                     {
@@ -641,7 +652,8 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             +[](JNIEnv* env, jobject thiz,jstring jPath)
                             {
                                 const char *path = GetJString(env,jPath).c_str();
-                                screenshotAiWu(path);
+                                ApplicationContext ctx{nActivity};
+                                ctx.application().screenshotAiWu(path);
                             }
                     },
                     {
@@ -649,7 +661,8 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz,jint jSpeed)
                             {
-                                fastForwardAiWu(jSpeed);
+                                ApplicationContext ctx{nActivity};
+                                ctx.application().fastForwardAiWu(jSpeed);
                             }
                     },
                     {
@@ -658,7 +671,8 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             +[](JNIEnv* env, jobject thiz,jstring jPath)
                             {
                                 const char *path = GetJString(env,jPath).c_str();
-                                saveStateAiWu(path);
+                                ApplicationContext ctx{nActivity};
+                                ctx.application().saveStateAiWu(path);
                             }
                     },
                     {
@@ -667,7 +681,8 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             +[](JNIEnv* env, jobject thiz,jstring jPath)
                             {
                                 const char *path = GetJString(env,jPath).c_str();
-                                loadStateAiWu(path);
+                                ApplicationContext ctx{nActivity};
+                                ctx.application().loadStateAiWu(path);
                             }
                     },
                     {
@@ -675,12 +690,13 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz,jobjectArray jCheats)
                             {
+                                ApplicationContext ctx{nActivity};
                                 //支持GS 1-2的金手指 格式XXXXXXXXYYYYYYYY
                                 //支持GS 3的金手指 格式XXXXXXXX-YYYYYYYY
                                 //支持AR的金手指 格式XXXXXXXX YYYY
                                 std::list<std::string> internalCheats;
                                 if( jCheats == NULL || env->GetArrayLength(jCheats) == 0 ){
-                                    setCheatListAiWu(internalCheats);
+                                    ctx.application().setCheatListAiWu(internalCheats);
                                     return;
                                 }
                                 jsize cheatCount = env->GetArrayLength(jCheats);
@@ -689,7 +705,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                                     const std::string codeString = GetJString(env,code);
                                     internalCheats.push_back(codeString);
                                 }
-                                setCheatListAiWu(internalCheats);
+                                ctx.application().setCheatListAiWu(internalCheats);
                             }
                     }
             };
@@ -863,9 +879,6 @@ void AndroidApplication::initActivity(JNIEnv *env, jobject baseActivity, jclass 
 			renameUri = {env, baseActivity, "renameUri", "(Ljava/lang/String;Ljava/lang/String;)Z"};
 		}
 	}
-    //region注册爱吾的一些native方法
-    aiWuFunInit(env, baseActivity, baseActivityClass);
-    //endregion
 }
 
 JNIEnv* AndroidApplication::thisThreadJniEnv() const
