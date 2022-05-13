@@ -560,7 +560,7 @@ void ApplicationContext::showEmulationCallbackAiWu(bool showEmulation)
 {
     auto env = mainThreadJniEnv();
     auto baseActivity = baseActivityObject();
-    JNI::JavaInstMethod<void(jboolean)> jShowEmulationCallback{env, jBaseActivityCls, "showEmulationCallback", "(Z)V"};
+    JNI::InstMethod<void(jboolean)> jShowEmulationCallback{env, baseActivity, "showEmulationCallback", "(Z)V"};
     jShowEmulationCallback(env, baseActivity, showEmulation);
 }
 
