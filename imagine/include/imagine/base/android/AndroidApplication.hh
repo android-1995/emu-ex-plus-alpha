@@ -171,7 +171,7 @@ private:
 	void handleDocumentIntentResult(const char *uri, const char *name);
 
 	//region 爱吾
-	void aiWuFunInit(JNIEnv *, jobject baseActivity, jclass baseActivityClass);
+	void aiWuFunInit(JNIEnv *, jobject baseActivity, jclass baseActivityClass, ANativeActivity *nActivity);
 	//endregion
 };
 
