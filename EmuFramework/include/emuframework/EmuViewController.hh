@@ -109,7 +109,8 @@ public:
 	void writeConfig(IO &io);
 	IG::ApplicationContext appContext() const;
 	EmuSystemTask &emuTask() { return *systemTaskPtr; }
-
+	void startEmulation();
+	void pauseEmulation();
 protected:
 	static constexpr bool HAS_USE_RENDER_TIME = Config::envIsLinux
 		|| (Config::envIsAndroid && Config::ENV_ANDROID_MIN_SDK < 16);
@@ -136,8 +137,6 @@ protected:
 	void addOnFrame();
 	void removeOnFrame();
 	void moveOnFrame(IG::Window &from, IG::Window &to);
-	void startEmulation();
-	void pauseEmulation();
 	void configureAppForEmulation(bool running);
 	void configureWindowForEmulation(IG::Window &win, bool running);
 	void startViewportAnimation(IG::Window &win);

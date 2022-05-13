@@ -1510,7 +1510,7 @@ void ApplicationContext::resetAiWu()
     auto &sys = app.system();
     if(!sys.hasContent())
         return;
-    sys.reset(app, EmuSystem::RESET_SOFT);
+    sys.reset(app, EmuEx::EmuSystem::RESET_SOFT);
 }
 bool ApplicationContext::isSoundEnabledAiWu()
 {
