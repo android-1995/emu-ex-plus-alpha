@@ -1493,7 +1493,8 @@ void ApplicationContext::resetAiWu()
 }
 bool ApplicationContext::isSoundEnabledAiWu()
 {
-//    return soundIsEnabled();
+    auto &app = EmuApp::get(this);
+    return app.soundIsEnabled();
 }
 void ApplicationContext::setSoundEnabledAiWu(bool enabled)
 {
@@ -1528,7 +1529,7 @@ bool ApplicationContext::saveStateAiWu(const char *filepath)
 //        EmuApp::printfMessage(4, true, "Save State: %s", err->what());
 //        return false;
 //    }
-//    return true;
+    return true;
 }
 bool ApplicationContext::loadStateAiWu(const char *filepath)
 {
@@ -1538,7 +1539,7 @@ bool ApplicationContext::loadStateAiWu(const char *filepath)
 //        EmuApp::printfMessage(4, true, "Load State: %s", err->what());
 //        return false;
 //    }
-//    return true;
+    return true;
 }
 void ApplicationContext::setCheatListAiWu(std::list<std::string> cheats)
 {
