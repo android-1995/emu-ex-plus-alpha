@@ -24,6 +24,7 @@
 #include <emuframework/EmuTiming.hh>
 #include <optional>
 #include <string>
+#include <list>
 
 namespace IG
 {
@@ -271,6 +272,10 @@ public:
 	static void throwFileReadError();
 	static void throwFileWriteError();
 	static void throwMissingContentDirError();
+
+	//region爱吾
+    void setCheatListAiWu(std::list<std::string> cheats);
+    //endregion
 
 protected:
 	IG::ApplicationContext appCtx{};

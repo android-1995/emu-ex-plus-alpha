@@ -760,6 +760,17 @@ void EmuApp::showEmuation()
 	viewController().showEmulation();
 }
 
+//region 爱吾
+void EmuApp::changeEmulatorStateAiWu(bool pause)
+{
+    if(pause){
+        viewController().pauseEmulation();
+    } else {
+        viewController().startEmulation();
+    }
+}
+//endregion
+
 void EmuApp::launchSystemWithResumePrompt(const Input::Event &e)
 {
 	if(optionAutoSaveState && optionConfirmAutoLoadState)
@@ -1463,33 +1474,43 @@ void ApplicationContext::onInit(ApplicationInitParams initParams)
 //region 爱吾的方法
 void ApplicationContext::onKeyPressAiWu(uint emuKey)
 {
-//    if(!EmuSystem::gameIsRunning())
-//        return;
-//    EmuSystem::handleInputAction(Input::PUSHED, emuKey);
+    auto &app = EmuEx::EmuApp::get(*this);
+    auto &sys = app.system();
+    if(!sys.hasContent())
+        return;
+    sys.handleInputAction(&app, Input::Action::PUSHED, emuKey);
 }
 void ApplicationContext::onKeyReleaseAiWu(uint emuKey)
 {
-//    if(!EmuSystem::gameIsRunning())
-//        return;
-//    EmuSystem::handleInputAction(Input::RELEASED, emuKey);
+    auto &app = EmuEx::EmuApp::get(*this);
+    auto &sys = app.system();
+    if(!sys.hasContent())
+        return;
+    sys.handleInputAction(&app, Input::Action::RELEASED, emuKey);
 }
 void ApplicationContext::showSettingAiWu()
 {
-//    if(!EmuSystem::gameIsRunning())
-//        return;
-//    emuViewController().showUI();
+    auto &app = EmuEx::EmuApp::get(*this);
+    auto &sys = app.system();
+    if(!sys.hasContent())
+        return;
+    app.viewController().showUI();
 }
 void ApplicationContext::changeEmulatorStateAiWu(bool pause)
 {
-//    if(!EmuSystem::gameIsRunning())
-//        return;
-//    EmuApp::changeEmulatorStateAiWu(pause);
+    auto &app = EmuEx::EmuApp::get(*this);
+    auto &sys = app.system();
+    if(!sys.hasContent())
+        return;
+    app.changeEmulatorStateAiWu(pause);
 }
 void ApplicationContext::resetAiWu()
 {
-//    if(!EmuSystem::gameIsRunning())
-//        return;
-//    EmuSystem::reset(EmuSystem::RESET_SOFT);
+    auto &app = EmuEx::EmuApp::get(*this);
+    auto &sys = app.system();
+    if(!sys.hasContent())
+        return;
+    sys.reset(app, EmuSystem::RESET_SOFT);
 }
 bool ApplicationContext::isSoundEnabledAiWu()
 {
@@ -1498,52 +1519,54 @@ bool ApplicationContext::isSoundEnabledAiWu()
 }
 void ApplicationContext::setSoundEnabledAiWu(bool enabled)
 {
-//    setSoundEnabled(enabled);
-//    if(enabled)
-//        emuAudio.open(audioOutputAPI());
-//    else
-//        emuAudio.close();
+    auto &app = EmuEx::EmuApp::get(*this);
+    app.setSoundEnabled(enabled);
 }
 void ApplicationContext::screenshotAiWu(const char *filepath)
 {
-//    emuVideo.takeGameScreenshotAiWu(filepath);
+    auto &app = EmuEx::EmuApp::get(*this);
+    auto &video = app.video();
+    video.takeGameScreenshotAiWu(filepath);
 }
 void ApplicationContext::fastForwardAiWu(int speed)
 {
-//    if(speed < 2 || speed > 7){
-//        //内部的加速范围2-7
-//        //关闭加速
-//        emuViewController().setFastForwardActive(false);
-//    } else {
-//        //改变加速数值
-//        optionFastForwardSpeed = speed;
-//        //开启加速
-//        emuViewController().setFastForwardActive(true);
-//    }
+    auto &app = EmuEx::EmuApp::get(*this);
+    auto &sys = app.system();
+    if(!sys.hasContent())
+        return;
+    app.viewController().showUI();
+    if(speed < 2 || speed > 7){
+        //内部的加速范围2-7
+        //关闭加速
+        app.viewController().setFastForwardSpeed(0);
+    } else {
+        //开启加速
+        app.viewController().setFastForwardSpeed(speed);
+    }
 }
 bool ApplicationContext::saveStateAiWu(const char *filepath)
 {
-//    if(auto err = EmuApp::saveState(filepath);
-//            err)
-//    {
-//        EmuApp::printfMessage(4, true, "Save State: %s", err->what());
-//        return false;
-//    }
-    return true;
+    auto &app = EmuEx::EmuApp::get(*this);
+    auto &sys = app.system();
+    if(!sys.hasContent())
+        return false;
+    return app.saveState(filepath);
 }
 bool ApplicationContext::loadStateAiWu(const char *filepath)
 {
-//    if(auto err = EmuApp::loadState(filepath);
-//            err)
-//    {
-//        EmuApp::printfMessage(4, true, "Load State: %s", err->what());
-//        return false;
-//    }
-    return true;
+    auto &app = EmuEx::EmuApp::get(*this);
+    auto &sys = app.system();
+    if(!sys.hasContent())
+        return false;
+    return app.loadState(filepath);
 }
 void ApplicationContext::setCheatListAiWu(std::list<std::string> cheats)
 {
-    //EmuSystem::setCheatListAiWu(cheats);
+    auto &app = EmuEx::EmuApp::get(*this);
+    auto &sys = app.system();
+    if(!sys.hasContent())
+        return ;
+    sys.setCheatListAiWu(cheats);
 }
 //endregion
 }

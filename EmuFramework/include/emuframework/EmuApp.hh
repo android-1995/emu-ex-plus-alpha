@@ -137,6 +137,9 @@ public:
 	void showLastViewFromSystem(ViewAttachParams, const Input::Event &);
 	void showExitAlert(ViewAttachParams, const Input::Event &);
 	void showEmuation();
+	//region 爱吾
+	void changeEmulatorStateAiWu(bool pause);
+	//endregion
 	void launchSystemWithResumePrompt(const Input::Event &);
 	void launchSystem(const Input::Event &, bool tryAutoState);
 	static bool hasArchiveExtension(std::string_view name);

@@ -200,9 +200,24 @@ void EmuVideo::takeGameScreenshot()
 	screenshotNextFrame = true;
 }
 
+//region 爱吾
+void EmuVideo::takeGameScreenshotAiWu(const char *filepath)
+{
+    screenshotNextFrame = true;
+    screenshotPathAiWu = filepath;
+}
+//endregion
+
 void EmuVideo::doScreenshot(EmuSystemTaskContext taskCtx, IG::Pixmap pix)
 {
 	screenshotNextFrame = false;
+    //region 爱吾
+    if(screenshotPathAiWu != nullptr){
+        auto success = app().writeScreenshot(pix, screenshotPathAiWu);
+        screenshotPathAiWu = nullptr;
+        return;
+    }
+    //endregion
 	auto [screenshotNum, path] = app().makeNextScreenshotFilename();
 	if(screenshotNum == -1)
 	{

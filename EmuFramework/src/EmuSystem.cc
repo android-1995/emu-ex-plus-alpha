@@ -631,5 +631,7 @@ bool EmuSystem::updateBackupMemoryCounter()
 [[gnu::weak]] void EmuSystem::closeSystem() {}
 
 EmuSystem &gSystem() { return gApp().system(); }
-
+//region 爱吾
+[[gnu::weak]] void EmuSystem::setCheatListAiWu(std::list<std::string> cheats) {}
+//endregion
 }

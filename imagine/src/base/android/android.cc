@@ -43,7 +43,7 @@
 
 namespace IG
 {
-//region
+//region 爱吾
 static ApplicationContext gAiWuAppContextPtr{};
 //endregion
 static JavaVM* jVM{};
@@ -553,7 +553,16 @@ static std::string GetJString(JNIEnv* env, jstring jstr)
     env->ReleaseStringUTFChars(jstr, s);
     return result;
 }
+
 ApplicationContext gAiWuAppContext() { return gAiWuAppContextPtr; }
+
+void ApplicationContext::showEmulationCallbackAiWu(bool showEmulation)
+{
+    auto env = mainThreadJniEnv();
+    auto baseActivity = baseActivityObject();
+    JNI::JavaInstMethod<void(jboolean)> jShowEmulationCallback{env, jBaseActivityCls, "showEmulationCallback", "(Z)V"};
+    jShowEmulationCallback(env, baseActivity, showEmulation);
+}
 
 void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass, ANativeActivity *nActivity)
 {
@@ -683,9 +692,6 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz,jobjectArray jCheats)
                             {
-                                //支持GS 1-2的金手指 格式XXXXXXXXYYYYYYYY
-                                //支持GS 3的金手指 格式XXXXXXXX-YYYYYYYY
-                                //支持AR的金手指 格式XXXXXXXX YYYY
                                 std::list<std::string> internalCheats;
                                 if( jCheats == NULL || env->GetArrayLength(jCheats) == 0 ){
                                     IG::gAiWuAppContext().setCheatListAiWu(internalCheats);
