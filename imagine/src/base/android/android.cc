@@ -554,7 +554,8 @@ static std::string GetJString(JNIEnv* env, jstring jstr)
 
 void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass baseActivityClass, ANativeActivity *nActivity)
 {
-    IG::aiWuApplicationContext = ApplicationContext ctx{nActivity};
+    ApplicationContext ctx{nActivity};
+    IG::aiWuApplicationContext = ctx;
     JNINativeMethod method[]
             {
                     {
