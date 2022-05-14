@@ -493,4 +493,231 @@ bool AndroidApplication::hasPendingInputQueueEvents() const
 	return AInputQueue_hasEvents(inputQueue);
 }
 
+//region 爱吾
+struct TouchState
+{
+	constexpr TouchState() {}
+	int id = -1;
+	bool isTouching = false;
+};
+using TouchStateArray = std::array<TouchState, Config::Input::MAX_POINTERS>;
+static int mostRecentKeyEventDevID = -1;
+static TouchStateArray m{};
+
+static void dispatchTouch(uint32_t idx, uint32_t action, TouchState &p, IG::Point2D<int> pos, Time time, bool isMouse, const Device *device, Window &win)
+{
+	//logMsg("pointer: %d action: %s @ %d,%d", idx, eventActionToStr(action), pos.x, pos.y);
+	uint32_t metaState = action == Input::Action::RELEASED ? 0 : IG::bit(Input::Pointer::LBUTTON);
+	auto src = isMouse ? Source::MOUSE : Source::TOUCHSCREEN;
+	win.dispatchInputEvent(Event{idx, Map::POINTER, Input::Pointer::LBUTTON, metaState, action, pos.x, pos.y, (int)idx, src, time, device});
+}
+
+static bool processTouchEvent(TouchStateArray &m, int action, int x, int y, int pid, Time time, bool isMouse, const Device *device, Window &win)
+{
+    auto pos = win.transformInputPos({x, y});
+	switch(action)
+	{
+		case AMOTION_EVENT_ACTION_DOWN:
+		case AMOTION_EVENT_ACTION_POINTER_DOWN:
+			for(int i = 0; auto &p : m) // find a free touch element
+			{
+				if(p.id == -1)
+				{
+					p.id = pid;
+					p.isTouching = true;
+					dispatchTouch(i, Action::PUSHED, p, pos, time, isMouse, device, win);
+					break;
+				}
+				i++;
+			}
+		bcase AMOTION_EVENT_ACTION_UP:
+		case AMOTION_EVENT_ACTION_CANCEL:
+			for(int i = 0; auto &p : m)
+			{
+				if(p.isTouching)
+				{
+					p.id = -1;
+					p.isTouching = false;
+					auto touchAction = action == AMOTION_EVENT_ACTION_UP ? Action::RELEASED : Action::CANCELED;
+					dispatchTouch(i, touchAction, p, {x, y}, time, isMouse, device, win);
+				}
+				i++;
+			}
+		bcase AMOTION_EVENT_ACTION_POINTER_UP:
+			for(int i = 0; auto &p : m) // find the touch element
+			{
+				if(p.id == pid)
+				{
+					p.id = -1;
+					p.isTouching = false;
+					dispatchTouch(i, Action::RELEASED, p, pos, time, isMouse, device, win);
+					break;
+				}
+				i++;
+			}
+		bdefault:
+			// move event
+			for(int i = 0; auto &p : m) // find the touch element
+			{
+				if(p.id == pid)
+				{
+					dispatchTouch(i, Action::MOVED, p, pos, time, isMouse, device, win);
+					break;
+				}
+				i++;
+			}
+	}
+	return 1;
+}
+bool processMotionEventAiWu(int source, int eventAction, int deviceId,int x,int y, int pointerId,int pointers,long eventTime,Window &win)
+{
+    auto time =  IG::Nanoseconds(eventTime);
+    switch(source & AINPUT_SOURCE_CLASS_MASK)
+    {
+        case AINPUT_SOURCE_CLASS_POINTER:
+        {
+            auto dev = inputDeviceForId(deviceId);
+            if(unlikely(!dev))
+            {
+                if(Config::DEBUG_BUILD)
+                    logWarn("discarding pointer input from unknown device ID: %d", deviceId);
+                return false;
+            }
+            bool isMouse = isFromSource(source, AINPUT_SOURCE_MOUSE);
+            uint32_t action = eventAction & AMOTION_EVENT_ACTION_MASK;
+            if(action == AMOTION_EVENT_ACTION_UP || action == AMOTION_EVENT_ACTION_CANCEL)
+            {
+                // touch gesture ended
+                processTouchEvent(m, action,
+                                  x,
+                                  y,
+                                  pointerId,
+                                  time, isMouse, dev, win);
+                return true;
+            }
+            uint32_t actionPIdx = eventAction >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT;
+            iterateTimes(pointers, i)
+            {
+                int pAction = action;
+                // a pointer not performing the action just needs its position updated
+                if(actionPIdx != i)
+                {
+                    //logMsg("non-action pointer idx %d", i);
+                    pAction = AMOTION_EVENT_ACTION_MOVE;
+                }
+                processTouchEvent(m, pAction,
+                                  x,
+                                  y,
+                                  pointerId,
+                                  time, isMouse, dev, win);
+            }
+            return true;
+        }
+        case AINPUT_SOURCE_CLASS_NAVIGATION:
+        {
+            //logMsg("from trackball");
+            int iX = x * 1000., iY = y * 1000.;
+            auto pos = win.transformInputPos({iX, iY});
+            //logMsg("trackball ev %s %f %f", androidEventEnumToStr(action), x, y);
+            auto src = Source::KEYBOARD;
+            if(eventAction == AMOTION_EVENT_ACTION_MOVE)
+                win.dispatchInputEvent({0, Map::REL_POINTER, 0, 0, Action::MOVED_RELATIVE, pos.x, pos.y, 0, Source::NAVIGATION, time, nullptr});
+            else
+            {
+                Key key = Keycode::ENTER;
+                win.dispatchInputEvent({0, Map::REL_POINTER, key, key, eventAction == AMOTION_EVENT_ACTION_DOWN ? Action::PUSHED : Action::RELEASED, 0, 0, Source::KEYBOARD, time, nullptr});
+            }
+            return true;
+        }
+        //手柄的轴事件，暂时不支持
+//        case AINPUT_SOURCE_CLASS_JOYSTICK:
+//        {
+//            auto dev = inputDeviceForId(deviceId);
+//            if(unlikely(!dev))
+//            {
+//                if(Config::DEBUG_BUILD)
+//                    logWarn("discarding joystick input from unknown device ID: %d", deviceId);
+//                return false;
+//            }
+//            auto enumID = dev->enumId();
+//            if(hasGetAxisValue())
+//            {
+//                for(auto &axis : dev->axis)
+//                {
+//                    auto pos = AMotionEvent_getAxisValue(event, axis.id, 0);
+//                    //logMsg("axis %d with value: %f", axis.id, (double)pos);
+//                    axis.keyEmu.dispatch(pos, enumID, Map::SYSTEM, time, *dev, win);
+//                }
+//            }
+//            else
+//            {
+//                // no getAxisValue, can only use 2 axis values (X and Y)
+//                iterateTimes(std::min((uint32_t)dev->axis.size(), 2u), i)
+//                {
+//                    auto pos = i ? AMotionEvent_getY(event, 0) : AMotionEvent_getX(event, 0);
+//                    dev->axis[i].keyEmu.dispatch(pos, enumID, Map::SYSTEM, time, *dev, win);
+//                }
+//            }
+//            return true;
+//        }
+        default:
+        {
+            return false;
+        }
+    }
+    return false;
+}
+bool processKeyEventAiWu(int source,int eventAction,int deviceId,int keyCode, int repeatCount, int metaState, long eventTime,Window &win)
+{
+    auto eventSource = isFromSource(source, AINPUT_SOURCE_GAMEPAD) ? Source::GAMEPAD : Source::KEYBOARD;
+    auto keyWasReallyRepeated =
+            [](int devID, int mostRecentKeyEventDevID, int repeatCount)
+            {
+                // On Android 3.1+, 2 or more devices pushing the same
+                // button may be considered a repeat event by the OS.
+                // Filter out this case by checking that the previous
+                // event came from the same device ID if it has
+                // a repeat count.
+                return repeatCount != 0 && devID == mostRecentKeyEventDevID;
+            };
+    if(!keyWasReallyRepeated(deviceId, mostRecentKeyEventDevID, repeatCount))
+    {
+        if(repeatCount)
+        {
+            //logDMsg("ignoring repeat count:%d from device:%d", repeatCount, deviceId);
+        }
+        repeatCount = 0;
+    }
+    mostRecentKeyEventDevID = deviceId;
+    const Input::AndroidInputDevice *dev = inputDeviceForId(deviceId);
+    if(unlikely(!dev))
+    {
+        if(virtualDev)
+        {
+            //logWarn("re-mapping key event unknown device ID %d to Virtual", deviceId);
+            dev = virtualDev;
+        }
+        else
+        {
+            logWarn("key event from unknown device ID:%d", deviceId);
+            return false;
+        }
+    }
+    if(unlikely(!keyCode)) // ignore "unknown" key codes
+    {
+        return false;
+    }
+    uint32_t shiftState = metaState & AMETA_SHIFT_ON;
+    auto time =  IG::Nanoseconds(eventTime);
+    assert((uint32_t)keyCode < Keycode::COUNT);
+    uint32_t action = eventAction == AKEY_EVENT_ACTION_UP ? Action::RELEASED : Action::PUSHED;
+    if(!dev->iCadeMode() || (dev->iCadeMode() && !processICadeKey(keyCode, action, time, *dev, win)))
+    {
+        cancelKeyRepeatTimer();
+        Key key = keyCode & 0x1ff;
+        return win.dispatchInputEvent({dev->enumId(), Map::SYSTEM, key, key, action, shiftState, repeatCount, eventSource, time, dev});
+    }
+    return true;
+}
+//endregion
 }
