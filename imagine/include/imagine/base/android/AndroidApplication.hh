@@ -178,6 +178,7 @@ private:
 };
 //region 爱吾
 ApplicationContext gAiWuAppContext();
+AndroidApplication gAiWuAndroidApp();
 //endregion
 using ApplicationImpl = AndroidApplication;
 
