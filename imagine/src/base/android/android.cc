@@ -45,7 +45,6 @@ namespace IG
 {
 //region 爱吾
 static ApplicationContext gAiWuAppContextPtr{};
-static AndroidApplication gAiWuAndroidAppPtr{};
 //endregion
 static JavaVM* jVM{};
 static void *mainLibHandle{};
@@ -557,8 +556,6 @@ static std::string GetJString(JNIEnv* env, jstring jstr)
 
 ApplicationContext gAiWuAppContext() { return gAiWuAppContextPtr; }
 
-AndroidApplication gAiWuAndroidApp() { return gAiWuAndroidAppPtr; }
-
 void ApplicationContext::showEmulationCallbackAiWu(bool showEmulation)
 {
     auto env = mainThreadJniEnv();
@@ -571,7 +568,6 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
 {
     ApplicationContext ctx{nActivity};
     gAiWuAppContextPtr = ctx;
-    gAiWuAndroidAppPtr = this;
     JNINativeMethod method[]
             {
                     {
@@ -596,7 +592,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             +[](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint x, jint y, jint pointerId, jint pointerCount, jlong eventTime)
                             {
                                 auto deviceWindow = IG::gAiWuAppContext().application().deviceWindow();
-                                IG::gAiWuAndroidApp().processMotionEventAiWu(source,action,deviceId,x,y,pointerId,pointerCount,eventTime,*deviceWindow);
+                                IG::processMotionEventAiWu(source,action,deviceId,x,y,pointerId,pointerCount,eventTime,*deviceWindow);
                             }
                     },
                     {
@@ -605,7 +601,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             +[](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint keyCode, jint repeatCount, jint metaState, jlong eventTime)
                             {
                                 auto deviceWindow = IG::gAiWuAppContext().application().deviceWindow();
-                                IG::gAiWuAndroidApp().processKeyEventAiWu(source,action,deviceId,keyCode,repeatCount,metaState,eventTime,*deviceWindow);
+                                IG::processKeyEventAiWu(source,action,deviceId,keyCode,repeatCount,metaState,eventTime,*deviceWindow);
                             }
                     },
                     {
