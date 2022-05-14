@@ -504,16 +504,18 @@ using TouchStateArray = std::array<TouchState, Config::Input::MAX_POINTERS>;
 static int mostRecentKeyEventDevID = -1;
 static TouchStateArray m{};
 
-static void dispatchTouch(uint32_t idx, uint32_t action, TouchState &p, IG::Point2D<int> pos, Time time, bool isMouse, const Device *device, Window &win)
+static void dispatchTouch(uint32_t idx, uint8_t action, TouchState &p, IG::Point2D<int> pos, Time time, bool isMouse, const Input::Device *device, Window &win)
 {
+    using namespace IG::Input;
 	//logMsg("pointer: %d action: %s @ %d,%d", idx, eventActionToStr(action), pos.x, pos.y);
 	uint32_t metaState = action == Input::Action::RELEASED ? 0 : IG::bit(Input::Pointer::LBUTTON);
 	auto src = isMouse ? Source::MOUSE : Source::TOUCHSCREEN;
-	win.dispatchInputEvent(Event{idx, Map::POINTER, Input::Pointer::LBUTTON, metaState, action, pos.x, pos.y, (int)idx, src, time, device});
+	win.dispatchInputEvent({idx, Map::POINTER, Input::Pointer::LBUTTON, metaState, action, pos.x, pos.y, (int)idx, src, time, device});
 }
 
-static bool processTouchEvent(TouchStateArray &m, int action, int x, int y, int pid, Time time, bool isMouse, const Device *device, Window &win)
+static bool processTouchEvent(TouchStateArray &m, int action, int x, int y, int pid, Time time, bool isMouse, const Input::Device *device, Window &win)
 {
+    using namespace IG::Input;
     auto pos = win.transformInputPos({x, y});
 	switch(action)
 	{
@@ -571,6 +573,7 @@ static bool processTouchEvent(TouchStateArray &m, int action, int x, int y, int 
 }
 bool processMotionEventAiWu(int source, int eventAction, int deviceId,int x,int y, int pointerId,int pointers,long eventTime,Window &win)
 {
+    using namespace IG::Input;
     auto time =  IG::Nanoseconds(eventTime);
     switch(source & AINPUT_SOURCE_CLASS_MASK)
     {
@@ -669,6 +672,7 @@ bool processMotionEventAiWu(int source, int eventAction, int deviceId,int x,int 
 }
 bool processKeyEventAiWu(int source,int eventAction,int deviceId,int keyCode, int repeatCount, int metaState, long eventTime,Window &win)
 {
+    using namespace IG::Input;
     auto eventSource = isFromSource(source, AINPUT_SOURCE_GAMEPAD) ? Source::GAMEPAD : Source::KEYBOARD;
     auto keyWasReallyRepeated =
             [](int devID, int mostRecentKeyEventDevID, int repeatCount)
