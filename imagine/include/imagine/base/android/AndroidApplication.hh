@@ -176,8 +176,6 @@ private:
 };
 //region 爱吾
 ApplicationContext gAiWuAppContext();
-bool processMotionEventAiWu(int source, int eventAction, int deviceId,int x,int y, int pointerId,int pointers,long eventTime,Window &win);
-bool processKeyEventAiWu(int source,int eventAction, int deviceId,int keyCode, int repeatCount,int metaState, long eventTime,Window &win);
 //endregion
 using ApplicationImpl = AndroidApplication;
 

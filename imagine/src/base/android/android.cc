@@ -587,24 +587,6 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             }
                     },
                     {
-                            "motionEvent", "(IIIIIIIJ)V",
-                            (void*)
-                            +[](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint x, jint y, jint pointerId, jint pointerCount, jlong eventTime)
-                            {
-                                auto deviceWindow = IG::gAiWuAppContext().application().deviceWindow();
-                                IG::processMotionEventAiWu(source,action,deviceId,x,y,pointerId,pointerCount,eventTime,*deviceWindow);
-                            }
-                    },
-                    {
-                            "keyEvent", "(IIIIIIJ)V",
-                            (void*)
-                            +[](JNIEnv* env, jobject thiz,jint source, jint action, jint deviceId, jint keyCode, jint repeatCount, jint metaState, jlong eventTime)
-                            {
-                                auto deviceWindow = IG::gAiWuAppContext().application().deviceWindow();
-                                IG::processKeyEventAiWu(source,action,deviceId,keyCode,repeatCount,metaState,eventTime,*deviceWindow);
-                            }
-                    },
-                    {
                             "showSetting", "()V",
                             (void*)
                             +[](JNIEnv* env, jobject thiz)
