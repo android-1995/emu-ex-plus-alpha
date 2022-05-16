@@ -1,6 +1,7 @@
 #pragma once
 
 #include <emuframework/Option.hh>
+#include <list>
 
 namespace IG
 {
@@ -21,7 +22,9 @@ extern bool detectedRtcGame;
 
 void setRTC(unsigned mode);
 void readCheatFile(EmuSystem &);
-
+//region 爱吾
+void setCheatListForAiWu(std::list<std::string> cheats);
+//endregion
 }
 
 struct GBASys;

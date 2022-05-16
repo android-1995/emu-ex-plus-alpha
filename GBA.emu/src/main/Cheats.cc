@@ -241,4 +241,35 @@ void readCheatFile(EmuSystem &sys)
 	}
 }
 
+//region爱吾
+void setCheatListForAiWu(std::list<std::string> cheats)
+{
+    //先删除所有
+    cheatsDeleteAll(gGba.cpu, false);
+    //然后写入
+    for (std::list<std::string>::iterator it = cheats.begin(); it != cheats.end(); it++)
+    {
+        std::string& cheat = *it;
+        char tempStr[20];
+        string_copy(tempStr, cheat.c_str());
+        string_toUpper(tempStr);
+        int len = strlen(tempStr);
+        if(len == 16){//GS v12 XXXXXXXXYYYYYYYY
+            cheatsAddGSACode(gGba.cpu, tempStr, "", false);
+            continue;
+        }
+        if(len == 17) {//GS v3 XXXXXXXX-YYYYYYYY
+            if (tempStr[8] == '-')
+            {
+                memmove(&tempStr[8], &tempStr[9], 9); // 8 chars + null byte
+            }
+            cheatsAddGSACode(gGba.cpu, tempStr, "" , true);
+            continue;
+        }
+        if(len == 13) {//AR XXXXXXXX YYYY
+            cheatsAddCBACode(gGba.cpu, tempStr, "");
+        }
+    }
+}
+//endregion
 }
