@@ -438,7 +438,7 @@ void EmuViewController::showEmulation()
 	placeEmuViews();
 
 	//回调一下C层
-    Base::showEmulationCallbackAiWu(true);
+    appContext().showEmulationCallbackAiWu(true);
 }
 
 void EmuViewController::showUI(bool updateTopView)
@@ -457,7 +457,7 @@ void EmuViewController::showUI(bool updateTopView)
 	}
 
     //回调一下C层
-    Base::showEmulationCallbackAiWu(false);
+    appContext().showEmulationCallbackAiWu(false);
 }
 
 bool EmuViewController::showAutoStateConfirm(const Input::Event &e)
