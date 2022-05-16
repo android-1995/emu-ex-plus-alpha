@@ -32,7 +32,7 @@ static constexpr bool CAN_TURN_OFF_MENU_BTN = !Config::envIsIOS;
 
 static constexpr const char *ctrlStateStr[]
 {
-	"Off", "On", "Hidden"
+	"关", "开", "隐藏"
 };
 
 static constexpr unsigned touchCtrlSizeMenuVal[10]
@@ -306,7 +306,9 @@ TextMenuItem::SelectDelegate TouchConfigView::setAlphaDel(uint8_t val)
 void TouchConfigView::draw(Gfx::RendererCommands &cmds)
 {
 	projP.resetTransforms(cmds);
-	vController().draw(cmds, false, true, .75);
+	//region 爱吾：隐藏按键
+	//vController().draw(cmds, false, true, .75);
+	//endregion
 	TableView::draw(cmds);
 }
 
@@ -349,7 +351,7 @@ void TouchConfigView::refreshTouchConfigMenu()
 
 TouchConfigView::TouchConfigView(ViewAttachParams attach, VController &vCtrl,
 	IG::utf16String faceBtnName, IG::utf16String centerBtnName):
-	TableView{"On-screen Input Setup", attach, item},
+	TableView{"屏幕按键设置", attach, item},
 	vControllerPtr{&vCtrl},
 	touchCtrlItem
 	{
@@ -615,7 +617,7 @@ TouchConfigView::TouchConfigView(ViewAttachParams attach, VController &vCtrl,
 	},
 	menuState
 	{
-		"Open Menu Button", &defaultFace(),
+		"菜单按钮", &defaultFace(),
 		(int)layoutPosArr(vCtrl, window())[3].state,
 		[](const MultiChoiceMenuItem &)
 		{
@@ -634,7 +636,7 @@ TouchConfigView::TouchConfigView(ViewAttachParams attach, VController &vCtrl,
 	},
 	ffState
 	{
-		"Fast-forward Button", &defaultFace(),
+		"加速按钮", &defaultFace(),
 		(int)layoutPosArr(vCtrl, window())[4].state,
 		ffStateItem
 	},
@@ -687,14 +689,16 @@ TouchConfigView::TouchConfigView(ViewAttachParams attach, VController &vCtrl,
 		"Other Options", &defaultBoldFace()
 	}
 {
-	item.emplace_back(&touchCtrl);
-	if(EmuSystem::maxPlayers > 1)
-	{
-		item.emplace_back(&pointerInput);
-	}
-	item.emplace_back(&size);
-	item.emplace_back(&btnPlace);
-	item.emplace_back(&btnTogglesHeading);
+//region 去掉功能
+//	item.emplace_back(&touchCtrl);
+//	if(EmuSystem::maxPlayers > 1)
+//	{
+//		item.emplace_back(&pointerInput);
+//	}
+//	item.emplace_back(&size);
+//	item.emplace_back(&btnPlace);
+//	item.emplace_back(&btnTogglesHeading);
+//endregion
 	auto &layoutPos = layoutPosArr(vCtrl, window());
 	{
 		if(!CAN_TURN_OFF_MENU_BTN) // prevent iOS port from disabling menu control
@@ -705,31 +709,33 @@ TouchConfigView::TouchConfigView(ViewAttachParams attach, VController &vCtrl,
 		item.emplace_back(&menuState);
 	}
 	item.emplace_back(&ffState);
-	item.emplace_back(&dPadState);
-	item.emplace_back(&faceBtnState);
-	item.emplace_back(&centerBtnState);
-	if(vController().hasTriggers())
-	{
-		item.emplace_back(&triggerPos);
-	}
-	item.emplace_back(&dpadtHeading);
-	item.emplace_back(&deadzone);
-	item.emplace_back(&diagonalSensitivity);
-	item.emplace_back(&faceBtnHeading);
-	item.emplace_back(&btnSpace);
-	item.emplace_back(&btnStagger);
-	item.emplace_back(&btnExtraXSize);
-	item.emplace_back(&btnExtraYSize);
-	item.emplace_back(&otherHeading);
-	item.emplace_back(&boundingBoxes);
-	if(app().vibrationManager().hasVibrator())
-	{
-		item.emplace_back(&vibrate);
-	}
-	item.emplace_back(&showOnTouch);
-	item.emplace_back(&alpha);
-	item.emplace_back(&resetControls);
-	item.emplace_back(&resetAllControls);
+	//region 去掉功能
+//	item.emplace_back(&dPadState);
+//	item.emplace_back(&faceBtnState);
+//	item.emplace_back(&centerBtnState);
+//	if(vController().hasTriggers())
+//	{
+//		item.emplace_back(&triggerPos);
+//	}
+//	item.emplace_back(&dpadtHeading);
+//	item.emplace_back(&deadzone);
+//	item.emplace_back(&diagonalSensitivity);
+//	item.emplace_back(&faceBtnHeading);
+//	item.emplace_back(&btnSpace);
+//	item.emplace_back(&btnStagger);
+//	item.emplace_back(&btnExtraXSize);
+//	item.emplace_back(&btnExtraYSize);
+//	item.emplace_back(&otherHeading);
+//	item.emplace_back(&boundingBoxes);
+//	if(app().vibrationManager().hasVibrator())
+//	{
+//		item.emplace_back(&vibrate);
+//	}
+//	item.emplace_back(&showOnTouch);
+//	item.emplace_back(&alpha);
+//	item.emplace_back(&resetControls);
+//	item.emplace_back(&resetAllControls);
+    //endregion
 }
 
 }

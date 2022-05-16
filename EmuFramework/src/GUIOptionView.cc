@@ -30,7 +30,7 @@ static const char *portraitName = USE_MOBILE_ORIENTATION_NAMES ? "Portrait" : "S
 static const char *portrait2Name = USE_MOBILE_ORIENTATION_NAMES ? "Portrait 2" : "Upside Down";
 
 GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
-	TableView{"GUI Options", attach, item},
+	TableView{"界面设置", attach, item},
 	pauseUnfocused
 	{
 		"Pause if unfocused", &defaultFace(),
@@ -51,10 +51,10 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 		{"8",  &defaultFace(), setFontSizeDel(), 8000},
 		{"9",  &defaultFace(), setFontSizeDel(), 9000},
 		{"10", &defaultFace(), setFontSizeDel(), 10000},
-		{"Custom Value", &defaultFace(),
+		{"自定义", &defaultFace(),
 			[this](const Input::Event &e)
 			{
-				app().pushAndShowNewCollectValueInputView<double>(attachParams(), e, "Input 2.0 to 10.0", "",
+				app().pushAndShowNewCollectValueInputView<double>(attachParams(), e, "输入2.0到10.0", "",
 					[this](EmuApp &app, auto val)
 					{
 						int scaledIntVal = val * 1000.0;
@@ -66,7 +66,7 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 						}
 						else
 						{
-							app.postErrorMessage("Value not in range");
+							app.postErrorMessage("值错误");
 							return false;
 						}
 					});
@@ -76,7 +76,7 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	fontSize
 	{
-		"Font Size", &defaultFace(),
+		"字体大小", &defaultFace(),
 		[this](auto idx, Gfx::Text &t)
 		{
 			t.setString(fmt::format("{:.2f}", app().fontSize() / 1000.));
@@ -87,7 +87,7 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	notificationIcon
 	{
-		"Suspended App Icon", &defaultFace(),
+		"通知栏图标", &defaultFace(),
 		(bool)app().notificationIconOption().val,
 		[this](BoolMenuItem &item)
 		{
@@ -108,9 +108,9 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	lowProfileOSNavItem
 	{
-		{"Off",    &defaultFace(), setLowProfileOSNavDel(), (int)Tristate::OFF},
-		{"In Emu", &defaultFace(), setLowProfileOSNavDel(), (int)Tristate::IN_EMU},
-		{"On",     &defaultFace(), setLowProfileOSNavDel(), (int)Tristate::ON}
+		{"关",    &defaultFace(), setLowProfileOSNavDel(), (int)Tristate::OFF},
+		{"游戏时", &defaultFace(), setLowProfileOSNavDel(), (int)Tristate::IN_EMU},
+		{"开",     &defaultFace(), setLowProfileOSNavDel(), (int)Tristate::ON}
 	},
 	lowProfileOSNav
 	{
@@ -132,7 +132,7 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	idleDisplayPowerSave
 	{
-		"Allow Screen Timeout In Emulation", &defaultFace(),
+		"模拟中允许屏幕超时", &defaultFace(),
 		app().idleDisplayPowerSave(),
 		[this](BoolMenuItem &item)
 		{
@@ -141,7 +141,7 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	navView
 	{
-		"Title Bar", &defaultFace(),
+		"标题栏", &defaultFace(),
 		app().showsTitleBar(),
 		[this](BoolMenuItem &item)
 		{
@@ -150,7 +150,7 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	backNav
 	{
-		"Title Back Navigation", &defaultFace(),
+		"标题栏返回按钮", &defaultFace(),
 		attach.viewManager().needsBackControl(),
 		[this](BoolMenuItem &item)
 		{
@@ -161,9 +161,9 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	systemActionsIsDefaultMenu
 	{
-		"Default Menu", &defaultFace(),
+		"默认菜单", &defaultFace(),
 		(bool)app().systemActionsIsDefaultMenuOption().val,
-		"Last Used", "System Actions",
+		"上次使用", "游戏菜单",
 		[this](BoolMenuItem &item)
 		{
 			app().systemActionsIsDefaultMenuOption() = item.flipBoolValue(*this);
@@ -241,10 +241,10 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 
 void GUIOptionView::loadStockItems()
 {
-	if(!app().pauseUnfocusedOption().isConst)
-	{
-		item.emplace_back(&pauseUnfocused);
-	}
+//	if(!app().pauseUnfocusedOption().isConst)
+//	{
+//		item.emplace_back(&pauseUnfocused);
+//	}
 	if(!app().notificationIconOption().isConst)
 	{
 		item.emplace_back(&notificationIcon);
@@ -264,25 +264,25 @@ void GUIOptionView::loadStockItems()
 	{
 		item.emplace_back(&lowProfileOSNav);
 	}
-	if(used(hideOSNav))
-	{
-		item.emplace_back(&hideOSNav);
-	}
-	if(used(statusBar))
-	{
-		item.emplace_back(&statusBar);
-	}
-	if(EmuSystem::hasBundledGames)
-	{
-		item.emplace_back(&showBundledGames);
-	}
-	#ifdef CONFIG_BLUETOOTH
-	item.emplace_back(&showBluetoothScan);
-	#endif
-	item.emplace_back(&showHiddenFiles);
-	item.emplace_back(&orientationHeading);
-	item.emplace_back(&emuOrientation);
-	item.emplace_back(&menuOrientation);
+//	if(used(hideOSNav))
+//	{
+//		item.emplace_back(&hideOSNav);
+//	}
+//	if(used(statusBar))
+//	{
+//		item.emplace_back(&statusBar);
+//	}
+//	if(EmuSystem::hasBundledGames)
+//	{
+//		item.emplace_back(&showBundledGames);
+//	}
+//	#ifdef CONFIG_BLUETOOTH
+//	item.emplace_back(&showBluetoothScan);
+//	#endif
+//	item.emplace_back(&showHiddenFiles);
+//	item.emplace_back(&orientationHeading);
+//	item.emplace_back(&emuOrientation);
+//	item.emplace_back(&menuOrientation);
 }
 
 TextMenuItem::SelectDelegate GUIOptionView::setMenuOrientationDel()

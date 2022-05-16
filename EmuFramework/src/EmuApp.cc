@@ -209,15 +209,15 @@ public:
 		AlertView
 		{
 			attach,
-			"Really Exit? (Push Back/Escape again to confirm)",
+			"确定退出游戏吗?(再次按下返回键确认)",
 			hasEmuContent ? 3u : 2u
 		}
 	{
-		setItem(0, "Yes", [this](){ appContext().exit(); });
-		setItem(1, "No", [](){});
+		setItem(0, "确定", [this](){ appContext().exit(); });
+		setItem(1, "取消", [](){});
 		if(item.size() == 3)
 		{
-			setItem(2, "Close Menu",
+			setItem(2, "返回游戏",
 				[&]()
 				{
 					emuViewController.showEmulation();
@@ -499,6 +499,17 @@ void EmuApp::mainInitCommon(IG::ApplicationInitParams initParams, IG::Applicatio
 	auto appConfig = loadConfigFile(ctx);
 	system().onOptionsLoaded();
 	loadSystemOptions();
+	//region 爱吾：改一些配置
+    //触屏显示按键 关闭
+    vController.setShowOnTouchInput(false);
+    //失去焦点暂停 关闭
+    optionPauseUnfocused = false;
+    //手柄等输入设备更改通知 关闭
+    optionNotifyInputDeviceChange= false;
+    //隐藏导航栏和状态栏
+    optionHideOSNav = 2 ;
+    optionHideStatusBar = 2 ;
+    //endregion
 	updateLegacySavePathOnStoragePath(ctx, system());
 	auto launchGame = parseCommandArgs(initParams.commandArgs());
 	if(launchGame)
@@ -858,7 +869,7 @@ void EmuApp::promptSystemReloadDueToSetOption(ViewAttachParams attach, const Inp
 	if(!system().hasContent())
 		return;
 	auto ynAlertView = std::make_unique<YesNoAlertView>(attach,
-		"This option takes effect next time the system starts. Restart it now?");
+		"该选项在系统下次启动时生效。现在重启吗？");
 	ynAlertView->setOnYes(
 		[this, params]()
 		{

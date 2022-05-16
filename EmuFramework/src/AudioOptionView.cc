@@ -23,10 +23,10 @@ namespace EmuEx
 {
 
 AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
-	TableView{"Audio Options", attach, item},
+	TableView{"音频设置", attach, item},
 	snd
 	{
-		"Sound", &defaultFace(),
+		"声音", &defaultFace(),
 		app().soundIsEnabled(),
 		[this](BoolMenuItem &item)
 		{
@@ -35,7 +35,7 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	soundDuringFastForward
 	{
-		"Sound During Fast Forward", &defaultFace(),
+		"加速时声音", &defaultFace(),
 		app().soundDuringFastForwardIsEnabled(),
 		[this](BoolMenuItem &item)
 		{
@@ -47,7 +47,7 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 		{"100%", &defaultFace(), setVolumeDel(), 100},
 		{"50%",  &defaultFace(), setVolumeDel(), 50},
 		{"25%",  &defaultFace(), setVolumeDel(), 25},
-		{"Custom Value", &defaultFace(),
+		{"自定义", &defaultFace(),
 			[this](const Input::Event &e)
 			{
 				app().pushAndShowNewCollectValueInputView<int>(attachParams(), e, "Input 0 to 100", "",
@@ -61,7 +61,7 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 						}
 						else
 						{
-							app.postErrorMessage("Value not in range");
+							app.postErrorMessage("值错误");
 							return false;
 						}
 					});
@@ -71,7 +71,7 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	soundVolume
 	{
-		"Volume", &defaultFace(),
+		"音量", &defaultFace(),
 		[this](size_t idx, Gfx::Text &t)
 		{
 			t.setString(fmt::format("{}%", app().soundVolume()));
@@ -92,13 +92,13 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	soundBuffers
 	{
-		"Buffer Size In Frames", &defaultFace(),
+		"缓冲区大小(以帧为单位)", &defaultFace(),
 		(MenuItem::Id)app().soundBuffers(),
 		soundBuffersItem
 	},
 	addSoundBuffersOnUnderrun
 	{
-		"Auto-increase Buffer Size", &defaultFace(),
+		"自动增加缓冲区大小", &defaultFace(),
 		app().addSoundBuffersOnUnderrun(),
 		[this](BoolMenuItem &item)
 		{
@@ -107,13 +107,13 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	audioRate
 	{
-		"Sound Rate", &defaultFace(),
+		"采样率", &defaultFace(),
 		0,
 		audioRateItem
 	},
 	audioSoloMix
 	{
-		"Mix With Other Apps", &defaultFace(),
+		"允许其他应用后台播放音乐", &defaultFace(),
 		!app().audioManager().soloMix(),
 		[this](BoolMenuItem &item)
 		{
@@ -125,7 +125,7 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 		[this]()
 		{
 			ApiItemContainer items{};
-			items.emplace_back("Auto", &defaultFace(), [this](View &view)
+			items.emplace_back("自动", &defaultFace(), [this](View &view)
 			{
 				app().setAudioOutputAPI(Audio::Api::DEFAULT);
 				doIfUsed(api, [&](auto &api){ api.setSelected((MenuItem::Id)app().audioManager().makeValidAPI()); });
@@ -145,7 +145,7 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	api
 	{
-		"Audio Driver", &defaultFace(),
+		"音频驱动", &defaultFace(),
 		(MenuItem::Id)app().audioManager().makeValidAPI(app().audioOutputAPI()),
 		apiItem
 	}
@@ -164,7 +164,7 @@ void AudioOptionView::loadStockItems()
 	if(app().canChangeSoundRate())
 	{
 		audioRateItem.clear();
-		audioRateItem.emplace_back("Device Native", &defaultFace(),
+		audioRateItem.emplace_back("与本机一致", &defaultFace(),
 			[this](View &view)
 			{
 				app().setSoundRate(0);

@@ -808,7 +808,9 @@ void VController::setGamepadControlsVisible(bool on)
 
 bool VController::gamepadControlsVisible() const
 {
-	return gamepadIsVisible;
+	//return gamepadIsVisible;
+	//一直显示按键
+    return true;
 }
 
 void VController::setPhysicalControlsPresent(bool present)

@@ -87,25 +87,25 @@ void EmuSystemActionsView::onShow()
 
 void EmuSystemActionsView::loadStandardItems()
 {
-	if(EmuSystem::hasCheats)
-	{
-		item.emplace_back(&cheats);
-	}
-	item.emplace_back(&reset);
-	item.emplace_back(&loadState);
-	item.emplace_back(&saveState);
-	stateSlot.setName(makeStateSlotStr(system(), system().stateSlot()));
-	item.emplace_back(&stateSlot);
-	#ifdef CONFIG_EMUFRAMEWORK_ADD_LAUNCHER_ICON
-	item.emplace_back(&addLauncherIcon);
-	#endif
-	item.emplace_back(&screenshot);
+//	if(EmuSystem::hasCheats)
+//	{
+//		item.emplace_back(&cheats);
+//	}
+//	item.emplace_back(&reset);
+//	item.emplace_back(&loadState);
+//	item.emplace_back(&saveState);
+//	stateSlot.setName(makeStateSlotStr(system(), system().stateSlot()));
+//	item.emplace_back(&stateSlot);
+//	#ifdef CONFIG_EMUFRAMEWORK_ADD_LAUNCHER_ICON
+//	item.emplace_back(&addLauncherIcon);
+//	#endif
+//	item.emplace_back(&screenshot);
 	item.emplace_back(&resetSessionOptions);
-	item.emplace_back(&close);
+//	item.emplace_back(&close);
 }
 
 EmuSystemActionsView::EmuSystemActionsView(ViewAttachParams attach, bool customMenu):
-	TableView{"System Actions", attach, item},
+	TableView{"游戏菜单", attach, item},
 	cheats
 	{
 		"Cheats", &defaultFace(),
@@ -251,13 +251,13 @@ EmuSystemActionsView::EmuSystemActionsView(ViewAttachParams attach, bool customM
 	},
 	resetSessionOptions
 	{
-		"Reset Saved Options", &defaultFace(),
+		"重置已保存的设置", &defaultFace(),
 		[this](const Input::Event &e)
 		{
 			if(!app().hasSavedSessionOptions())
 				return;
 			auto ynAlertView = makeView<YesNoAlertView>(
-				"Reset saved options for the currently running system to defaults? Some options only take effect next time the system loads.");
+				"将当前运行的系统的已保存选项重置为默认值？某些选项仅在系统下次加载时生效。");
 			ynAlertView->setOnYes(
 				[this]()
 				{

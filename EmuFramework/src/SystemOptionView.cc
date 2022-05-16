@@ -63,7 +63,7 @@ BiosSelectMenu::BiosSelectMenu(IG::utf16String name, ViewAttachParams attach, FS
 	},
 	selectFile
 	{
-		"Select File", &defaultFace(),
+		"选择文件", &defaultFace(),
 		[this](const Input::Event &e)
 		{
 			auto fPicker = makeView<EmuFilePicker>(FSPicker::Mode::FILE, fsFilter, e);
@@ -81,7 +81,7 @@ BiosSelectMenu::BiosSelectMenu(IG::utf16String name, ViewAttachParams attach, FS
 	},
 	unset
 	{
-		"Unset", &defaultFace(),
+		"未设置", &defaultFace(),
 		[this]()
 		{
 			biosPathStr->clear();
@@ -117,17 +117,17 @@ static auto savesMenuEntryStr(IG::ApplicationContext ctx, std::string_view saveP
 }
 
 SystemOptionView::SystemOptionView(ViewAttachParams attach, bool customMenu):
-	TableView{"System Options", attach, item},
+	TableView{"系统设置", attach, item},
 	autoSaveStateItem
 	{
-		{"Off",       &defaultFace(), setAutoSaveStateDel(), 0},
-		{"Game Exit", &defaultFace(), setAutoSaveStateDel(), 1},
-		{"15mins",    &defaultFace(), setAutoSaveStateDel(), 15},
-		{"30mins",    &defaultFace(), setAutoSaveStateDel(), 30},
+		{"关",       &defaultFace(), setAutoSaveStateDel(), 0},
+		{"退出时", &defaultFace(), setAutoSaveStateDel(), 1},
+		{"15分钟",    &defaultFace(), setAutoSaveStateDel(), 15},
+		{"30分钟",    &defaultFace(), setAutoSaveStateDel(), 30},
 	},
 	autoSaveState
 	{
-		"Auto-save State", &defaultFace(),
+		"自动存档", &defaultFace(),
 		(MenuItem::Id)app().autoSaveStateOption().val,
 		autoSaveStateItem
 	},
@@ -166,9 +166,9 @@ SystemOptionView::SystemOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	performanceMode
 	{
-		"Performance Mode", &defaultFace(),
+		"性能模式", &defaultFace(),
 		(bool)app().sustainedPerformanceModeOption(),
-		"Normal", "Sustained",
+		"正常", "省电",
 		[this](BoolMenuItem &item)
 		{
 			app().sustainedPerformanceModeOption() = item.flipBoolValue(*this);
@@ -184,9 +184,9 @@ SystemOptionView::SystemOptionView(ViewAttachParams attach, bool customMenu):
 void SystemOptionView::loadStockItems()
 {
 	item.emplace_back(&autoSaveState);
-	item.emplace_back(&confirmAutoLoadState);
-	item.emplace_back(&confirmOverwriteState);
-	item.emplace_back(&fastForwardSpeed);
+//	item.emplace_back(&confirmAutoLoadState);
+//	item.emplace_back(&confirmOverwriteState);
+//	item.emplace_back(&fastForwardSpeed);
 	if(used(performanceMode))
 		item.emplace_back(&performanceMode);
 }

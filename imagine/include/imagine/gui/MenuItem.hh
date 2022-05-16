@@ -279,7 +279,7 @@ public:
 
 protected:
 	SelectDelegate selectD{};
-	std::u16string offStr{u"Off"}, onStr{u"On"};
+	std::u16string offStr{u"关"}, onStr{u"开"};
 };
 
 class MultiChoiceMenuItem : public BaseDualTextMenuItem

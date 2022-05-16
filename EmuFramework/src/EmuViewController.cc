@@ -49,8 +49,8 @@ public:
 		{
 			attach,
 			"",
-			"Continue",
-			"Restart Game",
+			"继续上次进度",
+			"重头开始",
 			[this]()
 			{
 				launchSystem(app(), true);
@@ -61,7 +61,7 @@ public:
 			}
 		}
 	{
-		setLabel(fmt::format("Auto-save state exists from:\n{}", dateStr));
+		setLabel(fmt::format("自动存档存在:\n{}", dateStr));
 	}
 };
 
@@ -436,6 +436,9 @@ void EmuViewController::showEmulation()
 	emuInputView.resetInput();
 	startEmulation();
 	placeEmuViews();
+
+	//回调一下C层
+    Base::showEmulationCallbackAiWu(true);
 }
 
 void EmuViewController::showUI(bool updateTopView)
@@ -452,6 +455,9 @@ void EmuViewController::showUI(bool updateTopView)
 		viewStack.show();
 		viewStack.top().postDraw();
 	}
+
+    //回调一下C层
+    Base::showEmulationCallbackAiWu(false);
 }
 
 bool EmuViewController::showAutoStateConfirm(const Input::Event &e)

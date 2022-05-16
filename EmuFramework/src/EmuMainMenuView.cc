@@ -139,19 +139,21 @@ void EmuMainMenuView::onShow()
 
 void EmuMainMenuView::loadFileBrowserItems()
 {
-	item.emplace_back(&loadGame);
-	item.emplace_back(&recentGames);
-	if(EmuSystem::hasBundledGames && app().showsBundledGames())
-	{
-		item.emplace_back(&bundledGames);
-	}
+//去掉功能
+//	item.emplace_back(&loadGame);
+//	item.emplace_back(&recentGames);
+//	if(EmuSystem::hasBundledGames && app().showsBundledGames())
+//	{
+//		item.emplace_back(&bundledGames);
+//	}
 }
 
 void EmuMainMenuView::loadStandardItems()
 {
 	item.emplace_back(&systemActions);
 	item.emplace_back(&onScreenInputManager);
-	item.emplace_back(&inputManager);
+	//去掉功能
+	//item.emplace_back(&inputManager);
 	item.emplace_back(&options);
 	#ifdef CONFIG_BLUETOOTH
 	if(app().showsBluetoothScanItems())
@@ -186,7 +188,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	},
 	systemActions
 	{
-		"System Actions", &defaultFace(),
+		"系统操作", &defaultFace(),
 		[this](const Input::Event &e)
 		{
 			if(!system().hasContent())
@@ -215,7 +217,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	},
 	options
 	{
-		"Options", &defaultFace(),
+		"设置", &defaultFace(),
 		[this](const Input::Event &e)
 		{
 			pushAndShow(makeView<OptionCategoryView>(*audio, *videoLayer), e);
@@ -223,7 +225,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	},
 	onScreenInputManager
 	{
-		"On-screen Input Setup", &defaultFace(),
+		"屏幕按键设置", &defaultFace(),
 		[this](const Input::Event &e)
 		{
 			pushAndShow(makeView<TouchConfigView>(app().defaultVController(), EmuSystem::inputFaceBtnName, EmuSystem::inputCenterBtnName), e);
@@ -239,7 +241,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	},
 	benchmark
 	{
-		"Benchmark Content", &defaultFace(),
+		"游戏测试", &defaultFace(),
 		[this](const Input::Event &e)
 		{
 			pushAndShow(EmuFilePicker::makeForBenchmarking(attachParams(), e), e, false);
@@ -336,7 +338,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	#endif
 	about
 	{
-		"About", &defaultFace(),
+		"关于", &defaultFace(),
 		[this](const Input::Event &e)
 		{
 			pushAndShow(makeView<CreditsView>(EmuSystem::creditsViewStr), e);
@@ -344,7 +346,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 	},
 	exitApp
 	{
-		"Exit", &defaultFace(),
+		"退出", &defaultFace(),
 		[this]()
 		{
 			appContext().exit();
@@ -369,7 +371,7 @@ EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
 OptionCategoryView::OptionCategoryView(ViewAttachParams attach, EmuAudio &audio, EmuVideoLayer &videoLayer):
 	TableView
 	{
-		"Options",
+		"设置",
 		attach,
 		[this](const TableView &) { return hasGooglePlayStoreFeatures() ? std::size(subConfig) : std::size(subConfig)-1; },
 		[this](const TableView &, size_t idx) -> MenuItem& { return subConfig[idx]; }
@@ -377,7 +379,7 @@ OptionCategoryView::OptionCategoryView(ViewAttachParams attach, EmuAudio &audio,
 	subConfig
 	{
 		{
-			"Video", &defaultFace(),
+			"视频", &defaultFace(),
 			[this, &videoLayer](const Input::Event &e)
 			{
 				auto view = EmuApp::makeView(attachParams(), EmuApp::ViewID::VIDEO_OPTIONS);
@@ -386,7 +388,7 @@ OptionCategoryView::OptionCategoryView(ViewAttachParams attach, EmuAudio &audio,
 			}
 		},
 		{
-			"Audio", &defaultFace(),
+			"音频", &defaultFace(),
 			[this, &audio](const Input::Event &e)
 			{
 				auto view = EmuApp::makeView(attachParams(), EmuApp::ViewID::AUDIO_OPTIONS);
@@ -394,21 +396,21 @@ OptionCategoryView::OptionCategoryView(ViewAttachParams attach, EmuAudio &audio,
 			}
 		},
 		{
-			"System", &defaultFace(),
+			"系统", &defaultFace(),
 			[this](const Input::Event &e)
 			{
 				pushAndShow(EmuApp::makeView(attachParams(), EmuApp::ViewID::SYSTEM_OPTIONS), e);
 			}
 		},
+//		{
+//			"File Paths", &defaultFace(),
+//			[this](const Input::Event &e)
+//			{
+//				pushAndShow(EmuApp::makeView(attachParams(), EmuApp::ViewID::FILE_PATH_OPTIONS), e);
+//			}
+//		},
 		{
-			"File Paths", &defaultFace(),
-			[this](const Input::Event &e)
-			{
-				pushAndShow(EmuApp::makeView(attachParams(), EmuApp::ViewID::FILE_PATH_OPTIONS), e);
-			}
-		},
-		{
-			"GUI", &defaultFace(),
+			"界面", &defaultFace(),
 			[this](const Input::Event &e)
 			{
 				pushAndShow(EmuApp::makeView(attachParams(), EmuApp::ViewID::GUI_OPTIONS), e);

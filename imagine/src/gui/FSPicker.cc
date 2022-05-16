@@ -310,7 +310,7 @@ void FSPicker::pushFileLocationsView(const Input::Event &e)
 	public:
 		FileLocationsTextTableView(ViewAttachParams attach,
 			std::vector<FS::PathLocation> locations, size_t customItems):
-				TextTableView{"File Locations", attach, locations.size() + customItems},
+				TextTableView{"文件位置", attach, locations.size() + customItems},
 				locations_{std::move(locations)} {}
 		const std::vector<FS::PathLocation> &locations() const { return locations_; }
 
@@ -337,7 +337,7 @@ void FSPicker::pushFileLocationsView(const Input::Event &e)
 	}
 	if(Config::envIsLinux)
 	{
-		view->appendItem("Root Filesystem",
+		view->appendItem("文件系统根目录",
 			[this](View &view, const Input::Event &e)
 			{
 				changeDirByInput("/", {}, e);
@@ -346,7 +346,7 @@ void FSPicker::pushFileLocationsView(const Input::Event &e)
 	}
 	if(appContext().hasSystemPathPicker())
 	{
-		view->appendItem("Browse For Folder",
+		view->appendItem("浏览文件夹",
 			[this](View &view, const Input::Event &e)
 			{
 				appContext().showSystemPathPicker(
@@ -362,7 +362,7 @@ void FSPicker::pushFileLocationsView(const Input::Event &e)
 	}
 	if(mode_ != Mode::DIR && appContext().hasSystemDocumentPicker())
 	{
-		view->appendItem("Browse For File",
+		view->appendItem("浏览文件",
 			[this](View &view, const Input::Event &e)
 			{
 				appContext().showSystemDocumentPicker(
@@ -372,11 +372,11 @@ void FSPicker::pushFileLocationsView(const Input::Event &e)
 					});
 			});
 	}
-	view->appendItem("Custom Path",
+	view->appendItem("自定义路径",
 		[this](const Input::Event &e)
 		{
 			auto textInputView = makeView<CollectTextInputView>(
-				"Input a directory path", root.path, nullptr,
+				"输入目录路径", root.path, nullptr,
 				[this](CollectTextInputView &view, const char *str)
 				{
 					if(!str || !strlen(str))
@@ -519,15 +519,15 @@ void FSPicker::listDirectory(IG::CStringView path, ThreadStop &stop)
 		}
 		else // no entries, show a message instead
 		{
-			msgText.setString("Empty Directory");
+			msgText.setString("空目录");
 		}
 	}
 	catch(std::system_error &err)
 	{
 		logErr("can't open %s", path.data());
 		auto ec = err.code();
-		std::string_view extraMsg = mode_ == Mode::FILE_IN_DIR ? "" : "\nPick a path from the top bar";
-		msgText.setString(fmt::format("Can't open directory:\n{}{}", ec.message(), extraMsg));
+		std::string_view extraMsg = mode_ == Mode::FILE_IN_DIR ? "" : "\n从顶部栏中选择一条路径";
+		msgText.setString(fmt::format("无法打开目录:\n{}{}", ec.message(), extraMsg));
 	}
 }
 

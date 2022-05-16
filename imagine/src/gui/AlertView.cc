@@ -154,8 +154,8 @@ YesNoAlertView::YesNoAlertView(ViewAttachParams attach, IG::utf16String label,
 		{
 			return idx == 0 ? yes : no;
 		}),
-	yes{yesStr.size() ? std::move(yesStr) : u"Yes", &defaultFace(), onYes ? onYes : makeDefaultSelectDelegate()},
-	no{noStr.size() ? std::move(noStr) : u"No", &defaultFace(), onNo ? onNo : makeDefaultSelectDelegate()}
+	yes{yesStr.size() ? std::move(yesStr) : u"确定", &defaultFace(), onYes ? onYes : makeDefaultSelectDelegate()},
+	no{noStr.size() ? std::move(noStr) : u"取消", &defaultFace(), onNo ? onNo : makeDefaultSelectDelegate()}
 {}
 
 void YesNoAlertView::setOnYes(TextMenuItem::SelectDelegate del)
