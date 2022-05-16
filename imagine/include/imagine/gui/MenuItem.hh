@@ -248,7 +248,7 @@ public:
 	BoolMenuItem() = default;
 
 	BoolMenuItem(IG::utf16String name, Gfx::GlyphTextureSet *face, bool val, SelectDelegate selectDel, IdInt id = {}):
-		BaseDualTextMenuItem{std::move(name), val ? u"On" : u"Off", face, id},
+		BaseDualTextMenuItem{std::move(name), val ? u"开" : u"关", face, id},
 		selectD{selectDel}
 	{
 		if(val)
