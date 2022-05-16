@@ -250,9 +250,7 @@ void setCheatListForAiWu(std::list<std::string> cheats)
     for (std::list<std::string>::iterator it = cheats.begin(); it != cheats.end(); it++)
     {
         std::string& cheat = *it;
-        char tempStr[20];
-        string_copy(tempStr, cheat.c_str());
-        string_toUpper(tempStr);
+        auto tempStr{IG::stringToUpper<std::string>(cheat.c_str())};
         int len = strlen(tempStr);
         if(len == 16){//GS v12 XXXXXXXXYYYYYYYY
             cheatsAddGSACode(gGba.cpu, tempStr, "", false);
