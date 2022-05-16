@@ -45,12 +45,14 @@ std::string AndroidApplicationContext::androidBuildDevice() const
 bool AndroidApplicationContext::apkSignatureIsConsistent() const
 {
 	bool sigMatchesAPK = true;
-	#ifdef ANDROID_APK_SIGNATURE_HASH
-	auto env = mainThreadJniEnv();
-	auto baseActivity = baseActivityObject();
-	JNI::InstMethod<jint()> jSigHash{env, baseActivity, "sigHash", "()I"};
-	sigMatchesAPK = jSigHash(env, baseActivity) == ANDROID_APK_SIGNATURE_HASH;
-	#endif
+	//region 爱吾：去掉签名验证
+//	#ifdef ANDROID_APK_SIGNATURE_HASH
+//	auto env = mainThreadJniEnv();
+//	auto baseActivity = baseActivityObject();
+//	JNI::InstMethod<jint()> jSigHash{env, baseActivity, "sigHash", "()I"};
+//	sigMatchesAPK = jSigHash(env, baseActivity) == ANDROID_APK_SIGNATURE_HASH;
+//	#endif
+	//endregion
 	return sigMatchesAPK;
 }
 
