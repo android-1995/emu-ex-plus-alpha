@@ -251,21 +251,21 @@ void setCheatListForAiWu(std::list<std::string> cheats)
     {
         std::string& cheat = *it;
         auto tempStr{IG::stringToUpper<std::string>(cheat.c_str())};
-        int len = strlen(tempStr);
+        int len = tempStr.size();
         if(len == 16){//GS v12 XXXXXXXXYYYYYYYY
-            cheatsAddGSACode(gGba.cpu, tempStr, "", false);
+            cheatsAddGSACode(gGba.cpu, tempStr.data(), "", false);
             continue;
         }
         if(len == 17) {//GS v3 XXXXXXXX-YYYYYYYY
             if (tempStr[8] == '-')
             {
-                memmove(&tempStr[8], &tempStr[9], 9); // 8 chars + null byte
+                tempStr.erase(tempStr.begin() + 8);
             }
-            cheatsAddGSACode(gGba.cpu, tempStr, "" , true);
+            cheatsAddGSACode(gGba.cpu, tempStr.data(), "" , true);
             continue;
         }
         if(len == 13) {//AR XXXXXXXX YYYY
-            cheatsAddCBACode(gGba.cpu, tempStr, "");
+            cheatsAddCBACode(gGba.cpu, tempStr.data(), "");
         }
     }
 }
