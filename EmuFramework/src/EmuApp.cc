@@ -771,17 +771,6 @@ void EmuApp::showEmuation()
 	viewController().showEmulation();
 }
 
-//region 爱吾
-void EmuApp::changeEmulatorStateAiWu(bool pause)
-{
-    if(pause){
-        viewController().pauseEmulation();
-    } else {
-        viewController().startEmulation();
-    }
-}
-//endregion
-
 void EmuApp::launchSystemWithResumePrompt(const Input::Event &e)
 {
 	if(optionAutoSaveState && optionConfirmAutoLoadState)
@@ -1513,7 +1502,11 @@ void ApplicationContext::changeEmulatorStateAiWu(bool pause)
     auto &sys = app.system();
     if(!sys.hasContent())
         return;
-    app.changeEmulatorStateAiWu(pause);
+    if(pause){
+        app.viewController().pauseEmulation();
+    } else {
+        app.viewController().startEmulation();
+    }
 }
 void ApplicationContext::resetAiWu()
 {
@@ -1545,7 +1538,6 @@ void ApplicationContext::fastForwardAiWu(int speed)
     auto &sys = app.system();
     if(!sys.hasContent())
         return;
-    app.viewController().showUI();
     if(speed < 2 || speed > 7){
         //内部的加速范围2-7
         //关闭加速
