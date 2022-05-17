@@ -132,7 +132,7 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	idleDisplayPowerSave
 	{
-		"模拟中允许屏幕超时", &defaultFace(),
+		"自动休眠", &defaultFace(),
 		app().idleDisplayPowerSave(),
 		[this](BoolMenuItem &item)
 		{
@@ -260,10 +260,10 @@ void GUIOptionView::loadStockItems()
 	item.emplace_back(&systemActionsIsDefaultMenu);
 	item.emplace_back(&fontSize);
 	item.emplace_back(&idleDisplayPowerSave);
-	if(used(lowProfileOSNav))
-	{
-		item.emplace_back(&lowProfileOSNav);
-	}
+//	if(used(lowProfileOSNav))
+//	{
+//		item.emplace_back(&lowProfileOSNav);
+//	}
 //	if(used(hideOSNav))
 //	{
 //		item.emplace_back(&hideOSNav);

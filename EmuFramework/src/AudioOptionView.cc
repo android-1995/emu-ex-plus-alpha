@@ -107,7 +107,7 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	audioRate
 	{
-		"采样率", &defaultFace(),
+		"音频采样率", &defaultFace(),
 		0,
 		audioRateItem
 	},
