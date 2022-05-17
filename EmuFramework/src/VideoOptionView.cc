@@ -548,9 +548,9 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	#if defined CONFIG_BASE_MULTI_WINDOW && defined CONFIG_BASE_MULTI_SCREEN
 	showOnSecondScreen
 	{
-		"External Screen", &defaultFace(),
+		"外接屏幕", &defaultFace(),
 		(bool)app().showOnSecondScreenOption(),
-		"OS Managed", "Emu Content",
+		"系统管理", "游戏内容",
 		[this](BoolMenuItem &item)
 		{
 			app().showOnSecondScreenOption() = item.flipBoolValue(*this);
