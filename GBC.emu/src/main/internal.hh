@@ -2,6 +2,7 @@
 
 #include <emuframework/Option.hh>
 #include <gambatte.h>
+#include <list>
 
 namespace EmuEx
 {
@@ -23,4 +24,7 @@ extern Byte1Option optionAudioResampler;
 extern gambatte::GB gbEmu;
 extern GbcInput gbcInput;
 
+//region 爱吾
+void setCheatListForAiWu(EmuSystem &sys,std::list<std::string> cheats);
+//endregion
 }

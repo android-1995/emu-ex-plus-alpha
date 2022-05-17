@@ -33,7 +33,7 @@ class CustomAudioOptionView : public AudioOptionView
 
 	MultiChoiceMenuItem resampler
 	{
-		"Resampler", &defaultFace(),
+		"重采样器", &defaultFace(),
 		optionAudioResampler.val,
 		resamplerItem
 	};
@@ -63,31 +63,31 @@ class CustomVideoOptionView : public VideoOptionView
 {
 	TextMenuItem gbPaletteItem[13]
 	{
-		{"Original", &defaultFace(), [](){ optionGBPal = 0; applyGBPalette(); }},
-		{"Brown", &defaultFace(), [](){ optionGBPal = 1; applyGBPalette(); }},
-		{"Red", &defaultFace(), [](){ optionGBPal = 2; applyGBPalette(); }},
-		{"Dark Brown", &defaultFace(), [](){ optionGBPal = 3; applyGBPalette(); }},
-		{"Pastel", &defaultFace(), [](){ optionGBPal = 4; applyGBPalette(); }},
-		{"Orange", &defaultFace(), [](){ optionGBPal = 5; applyGBPalette(); }},
-		{"Yellow", &defaultFace(), [](){ optionGBPal = 6; applyGBPalette(); }},
-		{"Blue", &defaultFace(), [](){ optionGBPal = 7; applyGBPalette(); }},
-		{"Dark Blue", &defaultFace(), [](){ optionGBPal = 8; applyGBPalette(); }},
-		{"Gray", &defaultFace(), [](){ optionGBPal = 9; applyGBPalette(); }},
-		{"Green", &defaultFace(), [](){ optionGBPal = 10; applyGBPalette(); }},
-		{"Dark Green", &defaultFace(), [](){ optionGBPal = 11; applyGBPalette(); }},
-		{"Reverse", &defaultFace(), [](){ optionGBPal = 12; applyGBPalette(); }},
+		{"原画", &defaultFace(), [](){ optionGBPal = 0; applyGBPalette(); }},
+		{"棕色", &defaultFace(), [](){ optionGBPal = 1; applyGBPalette(); }},
+		{"红色", &defaultFace(), [](){ optionGBPal = 2; applyGBPalette(); }},
+		{"深棕色", &defaultFace(), [](){ optionGBPal = 3; applyGBPalette(); }},
+		{"粉彩", &defaultFace(), [](){ optionGBPal = 4; applyGBPalette(); }},
+		{"橙色", &defaultFace(), [](){ optionGBPal = 5; applyGBPalette(); }},
+		{"黄色", &defaultFace(), [](){ optionGBPal = 6; applyGBPalette(); }},
+		{"蓝色", &defaultFace(), [](){ optionGBPal = 7; applyGBPalette(); }},
+		{"深蓝色", &defaultFace(), [](){ optionGBPal = 8; applyGBPalette(); }},
+		{"灰色", &defaultFace(), [](){ optionGBPal = 9; applyGBPalette(); }},
+		{"绿色", &defaultFace(), [](){ optionGBPal = 10; applyGBPalette(); }},
+		{"深绿色", &defaultFace(), [](){ optionGBPal = 11; applyGBPalette(); }},
+		{"反相", &defaultFace(), [](){ optionGBPal = 12; applyGBPalette(); }},
 	};
 
 	MultiChoiceMenuItem gbPalette
 	{
-		"GB Palette", &defaultFace(),
+		"GB调色板", &defaultFace(),
 		optionGBPal.val,
 		gbPaletteItem
 	};
 
 	BoolMenuItem fullSaturation
 	{
-		"Saturated GBC Colors", &defaultFace(),
+		"饱和GBC颜色", &defaultFace(),
 		(bool)optionFullGbcSaturation,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -113,7 +113,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 {
 	BoolMenuItem useBuiltinGBPalette
 	{
-		"Use Built-in GB Palettes", &defaultFace(),
+		"使用内置GB调色板", &defaultFace(),
 		(bool)optionUseBuiltinGBPalette,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -125,7 +125,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 
 	BoolMenuItem reportAsGba
 	{
-		"Report Hardware as GBA", &defaultFace(),
+		"将硬件报告为GBA", &defaultFace(),
 		(bool)optionReportAsGba,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -145,7 +145,7 @@ public:
 	ConsoleOptionView(ViewAttachParams attach):
 		TableView
 		{
-			"Console Options",
+			"控制台设置",
 			attach,
 			menuItem
 		}
@@ -156,7 +156,7 @@ class CustomSystemActionsView : public EmuSystemActionsView
 {
 	TextMenuItem options
 	{
-		"Console Options", &defaultFace(),
+		"控制台设置", &defaultFace(),
 		[this](TextMenuItem &, View &, Input::Event e)
 		{
 			if(system().hasContent())
