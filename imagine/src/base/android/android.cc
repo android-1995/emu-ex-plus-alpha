@@ -575,7 +575,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz, jint keyCode)
                             {
-                                IG::gAiWuAppContext().onKeyPressAiWu(bit(keyCode));
+                                IG::gAiWuAppContext().onKeyPressAiWu(keyCode);
                             }
                     },
                     {
@@ -583,7 +583,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz, jint keyCode)
                             {
-                                 IG::gAiWuAppContext().onKeyReleaseAiWu(bit(keyCode));
+                                 IG::gAiWuAppContext().onKeyReleaseAiWu(keyCode);
                             }
                     },
                     {
