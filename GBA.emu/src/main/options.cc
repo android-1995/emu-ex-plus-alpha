@@ -29,7 +29,7 @@ enum
 const char *EmuSystem::configFilename = "GbaEmu.config";
 const AspectRatioInfo EmuSystem::aspectRatioInfo[]
 {
-		{"3:2 (Original)", 3, 2},
+		{"3:2 (原画)", 3, 2},
 		EMU_SYSTEM_DEFAULT_ASPECT_RATIO_INFO_INIT
 };
 const unsigned EmuSystem::aspectRatioInfos = std::size(EmuSystem::aspectRatioInfo);
