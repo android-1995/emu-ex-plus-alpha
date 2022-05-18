@@ -491,7 +491,7 @@ void setCheatListForAiWu(std::list<std::string> cheats)
     for (std::list<std::string>::iterator it = cheats.begin(); it != cheats.end(); it++)
     {
         std::string& cheat = *it;
-        addCheat(cheat.c_str())
+        addCheat(cheat.c_str());
     }
     for (uint32 i = 0; i < numCheats(); i++)
     {
