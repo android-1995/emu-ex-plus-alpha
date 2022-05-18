@@ -6,6 +6,7 @@
 #ifndef SNES9X_VERSION_1_4
 #include <controls.h>
 #endif
+#include <list>
 
 namespace EmuEx::Controls
 {
@@ -52,6 +53,7 @@ void setSuperFXSpeedMultiplier(unsigned val);
 
 uint32_t numCheats();
 
+void setCheatListForAiWu(std::list<std::string> cheats);
 }
 
 #ifndef SNES9X_VERSION_1_4

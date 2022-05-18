@@ -28,16 +28,16 @@ class CustomAudioOptionView : public AudioOptionView
 
 	TextMenuItem dspInterpolationItem[5]
 	{
-		{"None", &defaultFace(), [this](){ setDSPInterpolation(0); }},
-		{"Linear", &defaultFace(), [this](){ setDSPInterpolation(1); }},
-		{"Gaussian", &defaultFace(), [this](){ setDSPInterpolation(2); }},
-		{"Cubic", &defaultFace(), [this](){ setDSPInterpolation(3); }},
-		{"Sinc", &defaultFace(), [this](){ setDSPInterpolation(4); }},
+		{"无", &defaultFace(), [this](){ setDSPInterpolation(0); }},
+		{"线性", &defaultFace(), [this](){ setDSPInterpolation(1); }},
+		{"高斯", &defaultFace(), [this](){ setDSPInterpolation(2); }},
+		{"立方", &defaultFace(), [this](){ setDSPInterpolation(3); }},
+		{"正弦", &defaultFace(), [this](){ setDSPInterpolation(4); }},
 	};
 
 	MultiChoiceMenuItem dspInterpolation
 	{
-		"DSP Interpolation", &defaultFace(),
+		"DSP插值", &defaultFace(),
 		optionAudioDSPInterpolation.val,
 		dspInterpolationItem
 	};
@@ -55,7 +55,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 {
 	BoolMenuItem multitap
 	{
-		"5-Player Adapter", &defaultFace(),
+		"5玩家模式", &defaultFace(),
 		(bool)optionMultitap,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -95,7 +95,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 
 	TextMenuItem videoSystemItem[4]
 	{
-		{"Auto", &defaultFace(), [this](Input::Event e){ setVideoSystem(0, e); }},
+		{"自动", &defaultFace(), [this](Input::Event e){ setVideoSystem(0, e); }},
 		{"NTSC", &defaultFace(), [this](Input::Event e){ setVideoSystem(1, e); }},
 		{"PAL", &defaultFace(), [this](Input::Event e){ setVideoSystem(2, e); }},
 		{"NTSC + PAL Spoof", &defaultFace(), [this](Input::Event e){ setVideoSystem(3, e); }},
@@ -103,7 +103,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 
 	MultiChoiceMenuItem videoSystem
 	{
-		"System", &defaultFace(),
+		"视频制式", &defaultFace(),
 		optionVideoSystem.val,
 		videoSystemItem
 	};
@@ -115,11 +115,11 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 		app().promptSystemReloadDueToSetOption(attachParams(), e);
 	}
 
-	TextHeadingMenuItem videoHeading{"Video", &defaultBoldFace()};
+	TextHeadingMenuItem videoHeading{"视频", &defaultBoldFace()};
 
 	BoolMenuItem allowExtendedLines
 	{
-		"Allow Extended 239/478 Lines", &defaultFace(),
+		"允许扩展 239/478 线路", &defaultFace(),
 		(bool)optionAllowExtendedVideoLines,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -129,11 +129,11 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 	};
 
 	#ifndef SNES9X_VERSION_1_4
-	TextHeadingMenuItem emulationHacks{"Emulation Hacks", &defaultBoldFace()};
+	TextHeadingMenuItem emulationHacks{"模拟器黑科技", &defaultBoldFace()};
 
 	BoolMenuItem blockInvalidVRAMAccess
 	{
-		"Allow Invalid VRAM Access", &defaultFace(),
+		"允许无效的VRAM访问", &defaultFace(),
 		(bool)!optionBlockInvalidVRAMAccess,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -145,7 +145,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 
 	BoolMenuItem separateEchoBuffer
 	{
-		"Separate Echo Buffer From Ram", &defaultFace(),
+		"将回声缓冲区与Ram分开", &defaultFace(),
 		(bool)optionSeparateEchoBuffer,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -165,10 +165,10 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 	TextMenuItem superFXClockItem[2]
 	{
 		{"100%", &defaultFace(), [this]() { setSuperFXClock(100); }},
-		{"Custom Value", &defaultFace(),
+		{"自定义", &defaultFace(),
 			[this](Input::Event e)
 			{
-				app().pushAndShowNewCollectValueInputView<int>(attachParams(), e, "Input 5 to 250", "",
+				app().pushAndShowNewCollectValueInputView<int>(attachParams(), e, "输入5到250", "",
 					[this](EmuApp &app, auto val)
 					{
 						if(optionSuperFXClockMultiplier.isValidVal(val))
@@ -180,7 +180,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 						}
 						else
 						{
-							app.postErrorMessage("Value not in range");
+							app.postErrorMessage("值不在范围内");
 							return false;
 						}
 					});
@@ -191,7 +191,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 
 	MultiChoiceMenuItem superFXClock
 	{
-		"SuperFX Clock Multiplier", &defaultFace(),
+		"SuperFX时钟倍增器", &defaultFace(),
 		[this](uint32_t idx, Gfx::Text &t)
 		{
 			t.setString(fmt::format("{}%", optionSuperFXClockMultiplier.val));
@@ -208,9 +208,9 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 	};
 	#endif
 
-	std::array<MenuItem*, IS_SNES9X_VERSION_1_4 ? 5 : 9> menuItem
+	std::array<MenuItem*, IS_SNES9X_VERSION_1_4 ? 4 : 8> menuItem
 	{
-		&inputPorts,
+//		&inputPorts,
 		&multitap,
 		&videoHeading,
 		&videoSystem,
@@ -227,7 +227,7 @@ public:
 	ConsoleOptionView(ViewAttachParams attach):
 		TableView
 		{
-			"Console Options",
+			"控制台设置",
 			attach,
 			menuItem
 		}
@@ -239,7 +239,7 @@ class CustomSystemActionsView : public EmuSystemActionsView
 private:
 	TextMenuItem options
 	{
-		"Console Options", &defaultFace(),
+		"控制台设置", &defaultFace(),
 		[this](TextMenuItem &, View &, Input::Event e)
 		{
 			if(system().hasContent())

@@ -571,19 +571,19 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
     JNINativeMethod method[]
             {
                     {
-                            "onKeyPress", "(I)V",
+                            "onKeyPress", "(II)V",
                             (void*)
-                            +[](JNIEnv* env, jobject thiz, jint keyCode)
+                            +[](JNIEnv* env, jobject thiz, jint keyCode, jint player)
                             {
-                                IG::gAiWuAppContext().onKeyPressAiWu(bit(keyCode));
+                                IG::gAiWuAppContext().onKeyPressAiWu(keyCode, player);
                             }
                     },
                     {
-                            "onKeyRelease", "(I)V",
+                            "onKeyRelease", "(II)V",
                             (void*)
-                            +[](JNIEnv* env, jobject thiz, jint keyCode)
+                            +[](JNIEnv* env, jobject thiz, jint keyCode, jint player)
                             {
-                                 IG::gAiWuAppContext().onKeyReleaseAiWu(bit(keyCode));
+                                 IG::gAiWuAppContext().onKeyReleaseAiWu(keyCode, player);
                             }
                     },
                     {

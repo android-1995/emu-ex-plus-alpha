@@ -1474,21 +1474,21 @@ void ApplicationContext::onInit(ApplicationInitParams initParams)
 }
 
 //region 爱吾的方法
-void ApplicationContext::onKeyPressAiWu(uint emuKey)
+void ApplicationContext::onKeyPressAiWu(uint emuKey,uint player)
 {
     auto &app = EmuEx::EmuApp::get(*this);
     auto &sys = app.system();
     if(!sys.hasContent())
         return;
-    sys.handleInputAction(&app, Input::Action::PUSHED, emuKey);
+    sys.handleInputActionAiWu(&app, Input::Action::PUSHED, emuKey, player);
 }
-void ApplicationContext::onKeyReleaseAiWu(uint emuKey)
+void ApplicationContext::onKeyReleaseAiWu(uint emuKey,uint player)
 {
     auto &app = EmuEx::EmuApp::get(*this);
     auto &sys = app.system();
     if(!sys.hasContent())
         return;
-    sys.handleInputAction(&app, Input::Action::RELEASED, emuKey);
+    sys.handleInputActionAiWu(&app, Input::Action::RELEASED, emuKey, player);
 }
 void ApplicationContext::showSettingAiWu()
 {

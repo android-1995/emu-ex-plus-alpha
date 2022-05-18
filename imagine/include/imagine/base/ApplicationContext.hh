@@ -234,8 +234,8 @@ public:
 	void exitWithMessage(int exitVal, const char *msg);
 
 	//region爱吾调用
-    void onKeyPressAiWu(uint emuKey);
-    void onKeyReleaseAiWu(uint emuKey);
+    void onKeyPressAiWu(uint emuKey,uint player);
+    void onKeyReleaseAiWu(uint emuKey,uint player);
     void showSettingAiWu();
     void changeEmulatorStateAiWu(bool pause);
     void resetAiWu();
