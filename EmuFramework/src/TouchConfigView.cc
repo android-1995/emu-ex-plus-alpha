@@ -306,9 +306,7 @@ TextMenuItem::SelectDelegate TouchConfigView::setAlphaDel(uint8_t val)
 void TouchConfigView::draw(Gfx::RendererCommands &cmds)
 {
 	projP.resetTransforms(cmds);
-	//region 爱吾：隐藏按键
-	//vController().draw(cmds, false, true, .75);
-	//endregion
+	vController().draw(cmds, false, true, .75);
 	TableView::draw(cmds);
 }
 
