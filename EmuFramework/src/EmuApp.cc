@@ -500,6 +500,8 @@ void EmuApp::mainInitCommon(IG::ApplicationInitParams initParams, IG::Applicatio
 	system().onOptionsLoaded();
 	loadSystemOptions();
 	//region 爱吾：改一些配置
+	//虚拟键盘关闭
+    vController.setGamepadControlsVisibility(VControllerVisibility::OFF);
     //触屏显示按键 关闭
     vController.setShowOnTouchInput(false);
     //失去焦点暂停 关闭
