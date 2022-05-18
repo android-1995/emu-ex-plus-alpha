@@ -36,7 +36,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 {
 	BoolMenuItem fourScore
 	{
-		"4-Player Adapter", &defaultFace(),
+		"4-人适配器", &defaultFace(),
 		(bool)optionFourScore,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -87,7 +87,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 
 	TextMenuItem videoSystemItem[4]
 	{
-		{"Auto", &defaultFace(), [this](Input::Event e){ setVideoSystem(0, e); }},
+		{"自动", &defaultFace(), [this](Input::Event e){ setVideoSystem(0, e); }},
 		{"NTSC", &defaultFace(), [this](Input::Event e){ setVideoSystem(1, e); }},
 		{"PAL", &defaultFace(), [this](Input::Event e){ setVideoSystem(2, e); }},
 		{"Dendy", &defaultFace(), [this](Input::Event e){ setVideoSystem(3, e); }},
@@ -95,7 +95,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 
 	MultiChoiceMenuItem videoSystem
 	{
-		"System", &defaultFace(),
+		"视频制式", &defaultFace(),
 		[this](uint32_t idx, Gfx::Text &t)
 		{
 			if(idx == 0)
@@ -119,16 +119,15 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 
 	BoolMenuItem compatibleFrameskip
 	{
-		"Frameskip Mode", &defaultFace(),
+		"跳帧模式", &defaultFace(),
 		(bool)optionCompatibleFrameskip,
-		"Fast", "Compatible",
+		"快速", "兼容",
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
 			if(!item.boolValue())
 			{
 				auto ynAlertView = makeView<YesNoAlertView>(
-					"Use compatible mode if the current game has glitches when "
-					"fast-forwarding/frame-skipping, at the cost of increased CPU usage.");
+					"如果游戏在快进/跳帧时出现故障，请使用兼容模式，但会增加CPU使用率。");
 				ynAlertView->setOnYes(
 					[this, &item]()
 					{
@@ -144,7 +143,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 		}
 	};
 
-	TextHeadingMenuItem videoHeading{"Video", &defaultBoldFace()};
+	TextHeadingMenuItem videoHeading{"视频", &defaultBoldFace()};
 
 	TextMenuItem visibleVideoLinesItem[4]
 	{
@@ -156,7 +155,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 
 	MultiChoiceMenuItem visibleVideoLines
 	{
-		"Visible Lines", &defaultFace(),
+		"可见线条", &defaultFace(),
 		[]()
 		{
 			switch(optionVisibleVideoLines.val)
@@ -183,7 +182,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 
 	BoolMenuItem horizontalVideoCrop
 	{
-		"Crop 8 Pixels On Sides", &defaultFace(),
+		"在侧面裁剪8个像素", &defaultFace(),
 		(bool)optionHorizontalVideoCrop,
 		[this](BoolMenuItem &item)
 		{
@@ -195,9 +194,9 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 		}
 	};
 
-	std::array<MenuItem*, 7> menuItem
+	std::array<MenuItem*, 6> menuItem
 	{
-		&inputPorts,
+//		&inputPorts,
 		&fourScore,
 		&compatibleFrameskip,
 		&videoHeading,
@@ -210,7 +209,7 @@ public:
 	ConsoleOptionView(ViewAttachParams attach):
 		TableView
 		{
-			"Console Options",
+			"控制台设置",
 			attach,
 			menuItem
 		}
@@ -221,7 +220,7 @@ class CustomVideoOptionView : public VideoOptionView
 {
 	BoolMenuItem spriteLimit
 	{
-		"Sprite Limit", &defaultFace(),
+		"限制精灵", &defaultFace(),
 		(bool)optionSpriteLimit,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -232,7 +231,7 @@ class CustomVideoOptionView : public VideoOptionView
 
 	TextMenuItem videoSystemItem[4]
 	{
-		{"Auto", &defaultFace(), [this](){ optionDefaultVideoSystem = 0; }},
+		{"自动", &defaultFace(), [this](){ optionDefaultVideoSystem = 0; }},
 		{"NTSC", &defaultFace(), [this](){ optionDefaultVideoSystem = 1; }},
 		{"PAL", &defaultFace(), [this](){ optionDefaultVideoSystem = 2; }},
 		{"Dendy", &defaultFace(), [this](){ optionDefaultVideoSystem = 3; }},
@@ -240,7 +239,7 @@ class CustomVideoOptionView : public VideoOptionView
 
 	MultiChoiceMenuItem videoSystem
 	{
-		"Default Video System", &defaultFace(),
+		"默认视频制式", &defaultFace(),
 		optionDefaultVideoSystem.val,
 		videoSystemItem
 	};
@@ -271,7 +270,7 @@ class CustomVideoOptionView : public VideoOptionView
 		{"FirebrandX", &defaultFace(), [this]() { setPalette(appContext(), firebrandXPalPath); }},
 		{"Wavebeam", &defaultFace(), [this]() { setPalette(appContext(), wavebeamPalPath); }},
 		{"Classic", &defaultFace(), [this]() { setPalette(appContext(), classicPalPath); }},
-		{"Custom File", &defaultFace(), [this](TextMenuItem &, View &, Input::Event e)
+		{"自定义文件", &defaultFace(), [this](TextMenuItem &, View &, Input::Event e)
 			{
 				auto fsFilter = [](std::string_view name)
 					{
@@ -294,7 +293,7 @@ class CustomVideoOptionView : public VideoOptionView
 
 	MultiChoiceMenuItem defaultPal
 	{
-		"Default Palette", &defaultFace(),
+		"默认调色板", &defaultFace(),
 		[this](uint32_t idx, Gfx::Text &t)
 		{
 			if(idx == defaultPaletteCustomFileIdx())
@@ -341,21 +340,21 @@ class CustomAudioOptionView : public AudioOptionView
 
 	TextMenuItem qualityItem[3]
 	{
-		{"Normal", &defaultFace(), [](){ setQuality(0); }},
-		{"High", &defaultFace(), []() { setQuality(1); }},
-		{"Highest", &defaultFace(), []() { setQuality(2); }}
+		{"正常", &defaultFace(), [](){ setQuality(0); }},
+		{"高", &defaultFace(), []() { setQuality(1); }},
+		{"最高", &defaultFace(), []() { setQuality(2); }}
 	};
 
 	MultiChoiceMenuItem quality
 	{
-		"Emulation Quality", &defaultFace(),
+		"模拟质量", &defaultFace(),
 		optionSoundQuality.val,
 		qualityItem
 	};
 
 	BoolMenuItem lowPassFilter
 	{
-		"Low Pass Filter", &defaultFace(),
+		"低通滤波器", &defaultFace(),
 		(bool)FSettings.lowpass,
 		[this](BoolMenuItem &item)
 		{
@@ -365,7 +364,7 @@ class CustomAudioOptionView : public AudioOptionView
 
 	BoolMenuItem swapDutyCycles
 	{
-		"Swap Duty Cycles", &defaultFace(),
+		"交换占空比", &defaultFace(),
 		swapDuty,
 		[this](BoolMenuItem &item)
 		{
@@ -373,7 +372,7 @@ class CustomAudioOptionView : public AudioOptionView
 		}
 	};
 
-	TextHeadingMenuItem mixer{"Mixer", &defaultBoldFace()};
+	TextHeadingMenuItem mixer{"混合器", &defaultBoldFace()};
 
 	BoolMenuItem squareWave1
 	{
@@ -448,7 +447,7 @@ class CustomFilePathOptionView : public FilePathOptionView
 		biosMenuEntryStr(appContext().fileUriDisplayName(EmuEx::fdsBiosPath)), &defaultFace(),
 		[this](TextMenuItem &, View &, Input::Event e)
 		{
-			auto biosSelectMenu = makeViewWithName<BiosSelectMenu>("Disk System BIOS", &EmuEx::fdsBiosPath,
+			auto biosSelectMenu = makeViewWithName<BiosSelectMenu>("磁碟机BIOS", &EmuEx::fdsBiosPath,
 				[this](std::string_view displayName)
 				{
 					logMsg("set fds bios %s", EmuEx::fdsBiosPath.data());
@@ -461,7 +460,7 @@ class CustomFilePathOptionView : public FilePathOptionView
 
 	std::string biosMenuEntryStr(std::string_view displayName) const
 	{
-		return fmt::format("Disk System BIOS: {}", displayName);
+		return fmt::format("磁碟机BIOS: {}", displayName);
 	}
 
 public:
@@ -514,7 +513,7 @@ private:
 
 	TextMenuItem insertEject
 	{
-		"Eject", &defaultFace(),
+		"弹出", &defaultFace(),
 		[this](View &view, Input::Event e)
 		{
 			if(FCEU_FDSInserted())
@@ -529,7 +528,7 @@ public:
 	FDSControlView(ViewAttachParams attach):
 		TableView
 		{
-			"FDS Control",
+			"FDS控制",
 			attach,
 			[this](const TableView &)
 			{
@@ -569,7 +568,7 @@ private:
 				pushAndShow(makeView<FDSControlView>(), e);
 			}
 			else
-				app().postMessage(2, false, "Disk System not in use");
+				app().postMessage(2, false, "磁盘系统未在使用中");
 		}
 	};
 
@@ -588,7 +587,7 @@ private:
 
 	TextMenuItem options
 	{
-		"Console Options", &defaultFace(),
+		"控制台设置", &defaultFace(),
 		[this](TextMenuItem &, View &, Input::Event e)
 		{
 			if(system().hasContent())

@@ -2,6 +2,8 @@
 
 #include <emuframework/Option.hh>
 #include <fceu/driver.h>
+#include <list>
+#include <vector>
 
 namespace EmuEx::Controls
 {
@@ -42,4 +44,7 @@ void setDefaultPalette(IG::ApplicationContext, IG::CStringView palPath);
 void setRegion(int region, int defaultRegion, int detectedRegion);
 void updateVideoPixmap(EmuVideo &, bool horizontalCrop, int lines);
 
+//region 爱吾
+void setCheatListForAiWu(EmuSystem &sys, std::list<std::string> cheats);
+//endregion
 }
