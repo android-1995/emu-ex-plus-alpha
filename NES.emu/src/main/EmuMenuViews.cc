@@ -575,13 +575,13 @@ private:
 	void refreshFDSItem()
 	{
 		fdsControl.setActive(isFDS);
-		char diskLabel[sizeof("FDS Control (Disk 1:A)")+2]{};
+		char diskLabel[sizeof("FDS控制(磁碟 1:A)")+2]{};
 		if(!isFDS)
-			strcpy(diskLabel, "FDS Control");
+			strcpy(diskLabel, "FDS控制");
 		else if(!FCEU_FDSInserted())
-			strcpy(diskLabel, "FDS Control (No Disk)");
+			strcpy(diskLabel, "FDS控制(无磁碟)");
 		else
-			sprintf(diskLabel, "FDS Control (Disk %d:%c)", (FCEU_FDSCurrentSide()>>1)+1, (FCEU_FDSCurrentSide() & 1)? 'B' : 'A');
+			sprintf(diskLabel, "FDS控制(磁碟 %d:%c)", (FCEU_FDSCurrentSide()>>1)+1, (FCEU_FDSCurrentSide() & 1)? 'B' : 'A');
 		fdsControl.compile(diskLabel, renderer(), projP);
 	}
 
