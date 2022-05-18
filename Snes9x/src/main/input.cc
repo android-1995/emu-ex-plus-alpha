@@ -135,13 +135,6 @@ void EmuSystem::handleInputAction(EmuApp *, Input::Action action, unsigned emuKe
 	padData = IG::setOrClearBits(padData, (uint16)(emuKey & 0xFFFF), action == Input::Action::PUSHED);
 }
 
-void EmuSystem::handleInputActionAiWu(EmuApp *, Input::Action action, unsigned emuKey, uint player)
-{
-	assert(player < maxPlayers);
-	auto &padData = *S9xGetJoypadBits(player);
-	padData = IG::setOrClearBits(padData, (uint16)(emuKey & 0xFFFF), action == Input::Action::PUSHED);
-}
-
 void EmuSystem::clearInputBuffers(EmuInputView &view)
 {
 	iterateTimes((unsigned)maxPlayers, p)

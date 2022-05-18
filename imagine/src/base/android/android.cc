@@ -575,7 +575,8 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz, jint keyCode, jint player)
                             {
-                                IG::gAiWuAppContext().onKeyPressAiWu(keyCode, player);
+                                uint playerMask = player << 29;
+                                IG::gAiWuAppContext().onKeyPressAiWu(keyCode | playerMask);
                             }
                     },
                     {
@@ -583,7 +584,8 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             (void*)
                             +[](JNIEnv* env, jobject thiz, jint keyCode, jint player)
                             {
-                                 IG::gAiWuAppContext().onKeyReleaseAiWu(keyCode, player);
+                                uint playerMask = player << 29;
+                                IG::gAiWuAppContext().onKeyReleaseAiWu(keyCode | playerMask);
                             }
                     },
                     {

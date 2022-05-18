@@ -248,7 +248,6 @@ public:
 	void clearInputBuffers(EmuInputView &view);
 	void handleInputAction(EmuApp *, IG::Input::Action state, unsigned emuKey);
 	void handleInputAction(EmuApp *, IG::Input::Action state, unsigned emuKey, uint32_t metaState);
-	void handleInputActionAiWu(EmuApp *, IG::Input::Action state, unsigned emuKey, uint player);
 	unsigned translateInputAction(unsigned input, bool &turbo);
 	unsigned translateInputAction(unsigned input)
 	{
