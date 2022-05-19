@@ -721,7 +721,7 @@ void setCheatListForAiWu(EmuSystem &sys, std::list<std::string> cheats)
             std::string& cheat = *it;
             MdCheat c;
             c.code = IG::stringToUpper<decltype(c.code)>(cheat.c_str());
-			if(!decodeCheat(c.code, c.address, c.data, c.origData))
+            if(!decodeCheat(c.code.data(), c.address, c.data, c.origData))
 			{
 				continue;
 			}
