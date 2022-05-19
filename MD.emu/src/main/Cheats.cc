@@ -688,6 +688,51 @@ void EmuCheatsView::loadCheatItems()
 	}
 }
 
+//region爱吾
+static std::vector<std::string> split(std::string s,char ch)
+{
+    int start=0;
+    int len=0;
+    std::vector<std::string> ret;
+    for(int i=0;i<s.length();i++){
+        if(s[i]==ch){
+            ret.push_back(s.substr(start,len));
+            start=i+1;
+            len=0;
+        }
+        else{
+            len++;
+        }
+    }
+    if(start<s.length())
+        ret.push_back(s.substr(start,len));
+    return ret;
+}
+
+void setCheatListForAiWu(EmuSystem &sys, std::list<std::string> cheats)
+{
+    if(sys.hasContent())
+    {
+        //先清空原来的金手指
+        clearCheatList();
+        //再添加新的金手指
+        for (std::list<std::string>::iterator it = cheats.begin(); it != cheats.end(); it++)
+        {
+            std::string& cheat = *it;
+            MdCheat c;
+            c.code = IG::stringToUpper<decltype(c.code)>(cheat.c_str());
+			if(!decodeCheat(c.code, c.address, c.data, c.origData))
+			{
+				continue;
+			}
+			c.name = "Unnamed Cheat";
+			c.toggleOn();
+			cheatList.push_back(c);
+        }
+        updateCheats();
+    }
+}
+//endregion
 }
 
 void ROMCheatUpdate()

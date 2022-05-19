@@ -33,7 +33,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 {
 	BoolMenuItem sixButtonPad
 	{
-		"6-button Gamepad", &defaultFace(),
+		"6按键模式", &defaultFace(),
 		(bool)option6BtnPad,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -45,7 +45,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 
 	BoolMenuItem multitap
 	{
-		"4-Player Adapter", &defaultFace(),
+		"4玩家模式", &defaultFace(),
 		(bool)optionMultiTap,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -82,14 +82,14 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 
 	TextMenuItem videoSystemItem[3]
 	{
-		{"Auto", &defaultFace(), [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(0, e); }},
+		{"自动", &defaultFace(), [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(0, e); }},
 		{"NTSC", &defaultFace(), [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(1, e); }},
 		{"PAL", &defaultFace(), [this](TextMenuItem &, View &, Input::Event e){ setVideoSystem(2, e); }},
 	};
 
 	MultiChoiceMenuItem videoSystem
 	{
-		"Video System", &defaultFace(),
+		"视频制式", &defaultFace(),
 		[this](int idx, Gfx::Text &t)
 		{
 			if(idx == 0)
@@ -112,15 +112,15 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 
 	TextMenuItem regionItem[4]
 	{
-		{"Auto", &defaultFace(), [this](TextMenuItem &, View &, Input::Event e){ setRegion(0, e); }},
-		{"USA", &defaultFace(), [this](TextMenuItem &, View &, Input::Event e){ setRegion(1, e); }},
-		{"Europe", &defaultFace(), [this](TextMenuItem &, View &, Input::Event e){ setRegion(2, e); }},
-		{"Japan", &defaultFace(), [this](TextMenuItem &, View &, Input::Event e){ setRegion(3, e); }},
+		{"自动", &defaultFace(), [this](TextMenuItem &, View &, Input::Event e){ setRegion(0, e); }},
+		{"美国", &defaultFace(), [this](TextMenuItem &, View &, Input::Event e){ setRegion(1, e); }},
+		{"欧洲", &defaultFace(), [this](TextMenuItem &, View &, Input::Event e){ setRegion(2, e); }},
+		{"日本", &defaultFace(), [this](TextMenuItem &, View &, Input::Event e){ setRegion(3, e); }},
 	};
 
 	MultiChoiceMenuItem region
 	{
-		"Game Region", &defaultFace(),
+		"游戏地区", &defaultFace(),
 		[this](int idx, Gfx::Text &t)
 		{
 			if(idx == 0)
@@ -129,9 +129,9 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 				{
 					switch(region)
 					{
-						case REGION_USA: return "USA";
-						case REGION_EUROPE: return "Europe";
-						default: return "Japan";
+						case REGION_USA: return "美国";
+						case REGION_EUROPE: return "欧洲";
+						default: return "日本";
 					}
 				};
 				t.setString(regionStr(region_code));
@@ -150,20 +150,20 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 		app().promptSystemReloadDueToSetOption(attachParams(), e);
 	}
 
-	StaticArrayList<MenuItem*, 5> item{};
+	StaticArrayList<MenuItem*, 4> item{};
 
 public:
 	ConsoleOptionView(ViewAttachParams attach):
 		TableView
 		{
-			"Console Options",
+			"控制台设置",
 			attach,
 			item
 		}
 	{
 		if(system_hw != SYSTEM_PBC)
 		{
-			item.emplace_back(&inputPorts);
+//			item.emplace_back(&inputPorts);
 			item.emplace_back(&sixButtonPad);
 			item.emplace_back(&multitap);
 		}
@@ -177,7 +177,7 @@ class CustomSystemActionsView : public EmuSystemActionsView
 private:
 	TextMenuItem options
 	{
-		"Console Options", &defaultFace(),
+		"控制台设置", &defaultFace(),
 		[this](TextMenuItem &, View &, Input::Event e)
 		{
 			if(system().hasContent())
@@ -199,7 +199,7 @@ class CustomAudioOptionView : public AudioOptionView
 {
 	BoolMenuItem smsFM
 	{
-		"MarkIII FM Sound Unit", &defaultFace(),
+		"MarkIII调频音响单元", &defaultFace(),
 		(bool)optionSmsFM,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -220,14 +220,14 @@ class CustomSystemOptionView : public SystemOptionView
 {
 	BoolMenuItem bigEndianSram
 	{
-		"Use Big-Endian SRAM", &defaultFace(),
+		"使用 Big-Endian SRAM", &defaultFace(),
 		(bool)optionBigEndianSram,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
 			auto ynAlertView = makeView<YesNoAlertView>(
-				"Warning, this changes the format of SRAM saves files. "
-				"Turn on to make them compatible with other emulators like Gens. "
-				"Any SRAM loaded with the incorrect setting will be corrupted.");
+				"警告，这会改变 SRAM 保存文件的格式。"
+                "开启后将与 Gens 等其他模拟器兼容。"
+                "任何加载了错误设置的 SRAM 都将被损坏。");
 			ynAlertView->setOnYes(
 				[this, &item]()
 				{
@@ -250,9 +250,9 @@ class CustomFilePathOptionView : public FilePathOptionView
 	#ifndef NO_SCD
 	static constexpr std::string_view biosHeadingStr[3]
 	{
-		"USA CD BIOS",
-		"Japan CD BIOS",
-		"Europe CD BIOS"
+		"美国CD BIOS",
+		"日本CD BIOS",
+		"欧洲CD BIOS"
 	};
 
 	static int regionCodeToIdx(int region)

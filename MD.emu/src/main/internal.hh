@@ -2,6 +2,7 @@
 
 #include <emuframework/Option.hh>
 #include "genplus-config.h"
+#include <list>
 
 extern t_config config;
 
@@ -32,4 +33,5 @@ extern Byte1Option optionVideoSystem;
 void setupMDInput(EmuApp &);
 bool hasMDExtension(std::string_view name);
 
+void setCheatListForAiWu(EmuSystem &sys, std::list<std::string> cheats);
 }
