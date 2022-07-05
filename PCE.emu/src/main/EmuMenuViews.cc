@@ -28,7 +28,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 {
 	BoolMenuItem sixButtonPad
 	{
-		"6-button Gamepad", &defaultFace(),
+		"6按键模式", &defaultFace(),
 		(bool)option6BtnPad,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -40,7 +40,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 
 	BoolMenuItem arcadeCard
 	{
-		"Arcade Card", &defaultFace(),
+		"街机卡", &defaultFace(),
 		(bool)optionArcadeCard,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -60,7 +60,7 @@ public:
 	ConsoleOptionView(ViewAttachParams attach):
 		TableView
 		{
-			"Console Options",
+			"控制台设置",
 			attach,
 			menuItem
 		}
@@ -72,7 +72,7 @@ class CustomSystemActionsView : public EmuSystemActionsView
 private:
 	TextMenuItem options
 	{
-		"Console Options", &defaultFace(),
+		"控制台设置", &defaultFace(),
 		[this](TextMenuItem &, View &, Input::Event e)
 		{
 			pushAndShow(makeView<ConsoleOptionView>(), e);
@@ -94,7 +94,7 @@ class CustomFilePathOptionView : public FilePathOptionView
 		biosMenuEntryStr(appContext().fileUriDisplayName(EmuEx::sysCardPath)), &defaultFace(),
 		[this](TextMenuItem &, View &, Input::Event e)
 		{
-			auto biosSelectMenu = makeViewWithName<BiosSelectMenu>("System Card", &EmuEx::sysCardPath,
+			auto biosSelectMenu = makeViewWithName<BiosSelectMenu>("系统卡", &EmuEx::sysCardPath,
 				[this](std::string_view displayName)
 				{
 					logMsg("set bios %s", EmuEx::sysCardPath.data());
@@ -107,7 +107,7 @@ class CustomFilePathOptionView : public FilePathOptionView
 
 	std::string biosMenuEntryStr(std::string_view displayName) const
 	{
-		return fmt::format("System Card: {}", displayName);
+		return fmt::format("系统卡: {}", displayName);
 	}
 
 public:
