@@ -282,7 +282,7 @@ FilePathOptionView::FilePathOptionView(ViewAttachParams attach, bool customMenu)
 
 void FilePathOptionView::loadStockItems()
 {
-	item.emplace_back(&savePath);
+//	item.emplace_back(&savePath);
 }
 
 void FilePathOptionView::onSavePathChange(std::string_view path)
