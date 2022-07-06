@@ -176,7 +176,7 @@ void EmuSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 		}
 		if(sysCardPath.empty() || !appContext().fileUriExists(sysCardPath))
 		{
-			throw std::runtime_error("No System Card Set");
+			throw std::runtime_error("未设置系统卡");
 		}
 		CDInterfaces.reserve(1);
 		CDInterfaces.push_back(CDInterface::Open(&NVFS, contentLocation().data(), false, 0));
