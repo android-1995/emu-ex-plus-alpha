@@ -402,13 +402,13 @@ OptionCategoryView::OptionCategoryView(ViewAttachParams attach, EmuAudio &audio,
 				pushAndShow(EmuApp::makeView(attachParams(), EmuApp::ViewID::SYSTEM_OPTIONS), e);
 			}
 		},
-//		{
-//			"File Paths", &defaultFace(),
-//			[this](const Input::Event &e)
-//			{
-//				pushAndShow(EmuApp::makeView(attachParams(), EmuApp::ViewID::FILE_PATH_OPTIONS), e);
-//			}
-//		},
+		{
+			"文件路径", &defaultFace(),
+			[this](const Input::Event &e)
+			{
+				pushAndShow(EmuApp::makeView(attachParams(), EmuApp::ViewID::FILE_PATH_OPTIONS), e);
+			}
+		},
 		{
 			"界面", &defaultFace(),
 			[this](const Input::Event &e)

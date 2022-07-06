@@ -192,87 +192,87 @@ void SystemOptionView::loadStockItems()
 }
 
 FilePathOptionView::FilePathOptionView(ViewAttachParams attach, bool customMenu):
-	TableView{"File Path Options", attach, item},
-	savePath
-	{
-		savesMenuEntryStr(appContext(), system().userSaveDirectory()), &defaultFace(),
-		[this](const Input::Event &e)
-		{
-			auto multiChoiceView = makeViewWithName<TextTableView>("Saves", 4);
-			multiChoiceView->appendItem("Select Folder",
-				[this](const Input::Event &e)
-				{
-					auto fPicker = makeView<EmuFilePicker>(FSPicker::Mode::DIR, EmuSystem::NameFilterFunc{}, e);
-					auto userSavePath = system().userSaveDirectory();
-					fPicker->setPath(userSavePath.size() && userSavePath != optionSavePathDefaultToken ? userSavePath
-						: app().contentSearchPath(), e);
-					fPicker->setOnSelectPath(
-						[this](FSPicker &picker, CStringView path, std::string_view displayName, const Input::Event &e)
-						{
-							if(!hasWriteAccessToDir(path))
-							{
-								app().postErrorMessage("This folder lacks write access");
-								return;
-							}
-							system().setUserSaveDirectory(path);
-							onSavePathChange(path);
-							dismissPrevious();
-							picker.dismiss();
-						});
-					pushAndShowModal(std::move(fPicker), e);
-				});
-			multiChoiceView->appendItem("Same As Content",
-				[this](View &view)
-				{
-					system().setUserSaveDirectory("");
-					onSavePathChange("");
-					view.dismiss();
-				});
-			multiChoiceView->appendItem("App Folder",
-				[this](View &view)
-				{
-					system().setUserSaveDirectory(optionSavePathDefaultToken);
-					onSavePathChange(optionSavePathDefaultToken);
-					view.dismiss();
-				});
-			multiChoiceView->appendItem("Legacy Game Data Folder",
-				[this](View &view, const Input::Event &e)
-				{
-					auto ynAlertView = makeView<YesNoAlertView>(
-						fmt::format("Please select the \"Game Data/{}\" folder from an old version of the app to use its existing saves and convert it to a regular save path (this is only needed once)", system().shortSystemName()));
-					ynAlertView->setOnYes(
-						[this](const Input::Event &e)
-						{
-							auto fPicker = makeView<EmuFilePicker>(FSPicker::Mode::DIR, EmuSystem::NameFilterFunc{}, e);
-							fPicker->setPath("");
-							fPicker->setOnSelectPath(
-								[this](FSPicker &picker, CStringView path, std::string_view displayName, const Input::Event &e)
-								{
-									auto ctx = appContext();
-									if(!hasWriteAccessToDir(path))
-									{
-										app().postErrorMessage("This folder lacks write access");
-										return;
-									}
-									if(ctx.fileUriDisplayName(path) != system().shortSystemName())
-									{
-										app().postErrorMessage(fmt::format("Please select the {} folder", system().shortSystemName()));
-										return;
-									}
-									EmuApp::updateLegacySavePath(ctx, path);
-									system().setUserSaveDirectory(path);
-									onSavePathChange(path);
-									dismissPrevious();
-									picker.dismiss();
-								});
-							pushAndShowModal(std::move(fPicker), e);
-						});
-					pushAndShowModal(std::move(ynAlertView), e);
-				});
-			pushAndShow(std::move(multiChoiceView), e);
-			postDraw();
-		}
-	}
+	TableView{"文件路径设置", attach, item}//,
+//	savePath
+//	{
+//		savesMenuEntryStr(appContext(), system().userSaveDirectory()), &defaultFace(),
+//		[this](const Input::Event &e)
+//		{
+//			auto multiChoiceView = makeViewWithName<TextTableView>("Saves", 4);
+//			multiChoiceView->appendItem("Select Folder",
+//				[this](const Input::Event &e)
+//				{
+//					auto fPicker = makeView<EmuFilePicker>(FSPicker::Mode::DIR, EmuSystem::NameFilterFunc{}, e);
+//					auto userSavePath = system().userSaveDirectory();
+//					fPicker->setPath(userSavePath.size() && userSavePath != optionSavePathDefaultToken ? userSavePath
+//						: app().contentSearchPath(), e);
+//					fPicker->setOnSelectPath(
+//						[this](FSPicker &picker, CStringView path, std::string_view displayName, const Input::Event &e)
+//						{
+//							if(!hasWriteAccessToDir(path))
+//							{
+//								app().postErrorMessage("This folder lacks write access");
+//								return;
+//							}
+//							system().setUserSaveDirectory(path);
+//							onSavePathChange(path);
+//							dismissPrevious();
+//							picker.dismiss();
+//						});
+//					pushAndShowModal(std::move(fPicker), e);
+//				});
+//			multiChoiceView->appendItem("Same As Content",
+//				[this](View &view)
+//				{
+//					system().setUserSaveDirectory("");
+//					onSavePathChange("");
+//					view.dismiss();
+//				});
+//			multiChoiceView->appendItem("App Folder",
+//				[this](View &view)
+//				{
+//					system().setUserSaveDirectory(optionSavePathDefaultToken);
+//					onSavePathChange(optionSavePathDefaultToken);
+//					view.dismiss();
+//				});
+//			multiChoiceView->appendItem("Legacy Game Data Folder",
+//				[this](View &view, const Input::Event &e)
+//				{
+//					auto ynAlertView = makeView<YesNoAlertView>(
+//						fmt::format("Please select the \"Game Data/{}\" folder from an old version of the app to use its existing saves and convert it to a regular save path (this is only needed once)", system().shortSystemName()));
+//					ynAlertView->setOnYes(
+//						[this](const Input::Event &e)
+//						{
+//							auto fPicker = makeView<EmuFilePicker>(FSPicker::Mode::DIR, EmuSystem::NameFilterFunc{}, e);
+//							fPicker->setPath("");
+//							fPicker->setOnSelectPath(
+//								[this](FSPicker &picker, CStringView path, std::string_view displayName, const Input::Event &e)
+//								{
+//									auto ctx = appContext();
+//									if(!hasWriteAccessToDir(path))
+//									{
+//										app().postErrorMessage("This folder lacks write access");
+//										return;
+//									}
+//									if(ctx.fileUriDisplayName(path) != system().shortSystemName())
+//									{
+//										app().postErrorMessage(fmt::format("Please select the {} folder", system().shortSystemName()));
+//										return;
+//									}
+//									EmuApp::updateLegacySavePath(ctx, path);
+//									system().setUserSaveDirectory(path);
+//									onSavePathChange(path);
+//									dismissPrevious();
+//									picker.dismiss();
+//								});
+//							pushAndShowModal(std::move(fPicker), e);
+//						});
+//					pushAndShowModal(std::move(ynAlertView), e);
+//				});
+//			pushAndShow(std::move(multiChoiceView), e);
+//			postDraw();
+//		}
+//	}
 {
 	if(!customMenu)
 	{
