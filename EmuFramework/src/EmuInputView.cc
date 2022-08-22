@@ -85,7 +85,8 @@ bool EmuInputView::inputEvent(const Input::Event &e)
 			}
 			else
 			{
-				vController->pointerInputEvent(motionEv, videoLayer->gameRect());
+			//屏蔽虚拟按键事件
+//				vController->pointerInputEvent(motionEv, videoLayer->gameRect());
 			}
 			return false;
 		},
