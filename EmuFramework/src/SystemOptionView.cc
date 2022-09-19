@@ -42,7 +42,7 @@ static FS::PathString savePathStrToDescStr(IG::ApplicationContext ctx, std::stri
 	}
 }
 
-BiosSelectMenu::BiosSelectMenu(IG::utf16String name, ViewAttachParams attach, FS::PathString *biosPathStr_, BiosChangeDelegate onBiosChange_,
+BiosSelectMenu::BiosSelectMenu(UTF16String name, ViewAttachParams attach, FS::PathString *biosPathStr_, BiosChangeDelegate onBiosChange_,
 	EmuSystem::NameFilterFunc fsFilter_):
 	TableView
 	{
@@ -106,9 +106,9 @@ TextMenuItem::SelectDelegate SystemOptionView::setAutoSaveStateDel()
 	};
 }
 
-TextMenuItem::SelectDelegate SystemOptionView::setFastForwardSpeedDel()
+TextMenuItem::SelectDelegate SystemOptionView::setFastSlowModeSpeedDel()
 {
-	return [this](TextMenuItem &item) { app().fastForwardSpeedOption() = item.id(); };
+	return [this](TextMenuItem &item) { app().fastSlowModeSpeedOption() = item.id(); };
 }
 
 static auto savesMenuEntryStr(IG::ApplicationContext ctx, std::string_view savePath)
@@ -149,20 +149,49 @@ SystemOptionView::SystemOptionView(ViewAttachParams attach, bool customMenu):
 			app().confirmOverwriteStateOption() = item.flipBoolValue(*this);
 		}
 	},
-	fastForwardSpeedItem
+	fastSlowModeSpeedItem
 	{
-		{"2x", &defaultFace(), setFastForwardSpeedDel(), 2},
-		{"3x", &defaultFace(), setFastForwardSpeedDel(), 3},
-		{"4x", &defaultFace(), setFastForwardSpeedDel(), 4},
-		{"5x", &defaultFace(), setFastForwardSpeedDel(), 5},
-		{"6x", &defaultFace(), setFastForwardSpeedDel(), 6},
-		{"7x", &defaultFace(), setFastForwardSpeedDel(), 7},
+		{"0.25x", &defaultFace(), setFastSlowModeSpeedDel(), 25},
+		{"0.50x", &defaultFace(), setFastSlowModeSpeedDel(), 50},
+		{"1.5x",  &defaultFace(), setFastSlowModeSpeedDel(), 150},
+		{"2x",    &defaultFace(), setFastSlowModeSpeedDel(), 200},
+		{"4x",    &defaultFace(), setFastSlowModeSpeedDel(), 400},
+		{"8x",    &defaultFace(), setFastSlowModeSpeedDel(), 800},
+		{"16x",   &defaultFace(), setFastSlowModeSpeedDel(), 1600},
+		{"Custom Value", &defaultFace(),
+			[this](const Input::Event &e)
+			{
+				app().pushAndShowNewCollectValueInputView<double>(attachParams(), e, "Input 0.05 to 20.0", "",
+					[this](EmuApp &app, auto val)
+					{
+						if(val >= MIN_RUN_SPEED && val <= MAX_RUN_SPEED)
+						{
+							auto valAsInt = std::round(val * 100.);
+							app.fastSlowModeSpeedOption() = valAsInt;
+							fastSlowModeSpeed.setSelected((MenuItem::Id)valAsInt, *this);
+							dismissPrevious();
+							return true;
+						}
+						else
+						{
+							app.postErrorMessage("Value not in range");
+							return false;
+						}
+					});
+				return false;
+			}, MenuItem::DEFAULT_ID
+		},
 	},
-	fastForwardSpeed
+	fastSlowModeSpeed
 	{
-		"Fast Forward Speed", &defaultFace(),
-		(MenuItem::Id)app().fastForwardSpeedOption().val,
-		fastForwardSpeedItem
+		"Fast/Slow Mode Speed", &defaultFace(),
+		[this](size_t idx, Gfx::Text &t)
+		{
+			t.resetString(fmt::format("{:.2f}x", app().fastSlowModeSpeedAsDouble()));
+			return true;
+		},
+		(MenuItem::Id)app().fastSlowModeSpeedOption().val,
+		fastSlowModeSpeedItem
 	},
 	performanceMode
 	{
@@ -186,7 +215,7 @@ void SystemOptionView::loadStockItems()
 	item.emplace_back(&autoSaveState);
 //	item.emplace_back(&confirmAutoLoadState);
 //	item.emplace_back(&confirmOverwriteState);
-//	item.emplace_back(&fastForwardSpeed);
+//	item.emplace_back(&fastSlowModeSpeed);
 	if(used(performanceMode))
 		item.emplace_back(&performanceMode);
 }
@@ -296,9 +325,9 @@ void FilePathOptionView::onSavePathChange(std::string_view path)
 
 bool FilePathOptionView::onFirmwarePathChange(IG::CStringView path, bool isDir) { return true; }
 
-std::unique_ptr<TextTableView> FilePathOptionView::makeFirmwarePathMenu(IG::utf16String name, bool allowFiles, unsigned extraItemsHint)
+std::unique_ptr<TextTableView> FilePathOptionView::makeFirmwarePathMenu(UTF16String name, bool allowFiles, int extraItemsHint)
 {
-	unsigned items = (allowFiles ? 3 : 2) + extraItemsHint;
+	int items = (allowFiles ? 3 : 2) + extraItemsHint;
 	auto multiChoiceView = std::make_unique<TextTableView>(std::move(name), attachParams(), items);
 	multiChoiceView->appendItem("Select Folder",
 		[this](const Input::Event &e)
@@ -351,16 +380,6 @@ std::unique_ptr<TextTableView> FilePathOptionView::makeFirmwarePathMenu(IG::utf1
 			view.dismiss();
 		});
 	return multiChoiceView;
-}
-
-void FilePathOptionView::pushAndShowFirmwarePathMenu(IG::utf16String name, const Input::Event &e, bool allowFiles)
-{
-	pushAndShow(makeFirmwarePathMenu(std::move(name), allowFiles), e);
-}
-
-void FilePathOptionView::pushAndShowFirmwareFilePathMenu(IG::utf16String name, const Input::Event &e)
-{
-	pushAndShowFirmwarePathMenu(std::move(name), e, true);
 }
 
 }

@@ -22,7 +22,7 @@
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/fs/ArchiveFS.hh>
 #include <imagine/fs/FS.hh>
-#include <imagine/io/FileIO.hh>
+#include <imagine/io/IO.hh>
 #include <imagine/input/DragTracker.hh>
 #include <imagine/util/utility.h>
 #include <imagine/util/math/int.hh>
@@ -41,7 +41,8 @@ namespace EmuEx
 [[gnu::weak]] int EmuSystem::inputRTriggerIndex = -1;
 [[gnu::weak]] bool EmuSystem::hasBundledGames = false;
 [[gnu::weak]] bool EmuSystem::hasPALVideoSystem = false;
-[[gnu::weak]] bool EmuSystem::canRenderRGB565 = true;
+[[gnu::weak]] double EmuSystem::staticFrameTime = 1. / 60.;
+[[gnu::weak]] double EmuSystem::staticPalFrameTime = 1. / 50.;
 [[gnu::weak]] bool EmuSystem::canRenderRGBA8888 = true;
 [[gnu::weak]] bool EmuSystem::hasResetModes = false;
 [[gnu::weak]] bool EmuSystem::handlesArchiveFiles = false;
@@ -75,7 +76,7 @@ EmuFrameTimeInfo EmuSystem::advanceFramesWithTime(IG::FrameTime time)
 	return emuTiming.advanceFramesWithTime(time);
 }
 
-void EmuSystem::setSpeedMultiplier(EmuAudio &emuAudio, uint8_t speed)
+void EmuSystem::setSpeedMultiplier(EmuAudio &emuAudio, double speed)
 {
 	emuTiming.setSpeedMultiplier(speed);
 	emuAudio.setSpeedMultiplier(speed);
@@ -170,12 +171,12 @@ FS::PathString EmuSystem::contentSaveDirectory() const
 	return contentSaveDirectory_;
 }
 
-FS::PathString EmuSystem::contentSavePath(std::string_view name)
+FS::PathString EmuSystem::contentSavePath(std::string_view name) const
 {
 	return FS::uriString(contentSaveDirectory(), name);
 }
 
-FS::PathString EmuSystem::contentSaveFilePath(std::string_view ext)
+FS::PathString EmuSystem::contentSaveFilePath(std::string_view ext) const
 {
 	return FS::uriString(contentSaveDirectory(), contentName().append(ext));
 }
@@ -257,6 +258,7 @@ void EmuSystem::pause(EmuApp &app)
 		state = State::PAUSED;
 	app.audio().stop();
 	app.cancelAutoSaveStateTimer();
+	onStop();
 }
 
 void EmuSystem::start(EmuApp &app)
@@ -266,6 +268,7 @@ void EmuSystem::start(EmuApp &app)
 		app.defaultVController().keyboard().setShiftActive(false);
 	clearInputBuffers(app.viewController().inputView());
 	resetFrameTime();
+	onStart();
 	app.startAudio();
 	app.startAutoSaveStateTimer();
 }
@@ -273,7 +276,7 @@ void EmuSystem::start(EmuApp &app)
 IG::Time EmuSystem::benchmark(EmuVideo &video)
 {
 	auto now = IG::steadyClockTimestamp();
-	iterateTimes(180, i)
+	for(auto i : iotaCount(180))
 	{
 		runFrame({}, &video, nullptr);
 	}
@@ -305,38 +308,32 @@ int EmuSystem::updateAudioFramesPerVideoFrame()
 	return wholeFrames;
 }
 
-double EmuSystem::frameRate()
+double EmuSystem::frameRate() const
 {
-	double time = frameTime().count();
-	return time ? 1. / time : 0.;
+	return frameRate(videoSystem());
 }
 
-double EmuSystem::frameRate(VideoSystem system)
+double EmuSystem::frameRate(VideoSystem system) const
 {
 	return 1. / frameTime(system).count();
 }
 
-IG::FloatSeconds EmuSystem::frameTime()
+IG::FloatSeconds EmuSystem::frameTime() const
 {
-	return frameTime(vidSysIsPAL() ? VIDSYS_PAL : VIDSYS_NATIVE_NTSC);
+	return frameTime(videoSystem());
 }
 
-IG::FloatSeconds EmuSystem::frameTime(VideoSystem system)
+IG::FloatSeconds EmuSystem::frameTime(VideoSystem system) const
 {
-	switch(system)
-	{
-		case VIDSYS_NATIVE_NTSC: return frameTimeNative;
-		case VIDSYS_PAL: return frameTimePAL;
-	}
-	return {};
+	return frameTimeVar(system);
 }
 
 IG::FloatSeconds EmuSystem::defaultFrameTime(VideoSystem system)
 {
 	switch(system)
 	{
-		case VIDSYS_NATIVE_NTSC: return IG::FloatSeconds{1./60.};
-		case VIDSYS_PAL: return IG::FloatSeconds{1./50.};
+		case VideoSystem::NATIVE_NTSC: return IG::FloatSeconds{staticFrameTime};
+		case VideoSystem::PAL: return IG::FloatSeconds{staticPalFrameTime};
 	}
 	return {};
 }
@@ -346,8 +343,10 @@ bool EmuSystem::frameTimeIsValid(VideoSystem system, IG::FloatSeconds time)
 	auto rate = 1. / time.count(); // convert to frames per second
 	switch(system)
 	{
-		case VIDSYS_NATIVE_NTSC: return rate >= 55 && rate <= 65;
-		case VIDSYS_PAL: return rate >= 45 && rate <= 65;
+		case VideoSystem::NATIVE_NTSC:
+			return rate >= 55. && rate <= ((1. / staticFrameTime) + 5.);
+		case VideoSystem::PAL:
+			return rate >= 45. && rate <= ((1. / staticPalFrameTime) + 15.);
 	}
 	return false;
 }
@@ -356,11 +355,7 @@ bool EmuSystem::setFrameTime(VideoSystem system, IG::FloatSeconds time)
 {
 	if(!frameTimeIsValid(system, time))
 		return false;
-	switch(system)
-	{
-		bcase VIDSYS_NATIVE_NTSC: frameTimeNative = time;
-		bcase VIDSYS_PAL: frameTimePAL = time;
-	}
+	frameTimeVar(system) = time;
 	return true;
 }
 
@@ -381,7 +376,7 @@ void EmuSystem::closeAndSetupNew(IG::CStringView path, std::string_view displayN
 	app.loadSessionOptions();
 }
 
-void EmuSystem::createWithMedia(GenericIO io, IG::CStringView path, std::string_view displayName,
+void EmuSystem::createWithMedia(IO io, IG::CStringView path, std::string_view displayName,
 	EmuSystemCreateParams params, OnLoadProgressDelegate onLoadProgress)
 {
 	if(io)
@@ -396,18 +391,19 @@ void EmuSystem::loadContentFromPath(IG::CStringView pathStr, std::string_view di
 	if(!handlesGenericIO)
 	{
 		closeAndSetupNew(path, displayName);
-		loadContent(FileIO{}, params, onLoadProgress);
+		IO nullIO{};
+		loadContent(nullIO, params, onLoadProgress);
 		return;
 	}
 	logMsg("load from %s:%s", IG::isUri(path) ? "uri" : "path", path.data());
-	loadContentFromFile(appContext().openFileUri(path, IO::AccessHint::SEQUENTIAL), path, displayName, params, onLoadProgress);
+	loadContentFromFile(appContext().openFileUri(path, IOAccessHint::SEQUENTIAL), path, displayName, params, onLoadProgress);
 }
 
-void EmuSystem::loadContentFromFile(GenericIO file, IG::CStringView path, std::string_view displayName, EmuSystemCreateParams params, OnLoadProgressDelegate onLoadProgress)
+void EmuSystem::loadContentFromFile(IO file, IG::CStringView path, std::string_view displayName, EmuSystemCreateParams params, OnLoadProgressDelegate onLoadProgress)
 {
 	if(EmuApp::hasArchiveExtension(displayName))
 	{
-		ArchiveIO io{};
+		IO io{};
 		FS::FileString originalName{};
 		for(auto &entry : FS::ArchiveIterator{std::move(file)})
 		{
@@ -478,7 +474,7 @@ void EmuSystem::setContentDisplayName(std::string_view name)
 	contentDisplayName_ = name;
 }
 
-FS::FileString EmuSystem::contentDisplayNameForPathDefaultImpl(IG::CStringView path)
+FS::FileString EmuSystem::contentDisplayNameForPathDefaultImpl(IG::CStringView path) const
 {
 	return IG::stringWithoutDotExtension<FS::FileString>(appContext().fileUriDisplayName(path));
 }
@@ -495,7 +491,7 @@ char EmuSystem::saveSlotChar(int slot) const
 	{
 		case -1: return 'a';
 		case 0 ... 9: return '0' + slot;
-		default: bug_unreachable("slot == %d", slot); return 0;
+		default: bug_unreachable("slot == %d", slot);
 	}
 }
 
@@ -505,7 +501,7 @@ char EmuSystem::saveSlotCharUpper(int slot) const
 	{
 		case -1: return 'A';
 		case 0 ... 9: return '0' + slot;
-		default: bug_unreachable("slot == %d", slot); return 0;
+		default: bug_unreachable("slot == %d", slot);
 	}
 }
 
@@ -547,88 +543,6 @@ bool EmuSystem::updateBackupMemoryCounter()
 	}
 	return false;
 }
-
-[[gnu::weak]] void EmuSystem::onInit() {}
-
-[[gnu::weak]] void EmuSystem::initOptions(EmuApp &) {}
-
-[[gnu::weak]] FS::FileString EmuSystem::configName() const { return {}; }
-
-[[gnu::weak]] void EmuSystem::onOptionsLoaded() {}
-
-[[gnu::weak]] void EmuSystem::onFlushBackupMemory(BackupMemoryDirtyFlags) {}
-
-[[gnu::weak]] void EmuSystem::savePathChanged() {}
-
-[[gnu::weak]] unsigned EmuSystem::multiresVideoBaseX() { return 0; }
-
-[[gnu::weak]] unsigned EmuSystem::multiresVideoBaseY() { return 0; }
-
-[[gnu::weak]] double EmuSystem::videoAspectRatioScale() { return 0; }
-
-[[gnu::weak]] bool EmuSystem::vidSysIsPAL() { return false; }
-
-[[gnu::weak]] bool EmuSystem::onPointerInputStart(const Input::MotionEvent &, Input::DragTrackerState, IG::WindowRect) { return false; }
-
-[[gnu::weak]] bool EmuSystem::onPointerInputUpdate(const Input::MotionEvent &, Input::DragTrackerState, Input::DragTrackerState, IG::WindowRect) { return false; }
-
-[[gnu::weak]] bool EmuSystem::onPointerInputEnd(const Input::MotionEvent &, Input::DragTrackerState, IG::WindowRect) { return false; }
-
-[[gnu::weak]] void EmuSystem::onPrepareAudio(EmuAudio &) {}
-
-[[gnu::weak]] bool EmuSystem::onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat) { return false; }
-
-[[gnu::weak]] FS::FileString EmuSystem::contentDisplayNameForPath(IG::CStringView path)
-{
-	return contentDisplayNameForPathDefaultImpl(path);
-}
-
-[[gnu::weak]] bool EmuSystem::shouldFastForward() { return false; }
-
-[[gnu::weak]] void EmuSystem::writeConfig(IO &io) {}
-
-[[gnu::weak]] void EmuSystem::writeCoreConfig(IO &io) {}
-
-[[gnu::weak]] bool EmuSystem::readConfig(IO &io, unsigned key, unsigned readSize) { return false; }
-
-[[gnu::weak]] bool EmuSystem::readCoreConfig(IO &io, unsigned key, unsigned readSize) { return false; }
-
-[[gnu::weak]] bool EmuSystem::resetSessionOptions(EmuApp &) { return false; }
-
-[[gnu::weak]] void EmuSystem::onSessionOptionsLoaded(EmuApp &) {}
-
-[[gnu::weak]] void EmuSystem::writeSessionConfig(IO &io) {}
-
-[[gnu::weak]] bool EmuSystem::readSessionConfig(IO &io, unsigned key, unsigned readSize) { return false; }
-
-[[gnu::weak]] void EmuSystem::reset(EmuApp &, ResetMode mode)
-{
-	reset(mode);
-}
-
-[[gnu::weak]] void EmuSystem::loadState(EmuApp &, IG::CStringView path)
-{
-	loadState(path);
-}
-
-[[gnu::weak]] void EmuSystem::renderFramebuffer(EmuVideo &video)
-{
-	video.clear();
-}
-
-[[gnu::weak]] void EmuSystem::handleInputAction(EmuApp *app, Input::Action state, unsigned emuKey)
-{
-	handleInputAction(app, state, emuKey, 0);
-}
-
-[[gnu::weak]] void EmuSystem::handleInputAction(EmuApp *app, Input::Action state, unsigned emuKey, uint32_t metaState)
-{
-	handleInputAction(app, state, emuKey);
-}
-
-[[gnu::weak]] void EmuSystem::onVKeyboardShown(VControllerKeyboard &, bool shown) {}
-
-[[gnu::weak]] void EmuSystem::closeSystem() {}
 
 EmuSystem &gSystem() { return gApp().system(); }
 //region 爱吾

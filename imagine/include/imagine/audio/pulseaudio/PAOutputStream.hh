@@ -15,8 +15,8 @@
 	You should have received a copy of the GNU General Public License
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <imagine/config/defs.hh>
-#include <imagine/audio/OutputStream.hh>
+#include <imagine/audio/defs.hh>
+#include <imagine/audio/Format.hh>
 
 struct pa_context;
 struct pa_stream;
@@ -26,21 +26,26 @@ struct pa_glib_mainloop;
 struct pa_threaded_mainloop;
 #endif
 
+namespace IG
+{
+class ErrorCode;
+}
+
 namespace IG::Audio
 {
 
-class PAOutputStream : public OutputStream
+class PAOutputStream
 {
 public:
 	PAOutputStream();
 	~PAOutputStream();
-	IG::ErrorCode open(OutputStreamConfig config) final;
-	void play() final;
-	void pause() final;
-	void close() final;
-	void flush() final;
-	bool isOpen() final;
-	bool isPlaying() final;
+	ErrorCode open(OutputStreamConfig config);
+	void play();
+	void pause();
+	void close();
+	void flush();
+	bool isOpen();
+	bool isPlaying();
 	explicit operator bool() const;
 
 private:

@@ -18,7 +18,9 @@
 #include <imagine/util/2DOrigin.h>
 #include <imagine/util/AssignmentArithmetics.hh>
 #include <imagine/util/Point2D.hh>
+#include <imagine/util/concepts.hh>
 #include <compare>
+#include <algorithm>
 
 namespace IG
 {
@@ -42,65 +44,69 @@ public:
 
 	constexpr bool operator ==(Rect2 const& rhs) const = default;
 
-	constexpr Rect2 operator +(Rect2 const& rhs) const
+	[[nodiscard]] friend constexpr Rect2 operator+(Rect2 const& lhs, Rect2 const& rhs)
 	{
-		return {{x + rhs.x, y + rhs.y}, {x2 + rhs.x2, y2 + rhs.y2}};
+		return {{lhs.x + rhs.x, lhs.y + rhs.y}, {lhs.x2 + rhs.x2, lhs.y2 + rhs.y2}};
 	}
 
-	constexpr Rect2 operator -(Rect2 const& rhs) const
+	[[nodiscard]] friend constexpr Rect2 operator-(Rect2 const& lhs, Rect2 const& rhs)
 	{
-		return {{x - rhs.x, y - rhs.y}, {x2 - rhs.x2, y2 - rhs.y2}};
+		return {{lhs.x - rhs.x, lhs.y - rhs.y}, {lhs.x2 - rhs.x2, lhs.y2 - rhs.y2}};
 	}
 
-	constexpr Rect2 operator *(Rect2 const& rhs) const
+	[[nodiscard]] friend constexpr Rect2 operator*(Rect2 const& lhs, Rect2 const& rhs)
 	{
-		return {{x * rhs.x, y * rhs.y}, {x2 * rhs.x2, y2 * rhs.y2}};
+		return {{lhs.x * rhs.x, lhs.y * rhs.y}, {lhs.x2 * rhs.x2, lhs.y2 * rhs.y2}};
 	}
 
-	constexpr Rect2 operator /(Rect2 const& rhs) const
+	[[nodiscard]] friend constexpr Rect2 operator/(Rect2 const& lhs, Rect2 const& rhs)
 	{
-		return {{x / rhs.x, y / rhs.y}, {x2 / rhs.x2, y2 / rhs.y2}};
+		return {{lhs.x / rhs.x, lhs.y / rhs.y}, {lhs.x2 / rhs.x2, lhs.y2 / rhs.y2}};
 	}
 
-	constexpr Rect2 operator-() const
+	[[nodiscard]] constexpr Rect2 operator-() const
 	{
 		return {{-x, -y}, {-x2, -y2}};
 	}
 
-	constexpr Rect2 & operator +=(IG::Point2D<T> const& rhs)
+	[[nodiscard]] friend constexpr Rect2 operator+(Rect2 const& lhs, Point2D<T> const& rhs)
 	{
-		x += rhs.x;
-		y += rhs.y;
-		x2 += rhs.x;
-		y2 += rhs.y;
-		return *this;
+		return {{lhs.x + rhs.x, lhs.y + rhs.y}, {lhs.x2 + rhs.x, lhs.y2 + rhs.y}};
 	}
 
-	constexpr Rect2 & operator -=(IG::Point2D<T> const& rhs)
+	[[nodiscard]] friend constexpr Rect2 operator-(Rect2 const& lhs, Point2D<T> const& rhs)
 	{
-		x -= rhs.x;
-		y -= rhs.y;
-		x2 -= rhs.x;
-		y2 -= rhs.y;
-		return *this;
+		return {{lhs.x - rhs.x, lhs.y - rhs.y}, {lhs.x2 - rhs.x, lhs.y2 - rhs.y}};
 	}
 
-	constexpr Rect2 & operator *=(IG::Point2D<T> const& rhs)
+	[[nodiscard]] friend constexpr Rect2 operator*(Rect2 const& lhs, Point2D<T> const& rhs)
 	{
-		x *= rhs.x;
-		y *= rhs.y;
-		x2 *= rhs.x;
-		y2 *= rhs.y;
-		return *this;
+		return {{lhs.x * rhs.x, lhs.y * rhs.y}, {lhs.x2 * rhs.x, lhs.y2 * rhs.y}};
 	}
 
-	constexpr Rect2 & operator /=(IG::Point2D<T> const& rhs)
+	[[nodiscard]] friend constexpr Rect2 operator/(Rect2 const& lhs, Point2D<T> const& rhs)
 	{
-		x /= rhs.x;
-		y /= rhs.y;
-		x2 /= rhs.x;
-		y2 /= rhs.y;
-		return *this;
+		return {{lhs.x / rhs.x, lhs.y / rhs.y}, {lhs.x2 / rhs.x, lhs.y2 / rhs.y}};
+	}
+
+	[[nodiscard]] friend constexpr Rect2 operator+(Rect2 const& lhs, Arithmetic auto rhs)
+	{
+		return {{T(lhs.x + rhs), T(lhs.y + rhs)}, {T(lhs.x2 + rhs), T(lhs.y2 + rhs)}};
+	}
+
+	[[nodiscard]] friend constexpr Rect2 operator-(Rect2 const& lhs, Arithmetic auto rhs)
+	{
+		return {{T(lhs.x - rhs), T(lhs.y - rhs)}, {T(lhs.x2 - rhs), T(lhs.y2 - rhs)}};
+	}
+
+	[[nodiscard]] friend constexpr Rect2 operator*(Rect2 const& lhs, Arithmetic auto rhs)
+	{
+		return {{T(lhs.x * rhs), T(lhs.y * rhs)}, {T(lhs.x2 * rhs), T(lhs.y2 * rhs)}};
+	}
+
+	[[nodiscard]] friend constexpr Rect2 operator/(Rect2 const& lhs, Arithmetic auto rhs)
+	{
+		return {{T(lhs.x / rhs), T(lhs.y / rhs)}, {T(lhs.x2 / rhs), T(lhs.y2 / rhs)}};
 	}
 
 	constexpr Rect2 makeInverted() const
@@ -302,6 +308,18 @@ public:
 		linkedVar += newVal - var;
 		var = newVal;
 	}
+
+	[[nodiscard]] constexpr Rect2 intersection(Rect2 r) const
+	{
+		return
+		{
+			{std::max(x, r.x), std::max(y, r.y)},
+			{std::min(x2, r.x2), std::min(y2, r.y2)}
+		};
+	}
+
+	[[nodiscard]] constexpr Rect2 xRect() const { return {{x, 0}, {x2, 0}}; }
+	[[nodiscard]] constexpr Rect2 yRect() const { return {{0, y}, {0, y2}}; }
 };
 
 template<class T>
@@ -404,6 +422,7 @@ public:
 };
 
 using WindowRect = CoordinateRect<int, true, false>;
+using WRect = WindowRect;
 using WP = IP;
 using IRect = Rect2<int>;
 using FRect = Rect2<float>;

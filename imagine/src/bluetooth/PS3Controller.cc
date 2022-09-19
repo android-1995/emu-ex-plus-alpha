@@ -16,10 +16,11 @@
 #define LOGTAG "PS3Ctrl"
 #include <imagine/bluetooth/PS3Controller.hh>
 #include <imagine/base/Application.hh>
+#include <imagine/base/Error.hh>
 #include <imagine/logger/logger.h>
 #include <imagine/time/Time.hh>
 #include <imagine/util/bitset.hh>
-#include <imagine/util/algorithm.h>
+#include <imagine/util/ranges.hh>
 #include "../input/PackedInputAccess.hh"
 
 static constexpr uint32_t CELL_PAD_BTN_OFFSET_DIGITAL1 = 0, CELL_PAD_BTN_OFFSET_DIGITAL2 = 1;
@@ -229,7 +230,7 @@ bool PS3Controller::dataHandler(const char *packetPtr, size_t size)
 
 			const uint8_t *stickData = &packet[7];
 			//logMsg("left: %d,%d right: %d,%d", stickData[0], stickData[1], stickData[2], stickData[3]);
-			iterateTimes(4, i)
+			for(auto i : iotaCount(4))
 			{
 				if(axis[i].update(int(stickData[i]) - 127, Map::PS3PAD, time, *this, ctx.mainWindow()))
 					ctx.endIdleByUserActivity();

@@ -29,7 +29,6 @@ namespace EmuEx
 void VControllerDPad::setImg(Gfx::Renderer &r, Gfx::Texture &dpadR, float texHeight)
 {
 	spr = {{{-.5, -.5}, {.5, .5}}, {&dpadR, {{}, {1., 64.f/texHeight}}}};
-	spr.compileDefaultProgramOneShot(Gfx::IMG_MODE_MODULATE);
 }
 
 void VControllerDPad::updateBoundingAreaGfx(Gfx::Renderer &r, Gfx::ProjectionPlane projP)
@@ -38,8 +37,8 @@ void VControllerDPad::updateBoundingAreaGfx(Gfx::Renderer &r, Gfx::ProjectionPla
 	{
 		IG::MemPixmap mapMemPix{{padArea.size(), IG::PIXEL_FMT_RGB565}};
 		auto mapPix = mapMemPix.view();
-		iterateTimes(mapPix.h(), y)
-			iterateTimes(mapPix.w(), x)
+		for(auto y : iotaCount(mapPix.h()))
+			for(auto x : iotaCount(mapPix.w()))
 			{
 				int input = getInput({padArea.xPos(LT2DO) + (int)x, padArea.yPos(LT2DO) + (int)y});
 				//logMsg("got input %d", input);
@@ -47,7 +46,7 @@ void VControllerDPad::updateBoundingAreaGfx(Gfx::Renderer &r, Gfx::ProjectionPla
 										: IG::isOdd(input) ? IG::PIXEL_DESC_RGB565.build(1., 1., 1., 1.)
 										: IG::PIXEL_DESC_RGB565.build(0., 1., 0., 1.);
 			}
-		mapImg = r.makePixmapTexture({mapPix, &r.make(View::imageCommonTextureSampler)});
+		mapImg = r.makeTexture({mapPix.desc(), View::imageSamplerConfig});
 		mapImg.write(0, mapPix, {});
 		mapSpr = {{}, mapImg};
 		mapSpr.setPos(padArea, projP);
@@ -78,7 +77,7 @@ IG::WindowRect VControllerDPad::bounds() const
 	return padBaseArea;
 }
 
-void VControllerDPad::setSize(Gfx::Renderer &r, unsigned sizeInPixels, Gfx::ProjectionPlane projP)
+void VControllerDPad::setSize(Gfx::Renderer &r, int sizeInPixels, Gfx::ProjectionPlane projP)
 {
 	//logMsg("set dpad pixel size: %d", sizeInPixels);
 	btnSizePixels = sizeInPixels;
@@ -93,10 +92,10 @@ void VControllerDPad::setSize(Gfx::Renderer &r, unsigned sizeInPixels, Gfx::Proj
 	}
 }
 
-void VControllerDPad::setPos(IG::WP pos, Gfx::ProjectionPlane projP)
+void VControllerDPad::setPos(IG::WP pos, IG::WindowRect viewBounds, Gfx::ProjectionPlane projP)
 {
 	padBaseArea.setPos(pos, C2DO);
-	padBaseArea.fitIn(projP.viewport().bounds());
+	padBaseArea.fitIn(viewBounds);
 	padBase = projP.unProjectRect(padBaseArea);
 	spr.setPos(padBase);
 	//logMsg("set dpad pos %d:%d:%d:%d, %f:%f:%f:%f", padBaseArea.x, padBaseArea.y, padBaseArea.x2, padBaseArea.y2,
@@ -115,7 +114,7 @@ void VControllerDPad::setBoundingAreaVisible(Gfx::Renderer &r, bool on, Gfx::Pro
 	visualizeBounds = on;
 	if(!on)
 	{
-		if(mapSpr.image())
+		if(mapSpr.hasTexture())
 		{
 			logMsg("deallocating bounding box display resources");
 			mapSpr = {};
@@ -130,13 +129,10 @@ void VControllerDPad::setBoundingAreaVisible(Gfx::Renderer &r, bool on, Gfx::Pro
 
 void VControllerDPad::draw(Gfx::RendererCommands &cmds) const
 {
-	cmds.set(View::imageCommonTextureSampler);
-	spr.setCommonProgram(cmds, Gfx::IMG_MODE_MODULATE);
+	cmds.basicEffect().enableTexture(cmds);
 	spr.draw(cmds);
-
 	if(visualizeBounds)
 	{
-		mapSpr.setCommonProgram(cmds, Gfx::IMG_MODE_MODULATE);
 		mapSpr.draw(cmds);
 	}
 }
@@ -212,12 +208,10 @@ static FRect faceButtonCoordinates(int slot, float texHeight)
 		case 7: return {{33./64., 182.f/texHeight}, {1., 213.f/texHeight}};
 	}
 	bug_unreachable("invalid slot:%d", slot);
-	return {};
 }
 
 void VControllerGamepad::setImg(Gfx::Renderer &r, Gfx::Texture &pics)
 {
-	pics.compileDefaultProgramOneShot(Gfx::IMG_MODE_MODULATE);
 	float h = EmuSystem::inputFaceBtns == 2 || EmuSystem::inputHasShortBtnTexture ? 128. : 256.;
 	dp.setImg(r, pics, h);
 	centerBtns.buttons()[0].setImage({&pics, {{0., 65.f/h}, {32./64., 81.f/h}}}, 2.f);
@@ -225,8 +219,13 @@ void VControllerGamepad::setImg(Gfx::Renderer &r, Gfx::Texture &pics)
 	{
 		centerBtns.buttons()[1].setImage({&pics, {{33./64., 65.f/h}, {1., 81.f/h}}}, 2.f);
 	}
-	auto faceBtnMap = EmuSystem::vControllerImageMap;
-	iterateTimes(EmuSystem::inputFaceBtns, i)
+	setFaceButtonMapping(r, pics, EmuSystem::vControllerImageMap);
+}
+
+void VControllerGamepad::setFaceButtonMapping(Gfx::Renderer &r, Gfx::Texture &pics, FaceButtonImageMap faceBtnMap)
+{
+	float h = EmuSystem::inputFaceBtns == 2 || EmuSystem::inputHasShortBtnTexture ? 128. : 256.;
+	for(auto i : iotaCount(EmuSystem::inputFaceBtns))
 	{
 		faceBtns.buttons()[i].setImage({&pics, faceButtonCoordinates(faceBtnMap[i], h)});
 	}

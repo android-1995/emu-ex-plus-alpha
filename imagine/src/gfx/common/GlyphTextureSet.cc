@@ -77,13 +77,13 @@ void GlyphTextureSet::freeCaches(uint32_t purgeBits)
 		return;
 	}
 	auto tableBits = usedGlyphTableBits;
-	iterateTimes(32, i)
+	for(auto i : iotaCount(32))
 	{
 		if((tableBits & 1) && (purgeBits & 1))
 		{
 			logMsg("purging glyphs from table range %d/31", i);
 			int firstChar = i << 11;
-			iterateTimesFromStart(2048, firstChar, c)
+			for(auto c : std::views::iota(firstChar, 2048))
 			{
 				int tableIdx;
 				if((bool)mapCharToTable(c, tableIdx))
@@ -115,20 +115,19 @@ GlyphTextureSet::GlyphTextureSet(Renderer &r, IG::Font font, IG::FontSettings se
 	}
 }
 
-int GlyphTextureSet::nominalHeight() const
-{
-	return nominalHeight_;
-}
-
-void GlyphTextureSet::calcNominalHeight(Renderer &r)
+void GlyphTextureSet::calcMetrics(Renderer &r)
 {
 	//logMsg("calcNominalHeight");
 	GlyphEntry *mGly = glyphEntry(r, 'M');
 	GlyphEntry *gGly = glyphEntry(r, 'g');
-
-	assert(mGly && gGly);
-
-	nominalHeight_ = mGly->metrics.ySize + (gGly->metrics.ySize/2);
+	if(!mGly || !gGly) [[unlikely]]
+	{
+		logErr("error reading measurement glyphs");
+		return;
+	}
+	metrics_.nominalHeight = mGly->metrics.ySize + (gGly->metrics.ySize/2);
+	metrics_.spaceSize = mGly->metrics.xSize/2;
+	metrics_.yLineStart = gGly->metrics.ySize - gGly->metrics.yOffset;
 }
 
 IG::FontSettings GlyphTextureSet::fontSettings() const
@@ -148,7 +147,7 @@ bool GlyphTextureSet::setFontSettings(Renderer &r, IG::FontSettings set)
 	settings = set;
 	std::errc ec{};
 	faceSize = font.makeSize(settings, ec);
-	calcNominalHeight(r);
+	calcMetrics(r);
 	return true;
 }
 
@@ -171,7 +170,7 @@ std::errc GlyphTextureSet::cacheChar(Renderer &r, int c, int tableIdx)
 	}
 	//logMsg("setting up table entry %d", tableIdx);
 	glyphTable[tableIdx].metrics = res.metrics;
-	glyphTable[tableIdx].glyph_ = r.makePixmapTexture(res.image, &r.make(glyphCommonTextureSampler), false);
+	glyphTable[tableIdx].glyph_ = r.makeTexture(res.image, glyphSamplerConfig, false);
 	usedGlyphTableBits |= IG::bit((c >> 11) & 0x1F); // use upper 5 BMP plane bits to map in range 0-31
 	//logMsg("used table bits 0x%X", usedGlyphTableBits);
 	return {};

@@ -18,7 +18,6 @@
 #include <imagine/config/defs.hh>
 #include "BluetoothAdapter.hh"
 #include <imagine/base/EventLoop.hh>
-#include <imagine/base/Error.hh>
 #include <jni.h>
 #include <semaphore>
 
@@ -26,6 +25,7 @@ namespace IG
 {
 
 struct SocketStatusMessage;
+class ErrorCode;
 
 class AndroidBluetoothAdapter : public BluetoothAdapter
 {
@@ -74,7 +74,7 @@ public:
 private:
 	jobject socket{}, outStream{};
 	ApplicationContext ctx{};
-	std::binary_semaphore connectSem{};
+	std::binary_semaphore connectSem{0};
 	FDEventSource fdSrc{};
 	int nativeFd = -1;
 	uint32_t channel = 0;

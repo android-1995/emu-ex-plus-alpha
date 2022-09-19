@@ -15,7 +15,8 @@
 	You should have received a copy of the GNU General Public License
 	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <imagine/io/IO.hh>
+#include <imagine/io/MapIO.hh>
+#include <imagine/io/FileIO.hh>
 #include <imagine/util/concepts.hh>
 #include <imagine/util/optional.hh>
 #include <imagine/util/used.hh>
@@ -30,34 +31,62 @@ namespace EmuEx
 
 using namespace IG;
 
+// Stateless option API
+
 template <class T>
-inline std::optional<T> readOptionValue(IO &io, size_t bytesToRead, IG::Predicate<const T&> auto &&isValid)
+constexpr bool isAlwaysValid(const T &) { return true; }
+
+template <class T>
+inline std::optional<T> readOptionValue(Readable auto &io, size_t bytesToRead, Predicate<T> auto &&isValid)
 {
 	if(bytesToRead != sizeof(T))
 	{
 		logMsg("skipping %zu byte option value, expected %zu bytes", bytesToRead, sizeof(T));
 		return {};
 	}
-	auto val = io.get<T>();
+	auto val = io.template get<T>();
 	if(!isValid(val))
 		return {};
 	return val;
 }
 
 template <class T>
-inline std::optional<T> readOptionValue(IO &io, size_t bytesToRead)
+inline std::optional<T> readOptionValue(Readable auto &io, size_t bytesToRead)
 {
-	return readOptionValue<T>(io, bytesToRead, [](const T&){ return true; });
+	return readOptionValue<T>(io, bytesToRead, isAlwaysValid<T>);
 }
 
 template <class T>
-inline std::optional<T> readOptionValue(IO &io, size_t bytesToRead, auto &&func)
+inline bool readOptionValue(Readable auto &io, size_t bytesToRead,
+	Callable<void, T> auto &&func, Predicate<T> auto &&isValid)
 {
-	return IG::doOptionally(readOptionValue<T>(io, bytesToRead), std::forward<decltype(func)>(func));
+	return doOptionally(readOptionValue<T>(io, bytesToRead, IG_forward(isValid)),
+		IG_forward(func));
 }
 
-template <IG::Container T>
-inline std::optional<T> readStringOptionValue(IO &io, size_t bytesToRead)
+template <class T>
+inline bool readOptionValue(Readable auto &io, size_t bytesToRead,
+	Callable<void, T> auto &&func)
+{
+	return readOptionValue<T>(io, bytesToRead, IG_forward(func), isAlwaysValid<T>);
+}
+
+template <class T>
+inline bool readOptionValue(Readable auto &io, size_t bytesToRead, T &output,
+	Predicate<T> auto &&isValid)
+{
+	return readOptionValue<T>(io, bytesToRead,
+		[&](auto &&val){ output = IG_forward(val); }, IG_forward(isValid));
+}
+
+template <class T>
+inline bool readOptionValue(Readable auto &io, size_t bytesToRead, T &output)
+{
+	return readOptionValue<T>(io, bytesToRead, output, isAlwaysValid<T>);
+}
+
+template <Container T>
+inline std::optional<T> readStringOptionValue(Readable auto &io, size_t bytesToRead)
 {
 	T val{};
 	const auto destStringSize = val.max_size() - 1;
@@ -75,13 +104,20 @@ inline std::optional<T> readStringOptionValue(IO &io, size_t bytesToRead)
 	return val;
 }
 
-template <IG::Container T>
-inline void readStringOptionValue(IO &io, size_t bytesToRead, auto &&func)
+template <Container T>
+inline bool readStringOptionValue(Readable auto &io, size_t bytesToRead,
+	Callable<void, T> auto &&func)
 {
-	IG::doOptionally(readStringOptionValue<T>(io, bytesToRead), std::forward<decltype(func)>(func));
+	return doOptionally(readStringOptionValue<T>(io, bytesToRead), IG_forward(func));
 }
 
-inline void writeOptionValueHeader(IO &io, uint16_t key, uint16_t optSize)
+template <Container T>
+inline bool readStringOptionValue(Readable auto &io, size_t bytesToRead, T &output)
+{
+	return readStringOptionValue<T>(io, bytesToRead, [&](auto &&val){ output = IG_forward(val); });
+}
+
+inline void writeOptionValueHeader(Writable auto &io, uint16_t key, uint16_t optSize)
 {
 	optSize += sizeof key;
 	logMsg("writing option key:%u with size:%u", key, optSize);
@@ -89,21 +125,28 @@ inline void writeOptionValueHeader(IO &io, uint16_t key, uint16_t optSize)
 	io.write(key);
 }
 
-inline void writeOptionValue(IO &io, uint16_t key, const auto &val)
+inline void writeOptionValue(Writable auto &io, uint16_t key, const auto &val)
 {
 	writeOptionValueHeader(io, key, sizeof(decltype(val)));
 	io.write(val);
 }
 
 template <class T>
-inline void writeOptionValue(IO &io, uint16_t key, const std::optional<T> &val)
+inline void writeOptionValue(Writable auto &io, uint16_t key, const std::optional<T> &val)
 {
 	if(!val)
 		return;
 	writeOptionValue(io, key, *val);
 }
 
-inline void writeStringOptionValue(IO &io, uint16_t key, std::string_view view)
+inline void writeOptionValueIfNotDefault(Writable auto &io, uint16_t key, const auto &val, const auto &defaultVal)
+{
+	if(val == defaultVal)
+		return;
+	writeOptionValue(io, key, val);
+}
+
+inline void writeStringOptionValue(Writable auto &io, uint16_t key, std::string_view view)
 {
 	if(!view.size())
 		return;
@@ -111,10 +154,12 @@ inline void writeStringOptionValue(IO &io, uint16_t key, std::string_view view)
 	io.write(view.data(), view.size());
 }
 
-inline void writeStringOptionValue(IO &io, uint16_t key, const IG::Container auto &c)
+inline void writeStringOptionValue(Writable auto &io, uint16_t key, const Container auto &c)
 {
 	writeStringOptionValue(io, key, std::string_view(c.data()));
 }
+
+// Older stateful option API
 
 template <class T>
 constexpr bool optionIsAlwaysValid(T)
@@ -176,7 +221,7 @@ public:
 		return val;
 	}
 
-	bool writeToIO(IO &io) const
+	bool writeToIO(Writable auto &io) const
 	{
 		logMsg("writing option key %u after size %zu", KEY, ioSize());
 		io.write(KEY);
@@ -184,7 +229,7 @@ public:
 		return true;
 	}
 
-	bool writeWithKeyIfNotDefault(IO &io) const
+	bool writeWithKeyIfNotDefault(Writable auto &io) const
 	{
 		if(!isDefault())
 		{
@@ -194,7 +239,7 @@ public:
 		return true;
 	}
 
-	bool readFromIO(IO &io, size_t readSize)
+	bool readFromIO(Readable auto &io, size_t readSize)
 	{
 		if(isConst || readSize != SIZE)
 		{
@@ -205,7 +250,7 @@ public:
 			return false;
 		}
 
-		auto x = io.get<T>();
+		auto x = io.template get<T>();
 		if(isValidVal(x))
 			val = x;
 		else
@@ -231,7 +276,7 @@ using Byte4Option = Option<uint32_t>;
 using DoubleOption = Option<double>;
 
 template <class T>
-inline void writeOptionValue(IO &io, const Option<T> &opt)
+inline void writeOptionValue(Writable auto &io, const Option<T> &opt)
 {
 	if(opt.isDefault())
 		return;
@@ -239,7 +284,7 @@ inline void writeOptionValue(IO &io, const Option<T> &opt)
 	opt.writeToIO(io);
 }
 
-inline void writeOptionValue(IO &io, Unused auto &opt) {}
+inline void writeOptionValue(Writable auto &io, Unused auto &opt) {}
 
 template<int MAX, class T>
 constexpr bool optionIsValidWithMax(T val)

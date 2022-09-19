@@ -22,19 +22,6 @@
 namespace IG
 {
 
-TextTableView::TextTableView(ViewAttachParams attach, size_t itemsHint): TextTableView{{}, attach, itemsHint} {}
-
-void TextTableView::appendItem(IG::utf16String name, TextMenuItem::SelectDelegate del)
-{
-	textItem.emplace_back(std::move(name), &defaultFace(), del);
-}
-
-void TextTableView::setItem(size_t idx, IG::utf16String name, TextMenuItem::SelectDelegate del)
-{
-	assert(idx < textItem.size());
-	textItem[idx] = {std::move(name), &defaultFace(), del};
-}
-
 TextMenuItem &TextTableView::item(size_t idx)
 {
 	assert(idx < textItem.size());
@@ -55,7 +42,7 @@ void TextTableView::onAddedToController(ViewController *c, const Input::Event &e
 	else TableView::onAddedToController(c, e);
 }
 
-void TextTableView::drawElement(Gfx::RendererCommands &cmds, size_t i, MenuItem &item, Gfx::GCRect rect, float xIndent) const
+void TextTableView::drawElement(Gfx::RendererCommands &__restrict__ cmds, size_t i, MenuItem &item, Gfx::GCRect rect, float xIndent) const
 {
 	item.draw(cmds, rect.x, rect.pos(C2DO).y, rect.xSize(), rect.ySize(),
 		xIndent, TableView::align, projP, menuTextColor((int)i == activeItem));

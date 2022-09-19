@@ -22,8 +22,8 @@
 #include <stella/emucore/tia/TIA.hxx>
 #include <stella/emucore/Switches.hxx>
 #include <stella/emucore/PropsSet.hxx>
-#include <stella/emucore/Paddles.hxx>
 #include <stella/emucore/M6532.hxx>
+#include <stella/emucore/DispatchResult.hxx>
 #include <stella/common/StateManager.hxx>
 #include <stella/common/AudioSettings.hxx>
 #include <OSystem.hxx>
@@ -32,21 +32,16 @@
 // TODO: Stella includes can clash with PAGE_SHIFT & PAGE_MASK based on order
 // TODO: Some Stella types collide with MacTypes.h
 #define Debugger DebuggerMac
-#include <emuframework/EmuApp.hh>
 #include <emuframework/EmuAppInlines.hh>
+#include <emuframework/EmuSystemInlines.hh>
 #undef Debugger
-#include "internal.hh"
 #include <imagine/util/format.hh>
 #include <imagine/util/string.h>
 
 namespace EmuEx
 {
 
-static constexpr uint MAX_ROM_SIZE = 512 * 1024;
-std::optional<OSystem> osystem{};
-Properties defaultGameProps{};
-bool p1DiffB = true, p2DiffB = true, vcsColor = true;
-Controller::Type autoDetectedInput1{};
+constexpr size_t MAX_ROM_SIZE = 512 * 1024;
 const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2022\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nStella Team\nstella-emu.github.io";
 bool EmuSystem::hasPALVideoSystem = true;
 bool EmuSystem::hasResetModes = true;
@@ -69,33 +64,34 @@ const char *EmuSystem::systemName() const
 	return "Atari 2600";
 }
 
-FS::FileString EmuSystem::stateFilename(int slot, std::string_view name) const
+FS::FileString A2600System::stateFilename(int slot, std::string_view name) const
 {
 	return IG::format<FS::FileString>("{}.0{}.sta", name, saveSlotChar(slot));
 }
 
-void EmuSystem::closeSystem()
+void A2600System::closeSystem()
 {
-	osystem->deleteConsole();
+	osystem.deleteConsole();
 }
 
-static void updateSwitchValues()
+void A2600System::updateSwitchValues()
 {
-	auto switches = osystem->console().switches().read();
+	auto switches = osystem.console().switches().read();
 	logMsg("updating switch values to %X", switches);
 	p1DiffB = !(switches & 0x40);
 	p2DiffB = !(switches & 0x80);
 	vcsColor = switches & 0x08;
 }
 
-bool EmuSystem::vidSysIsPAL()
+VideoSystem A2600System::videoSystem() const
 {
-	return osystem->hasConsole() && osystem->console().timing() != ConsoleTiming::ntsc;
+	return osystem.hasConsole()
+		&& osystem.console().timing() != ConsoleTiming::ntsc ? VideoSystem::PAL : VideoSystem::NATIVE_NTSC;
 }
 
-void EmuSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegate)
+void A2600System::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegate)
 {
-	auto &os = *osystem;
+	auto &os = osystem;
 	if(io.size() > MAX_ROM_SIZE)
 		throw std::runtime_error{"ROM size is too large"};
 	auto image = std::make_unique<uInt8[]>(MAX_ROM_SIZE);
@@ -112,6 +108,7 @@ void EmuSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 	FilesystemNode fsNode{contentFileName().data()};
 	auto &settings = os.settings();
 	settings.setValue("romloadcount", 0);
+	settings.setValue("plr.tv.jitter", false);
 	auto cartridge = CartCreator::create(fsNode, image, size, md5, romType, settings);
 	cartridge->setMessageCallback([](const string& msg){ logMsg("%s", msg.c_str()); });
 	if((int)optionTVPhosphor != TV_PHOSPHOR_AUTO)
@@ -121,8 +118,8 @@ void EmuSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 	os.frameBuffer().enablePhosphor(props.get(PropType::Display_Phosphor) == "YES", optionTVPhosphorBlend);
 	if((int)optionVideoSystem) // not auto
 	{
-		logMsg("forcing video system to: %s", optionVideoSystemToStr());
-		props.set(PropType::Display_Format, optionVideoSystemToStr());
+		logMsg("forcing video system to:%s", optionVideoSystemToStr(optionVideoSystem));
+		props.set(PropType::Display_Format, optionVideoSystemToStr(optionVideoSystem));
 	}
 	os.makeConsole(cartridge, props, contentFileName().data());
 	auto &console = os.console();
@@ -131,12 +128,12 @@ void EmuSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 	Paddles::setDigitalSensitivity(optionPaddleDigitalSensitivity);
 	console.initializeVideo();
 	console.initializeAudio();
-	logMsg("is PAL: %s", EmuSystem::vidSysIsPAL() ? "yes" : "no");
+	logMsg("is PAL: %s", videoSystem() == VideoSystem::PAL ? "yes" : "no");
 }
 
-void EmuSystem::configAudioRate(IG::FloatSeconds frameTime, uint32_t rate)
+void A2600System::configAudioRate(IG::FloatSeconds frameTime, int rate)
 {
-	osystem->setFrameTime(frameTime.count(), rate);
+	osystem.setFrameTime(frameTime.count(), rate, (AudioSettings::ResamplingQuality)optionAudioResampleQuality.val);
 }
 
 static void renderVideo(EmuSystemTaskContext taskCtx, EmuVideo &video, FrameBuffer &fb, TIA &tia)
@@ -147,9 +144,9 @@ static void renderVideo(EmuSystemTaskContext taskCtx, EmuVideo &video, FrameBuff
 	img.endFrame();
 }
 
-void EmuSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio *audio)
+void A2600System::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio *audio)
 {
-	auto &os = *osystem;
+	auto &os = osystem;
 	auto &console = os.console();
 	auto &sound = os.soundEmuEx();
 	sound.setEmuAudio(audio);
@@ -158,7 +155,11 @@ void EmuSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	console.switches().update();
 	console.riot().update();
 	auto &tia = console.tia();
-	tia.update(0xFFFFFFFF);
+	static constexpr uInt64 maxCyclesPerFrame = 32768;
+	DispatchResult res;
+	tia.update(res, maxCyclesPerFrame);
+	if(res.getCycles() > maxCyclesPerFrame)
+		logWarn("frame ran %u cycles", (unsigned)res.getCycles());
 	tia.renderToFrameBuffer();
 	if(video)
 	{
@@ -167,26 +168,26 @@ void EmuSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	sound.updateRate(os);
 }
 
-void EmuSystem::renderFramebuffer(EmuVideo &video)
+void A2600System::renderFramebuffer(EmuVideo &video)
 {
-	auto &tia = osystem->console().tia();
-	auto &fb = osystem->frameBuffer();
+	auto &tia = osystem.console().tia();
+	auto &fb = osystem.frameBuffer();
 	renderVideo({}, video, fb, tia);
 }
 
-void EmuSystem::reset(ResetMode mode)
+void A2600System::reset(EmuApp &, ResetMode mode)
 {
 	assert(hasContent());
-	if(mode == RESET_HARD)
+	if(mode == ResetMode::HARD)
 	{
-		osystem->console().system().reset();
+		osystem.console().system().reset();
 	}
 	else
 	{
-		Event &ev = osystem->eventHandler().event();
+		Event &ev = osystem.eventHandler().event();
 		ev.clear();
 		ev.set(Event::ConsoleReset, 1);
-		auto &console = osystem->console();
+		auto &console = osystem.console();
 		console.switches().update();
 		TIA& tia = console.tia();
 		tia.update(console.emulationTiming().cyclesPerFrame());
@@ -194,19 +195,19 @@ void EmuSystem::reset(ResetMode mode)
 	}
 }
 
-void EmuSystem::saveState(IG::CStringView path)
+void A2600System::saveState(IG::CStringView path)
 {
 	Serializer state{path.data()};
-	if(!osystem->state().saveState(state))
+	if(!osystem.state().saveState(state))
 	{
 		throwFileWriteError();
 	}
 }
 
-void EmuSystem::loadState(IG::CStringView path)
+void A2600System::loadState(EmuApp &, IG::CStringView path)
 {
 	Serializer state{path.data(), Serializer::Mode::ReadOnly};
-	if(!osystem->state().loadState(state))
+	if(!osystem.state().loadState(state))
 	{
 		throwFileReadError();
 	}
@@ -217,36 +218,22 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 {
 	const Gfx::LGradientStopDesc navViewGrad[] =
 	{
-		{ .0, Gfx::VertexColorPixelFormat.build(.5, .5, .5, 1.) },
-		{ .03, Gfx::VertexColorPixelFormat.build((200./255.) * .4, (100./255.) * .4, (0./255.) * .4, 1.) },
+		{ .0, Gfx::VertexColorPixelFormat.build((200./255.) * .4, (100./255.) * .4, (0./255.) * .4, 1.) },
 		{ .3, Gfx::VertexColorPixelFormat.build((200./255.) * .4, (100./255.) * .4, (0./255.) * .4, 1.) },
 		{ .97, Gfx::VertexColorPixelFormat.build((75./255.) * .4, (37.5/255.) * .4, (0./255.) * .4, 1.) },
-		{ 1., Gfx::VertexColorPixelFormat.build(.5, .5, .5, 1.) },
+		{ 1., view.separatorColor() },
 	};
 	view.setBackgroundGradient(navViewGrad);
 }
 
-void EmuSystem::onPrepareAudio(EmuAudio &audio)
+bool A2600System::onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat fmt)
 {
-	audio.setStereo(false); // TODO: stereo mode
-}
-
-bool EmuSystem::onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat fmt)
-{
-	osystem->frameBuffer().setPixelFormat(fmt);
-	if(osystem->hasConsole())
+	osystem.frameBuffer().setPixelFormat(fmt);
+	if(osystem.hasConsole())
 	{
-		osystem->frameBuffer().paletteHandler().setPalette();
+		osystem.frameBuffer().paletteHandler().setPalette();
 	}
 	return false;
-}
-
-void EmuSystem::onInit()
-{
-	auto &app = EmuApp::get(appContext());
-	osystem.emplace(app);
-	Paddles::setDigitalSensitivity(5);
-	Paddles::setMouseSensitivity(7);
 }
 
 }

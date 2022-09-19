@@ -15,17 +15,21 @@
 
 #define LOGTAG "MapIO"
 #include <imagine/io/MapIO.hh>
+#include <imagine/config/defs.hh>
 #include <imagine/logger/logger.h>
 #include "utils.hh"
+#include "IOUtils.hh"
 #include <cerrno>
 #include <cstring>
 #if defined __linux__ || defined __APPLE__
 #include <sys/mman.h>
-#include <imagine/util/system/pagesize.h>
+#include <imagine/vmem/pageSize.hh>
 #endif
 
 namespace IG
 {
+
+template class IOUtils<MapIO>;
 
 MapIO::MapIO(IOBuffer buff):
 	currPos{buff.data()},
@@ -58,7 +62,7 @@ ssize_t MapIO::write(const void *buff, size_t bytes)
 	return -1;
 }
 
-off_t MapIO::seek(off_t offset, IO::SeekMode mode)
+off_t MapIO::seek(off_t offset, IOSeekMode mode)
 {
 	auto newPos = transformOffsetToAbsolute(mode, offset, data(), dataEnd(), currPos);
 	if(newPos < data() || newPos > dataEnd())
@@ -85,14 +89,14 @@ MapIO::operator bool() const
 	return data();
 }
 
-static int adviceToMAdv(IO::Advice advice)
+static int adviceToMAdv(IOAdvice advice)
 {
 	switch(advice)
 	{
 		default: return MADV_NORMAL;
-		case IO::Advice::SEQUENTIAL: return MADV_SEQUENTIAL;
-		case IO::Advice::RANDOM: return MADV_RANDOM;
-		case IO::Advice::WILLNEED: return MADV_WILLNEED;
+		case IOAdvice::SEQUENTIAL: return MADV_SEQUENTIAL;
+		case IOAdvice::RANDOM: return MADV_RANDOM;
+		case IOAdvice::WILLNEED: return MADV_WILLNEED;
 	}
 }
 
@@ -107,7 +111,7 @@ void MapIO::advise(off_t offset, size_t bytes, Advice advice)
 		bytes = size() - offset;
 	}
 	auto srcAddr = data() + offset;
-	void *pageSrcAddr = (void*)roundDownToPageSize((uintptr_t)srcAddr);
+	void *pageSrcAddr = roundDownToPageSize(srcAddr);
 	bytes += (uintptr_t)srcAddr - (uintptr_t)pageSrcAddr; // add extra bytes from rounding down to page size
 	int mAdv = adviceToMAdv(advice);
 	if(madvise(pageSrcAddr, bytes, mAdv) != 0 && Config::DEBUG_BUILD)

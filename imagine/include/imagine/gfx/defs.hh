@@ -16,13 +16,14 @@
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <imagine/config/defs.hh>
-#include <imagine/base/Error.hh>
+#include <imagine/base/Viewport.hh>
+#include <imagine/pixmap/PixelDesc.hh>
 #include <imagine/util/Point2D.hh>
 #include <imagine/util/rectangle2.h>
 #include <imagine/util/DelegateFunc.hh>
-#include <imagine/util/concepts.hh>
 #include <optional>
 #include <stdexcept>
+#include <compare>
 
 #ifdef CONFIG_GFX_OPENGL
 #include <imagine/gfx/opengl/gfx-globals.hh>
@@ -31,46 +32,39 @@
 namespace IG::Gfx
 {
 
+class Renderer;
 class RendererTask;
 class RendererCommands;
 class SyncFence;
+class TextureConfig;
 class Texture;
+class PixmapBufferTexture;
+class TextureSamplerConfig;
+class TextureSampler;
+class Mat4;
+class Vec3;
+class Vec4;
+class Shader;
+class Program;
+class GlyphTextureSet;
+class ProjectionPlane;
+struct DrawableConfig;
 
-using GP = FP;
 using GCRect = IG::CoordinateRect<float, true, true>;
 
-static GCRect makeGCRectRel(GP p, GP size)
-{
-	return GCRect::makeRel(p, size);
-}
+enum class WrapMode: uint8_t { REPEAT, MIRROR_REPEAT, CLAMP };
 
-static auto pixelToTexC(IG::integral auto pixel, IG::integral auto total)
-{
-	return pixel / (float)total;
-}
+enum class MipFilter: uint8_t { NONE, NEAREST, LINEAR };
 
-enum WrapMode
-{
-	WRAP_REPEAT,
-	WRAP_CLAMP
-};
+enum class BlendMode: uint8_t { OFF, ALPHA, PREMULT_ALPHA, INTENSITY };
 
-enum MipFilterMode
-{
-	MIP_FILTER_NONE,
-	MIP_FILTER_NEAREST,
-	MIP_FILTER_LINEAR,
-};
+enum class EnvMode: uint8_t { MODULATE, BLEND, REPLACE, ADD };
 
-enum { BLEND_MODE_OFF = 0, BLEND_MODE_ALPHA, BLEND_MODE_INTENSITY };
+enum class BlendEquation: uint8_t { ADD, SUB, RSUB };
 
-enum { IMG_MODE_MODULATE = 0, IMG_MODE_BLEND, IMG_MODE_REPLACE, IMG_MODE_ADD };
+enum class Faces: uint8_t { BOTH, FRONT, BACK };
 
-enum { BLEND_EQ_ADD, BLEND_EQ_SUB, BLEND_EQ_RSUB };
-
-enum { BOTH_FACES, FRONT_FACES, BACK_FACES };
-
-enum class ColorName
+enum class ColorName: uint8_t
 {
 	RED,
 	GREEN,
@@ -82,30 +76,9 @@ enum class ColorName
 	BLACK
 };
 
-enum TransformTargetEnum { TARGET_WORLD, TARGET_TEXTURE };
-
-enum class CommonProgram
+enum class TextureType : uint8_t
 {
-	// color replacement shaders
-	TEX_REPLACE,
-	TEX_ALPHA_REPLACE,
-	TEX_EXTERNAL_REPLACE,
-
-	// color modulation shaders
-	TEX,
-	TEX_ALPHA,
-	TEX_EXTERNAL,
-	NO_TEX
-};
-
-enum class CommonTextureSampler
-{
-	CLAMP,
-	NEAREST_MIP_CLAMP,
-	NO_MIP_CLAMP,
-	NO_LINEAR_NO_MIP_CLAMP,
-	REPEAT,
-	NEAREST_MIP_REPEAT
+	UNSET, T2D_1, T2D_2, T2D_4, T2D_EXTERNAL
 };
 
 class TextureSpan
@@ -137,30 +110,56 @@ enum class DrawAsyncMode : uint8_t
 	AUTO, NONE, PRESENT, FULL
 };
 
-class DrawParams
+struct DrawParams
 {
-public:
-	constexpr DrawParams() = default;
-	constexpr DrawParams(DrawAsyncMode asyncMode):
-		asyncMode_{asyncMode}
-	{}
-
-	void setAsyncMode(DrawAsyncMode mode)
-	{
-		asyncMode_ = mode;
-	}
-
-	DrawAsyncMode asyncMode() const { return asyncMode_; }
-
-private:
-	DrawAsyncMode asyncMode_ = DrawAsyncMode::AUTO;
+	DrawAsyncMode asyncMode{DrawAsyncMode::AUTO};
 };
 
-static constexpr Color color(float r, float g, float b, float a = 1.f)
+struct Color4F
 {
-	if constexpr(std::is_floating_point_v<ColorComp>)
+	union
 	{
-		return {(ColorComp)r, (ColorComp)g, (ColorComp)b, (ColorComp)a};
+		std::array<float, 4> rgba{};
+		struct
+		{
+			float r, g, b, a;
+		};
+	};
+
+	constexpr Color4F() = default;
+	constexpr Color4F(float r, float g, float b, float a):
+		r{r}, g{g}, b{b}, a{a} {}
+	constexpr Color4F(std::array<float, 4> rgba): rgba{rgba} {}
+	constexpr operator std::array<float, 4>() const { return rgba; }
+	constexpr bool operator ==(Color4F const &rhs) const { return rgba == rhs.rgba; }
+};
+
+struct Color4B
+{
+	union
+	{
+		uint32_t rgba{};
+		struct
+		{
+			uint8_t r, g, b, a;
+		};
+	};
+
+	constexpr Color4B() = default;
+	constexpr Color4B(uint32_t rgba): rgba{rgba} {}
+	constexpr operator uint32_t() const { return rgba; }
+	constexpr bool operator ==(Color4B const &rhs) const { return rgba == rhs.rgba; }
+};
+
+using VertexColor = Color4B;
+constexpr auto VertexColorPixelFormat = PIXEL_DESC_RGBA8888_NATIVE;
+using Color = Color4F;
+
+constexpr Color color(float r, float g, float b, float a = 1.f)
+{
+	if constexpr(std::is_same_v<Color, Color4F>)
+	{
+		return {r, g, b, a};
 	}
 	else
 	{
@@ -168,19 +167,20 @@ static constexpr Color color(float r, float g, float b, float a = 1.f)
 	}
 }
 
-static constexpr Color color(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255)
+constexpr Color color(uint8_t r, uint8_t g, uint8_t b, uint8_t a = 255)
 {
-	if constexpr(std::is_floating_point_v<ColorComp>)
+	if constexpr(std::is_same_v<Color, Color4F>)
 	{
 		return {r / 255.f, g / 255.f, b / 255.f, a / 255.f};
 	}
 	else
 	{
+		using ColorComp = decltype(Color::r);
 		return {(ColorComp)r, (ColorComp)g, (ColorComp)b, (ColorComp)a};
 	}
 }
 
-static constexpr Color color(ColorName c)
+constexpr Color color(ColorName c)
 {
 	switch(c)
 	{
@@ -195,5 +195,26 @@ static constexpr Color color(ColorName c)
 		default: return color(0.f, 0.f, 0.f, 0.f);
 	}
 }
+
+// converts to a relative rectangle in OpenGL coordinate system
+constexpr Rect2<int> asYUpRelRect(Viewport v)
+{
+	return {{v.realBounds().x, v.realOriginBounds().ySize() - v.realBounds().y2}, {v.realWidth(), v.realHeight()}};
+}
+
+enum class AttribType
+{
+	UByte = 1,
+	Short,
+	UShort,
+	Float,
+};
+
+struct AttribDesc
+{
+	size_t offset{};
+	size_t size{};
+	AttribType type{};
+};
 
 }

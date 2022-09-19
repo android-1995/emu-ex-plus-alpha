@@ -35,11 +35,11 @@ public:
 	EmuView(ViewAttachParams, EmuVideoLayer *, EmuSystem &);
 	void place() final;
 	void prepareDraw() final;
-	void draw(Gfx::RendererCommands &cmds) final;
+	void draw(Gfx::RendererCommands &__restrict__) final;
 	bool inputEvent(const Input::Event &) final;
 	bool hasLayer() const { return layer; }
 	void setLayoutInputView(EmuInputView *view);
-	void updateAudioStats(unsigned underruns, unsigned overruns, unsigned callbacks, double avgCallbackFrames, unsigned frames);
+	void updateAudioStats(int underruns, int overruns, int callbacks, double avgCallbackFrames, int frames);
 	void clearAudioStats();
 	EmuVideoLayer *videoLayer() const { return layer; }
 	EmuSystem &system() { return *sysPtr; }

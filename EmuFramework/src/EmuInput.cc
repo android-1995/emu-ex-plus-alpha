@@ -31,21 +31,21 @@ namespace EmuEx
 
 void TurboInput::update(EmuApp &app)
 {
-	static const unsigned turboFrames = 4;
+	static const int turboFrames = 4;
 
 	for(auto e : activeAction)
 	{
-		if(e.action)
+		if(e)
 		{
 			if(clock == 0)
 			{
 				//logMsg("turbo push for player %d, action %d", e.player, e.action);
-				app.system().handleInputAction(&app, Input::Action::PUSHED, e.action);
+				app.system().handleInputAction(&app, {e, Input::Action::PUSHED});
 			}
 			else if(clock == turboFrames/2)
 			{
 				//logMsg("turbo release for player %d, action %d", e.player, e.action);
-				app.system().handleInputAction(&app, Input::Action::RELEASED, e.action);
+				app.system().handleInputAction(&app, {e, Input::Action::RELEASED});
 			}
 		}
 	}
@@ -92,7 +92,7 @@ void InputDeviceData::buildKeyMap(const Input::Device &d)
 	{
 		Controls::transposeKeysForPlayer(key, devConf.player());
 	}
-	iterateTimes(MAX_KEY_CONFIG_KEYS, k)
+	for(auto k : iotaCount(MAX_KEY_CONFIG_KEYS))
 	{
 		//logMsg("mapping key %d to %u %s", k, key[k], d.keyName(key[k]));
 		assert(key[k] < totalKeys);
@@ -133,85 +133,69 @@ const KeyConfig &KeyConfig::defaultConfigForDevice(const Input::Device &dev)
 		default: return defaultConfigsForDevice(dev)[0];
 		case Input::Map::SYSTEM:
 		{
-			#if defined __ANDROID__ || defined CONFIG_BASE_X11
-			unsigned confs = 0;
-			auto conf = defaultConfigsForDevice(dev, confs);
-			iterateTimes(confs, i)
+			if constexpr(Config::envIsAndroid || Config::envIsLinux)
 			{
-				// Look for the first config to match the device subtype
-				if(dev.subtype() == conf[i].devSubtype)
+				for(const auto &c : defaultConfigsForDevice(dev))
 				{
-					return conf[i];
+					// Look for the first config to match the device subtype
+					if(dev.subtype() == c.devSubtype)
+					{
+						return c;
+					}
 				}
 			}
-			#endif
 			return defaultConfigsForDevice(dev)[0];
 		}
 	}
 }
 
-const KeyConfig *KeyConfig::defaultConfigsForInputMap(Input::Map map, unsigned &size)
+std::span<const KeyConfig> KeyConfig::defaultConfigsForInputMap(Input::Map map)
 {
 	switch(map)
 	{
-		default: return nullptr;
+		default: return {};
 		case Input::Map::SYSTEM:
-			size = Controls::defaultKeyProfiles;
-			return Controls::defaultKeyProfile;
+			return {Controls::defaultKeyProfile, Controls::defaultKeyProfiles};
 		#ifdef CONFIG_BLUETOOTH
 		case Input::Map::WIIMOTE:
-			size = Controls::defaultWiimoteProfiles;
-			return Controls::defaultWiimoteProfile;
+			return {Controls::defaultWiimoteProfile, Controls::defaultWiimoteProfiles};
 		case Input::Map::WII_CC:
-			size = Controls::defaultWiiCCProfiles;
-			return Controls::defaultWiiCCProfile;
+			return {Controls::defaultWiiCCProfile, Controls::defaultWiiCCProfiles};
 		case Input::Map::ICONTROLPAD:
-			size = Controls::defaultIControlPadProfiles;
-			return Controls::defaultIControlPadProfile;
+			return {Controls::defaultIControlPadProfile, Controls::defaultIControlPadProfiles};
 		case Input::Map::ZEEMOTE:
-			size = Controls::defaultZeemoteProfiles;
-			return Controls::defaultZeemoteProfile;
+			return {Controls::defaultZeemoteProfile, Controls::defaultZeemoteProfiles};
 		#endif
 		#ifdef CONFIG_BLUETOOTH_SERVER
 		case Input::Map::PS3PAD:
-			size = Controls::defaultPS3Profiles;
-			return Controls::defaultPS3Profile;
+			return {Controls::defaultPS3Profile, Controls::defaultPS3Profiles};
 		#endif
 		#ifdef CONFIG_INPUT_ICADE
 		case Input::Map::ICADE:
-			size = Controls::defaultICadeProfiles;
-			return Controls::defaultICadeProfile;
+			return {Controls::defaultICadeProfile, Controls::defaultICadeProfiles};
 		#endif
 		#ifdef CONFIG_INPUT_APPLE_GAME_CONTROLLER
 		case Input::Map::APPLE_GAME_CONTROLLER:
-			size = Controls::defaultAppleGCProfiles;
-			return Controls::defaultAppleGCProfile;
+			return {Controls::defaultAppleGCProfile, Controls::defaultAppleGCProfiles};
 		#endif
 	}
 }
 
-const KeyConfig *KeyConfig::defaultConfigsForDevice(const Input::Device &dev, unsigned &size)
+std::span<const KeyConfig> KeyConfig::defaultConfigsForDevice(const Input::Device &dev)
 {
-	auto conf = defaultConfigsForInputMap(dev.map(), size);
-	if(!conf)
+	auto conf = defaultConfigsForInputMap(dev.map());
+	if(!conf.data())
 	{
 		bug_unreachable("device map:%d missing default configs", (int)dev.map());
-		return nullptr;
 	}
 	return conf;
-}
-
-const KeyConfig *KeyConfig::defaultConfigsForDevice(const Input::Device &dev)
-{
-	unsigned size;
-	return defaultConfigsForDevice(dev, size);
 }
 
 // InputDeviceConfig
 
 static IG::StaticString<16> uniqueCustomConfigName(KeyConfigContainer &customKeyConfigs)
 {
-	iterateTimes(99, i) // Try up to "Custom 99"
+	for(auto i : iotaCount(100)) // Try up to "Custom 99"
 	{
 		auto name = IG::format<IG::StaticString<16>>("Custom {}", i+1);
 		// Check if this name is free
@@ -413,39 +397,50 @@ void InputDeviceConfig::buildKeyMap()
 namespace Controls
 {
 
-void generic2PlayerTranspose(KeyConfig::KeyArray &key, unsigned player, unsigned startCategory)
+void generic2PlayerTranspose(KeyConfig::KeyArray &key, int player, int startCategory)
 {
 	if(player == 0)
 	{
 		// clear P2 joystick keys
-		std::fill_n(&key[category[startCategory+1].configOffset], category[startCategory+1].keys, 0);
+		auto cat2 = categories()[startCategory+1];
+		std::fill_n(&key[cat2.configOffset], cat2.keys(), 0);
 	}
 	else
 	{
 		// transpose joystick keys
-		std::copy_n(&key[category[startCategory].configOffset], category[startCategory].keys, &key[category[startCategory+1].configOffset]);
-		std::fill_n(&key[category[startCategory].configOffset], category[startCategory].keys, 0);
+		auto cat = categories()[startCategory];
+		auto cat2 = categories()[startCategory+1];
+		std::copy_n(&key[cat.configOffset], cat.keys(), &key[cat2.configOffset]);
+		std::fill_n(&key[cat.configOffset], cat.keys(), 0);
 	}
 }
 
-void genericMultiplayerTranspose(KeyConfig::KeyArray &key, unsigned player, unsigned startCategory)
+void genericMultiplayerTranspose(KeyConfig::KeyArray &key, int player, int startCategory)
 {
-	iterateTimes(EmuSystem::maxPlayers, i)
+	for(int i : iotaCount(EmuSystem::maxPlayers))
 	{
-		if(player && (unsigned)i == player)
+		if(player && i == player)
 		{
 			//logMsg("moving to player %d map", i);
-			std::copy_n(&key[category[startCategory].configOffset], category[startCategory].keys, &key[category[i+startCategory].configOffset]);
-			std::fill_n(&key[category[startCategory].configOffset], category[startCategory].keys, 0);
+			auto cat = categories()[startCategory];
+			auto cat2 = categories()[startCategory+i];
+			std::copy_n(&key[cat.configOffset], cat.keys(), &key[cat2.configOffset]);
+			std::fill_n(&key[cat.configOffset], cat.keys(), 0);
 		}
 		else if(i)
 		{
 			//logMsg("clearing player %d map", i);
-			std::fill_n(&key[category[i+startCategory].configOffset], category[i+startCategory].keys, 0);
+			auto cat2 = categories()[startCategory+i];
+			std::fill_n(&key[cat2.configOffset], cat2.keys(), 0);
 		}
 	}
 }
 
+}
+
+void EmuApp::setFaceButtonMapping(std::array<int, EmuSystem::MAX_FACE_BTNS> map)
+{
+	vController.gamePad().setFaceButtonMapping(renderer, asset(AssetID::GAMEPAD_OVERLAY), map);
 }
 
 void EmuApp::applyEnabledFaceButtons(std::span<const std::pair<int, bool>> applyEnableMap)
@@ -461,7 +456,24 @@ void EmuApp::applyEnabledFaceButtons(std::span<const std::pair<int, bool>> apply
 		if(!vController.hasWindow())
 			return;
 		vController.place();
-		system().clearInputBuffers(emuViewController->inputView());
+		system().clearInputBuffers(viewController().inputView());
+	}
+}
+
+void EmuApp::applyEnabledCenterButtons(std::span<const std::pair<int, bool>> applyEnableMap)
+{
+	if constexpr(VCONTROLS_GAMEPAD)
+	{
+		auto &vController = defaultVController();
+		auto &btnGroup = vController.gamePad().centerButtons();
+		for(auto [idx, enabled] : applyEnableMap)
+		{
+			btnGroup.buttons()[idx].setEnabled(enabled);
+		}
+		if(!vController.hasWindow())
+			return;
+		vController.place();
+		system().clearInputBuffers(viewController().inputView());
 	}
 }
 
@@ -485,7 +497,7 @@ void TurboInput::addEvent(unsigned action)
 	Action *slot = IG::find_if(activeAction, [](Action a){ return a == 0; });
 	if(slot != activeAction.end())
 	{
-		slot->action = action;
+		*slot = action;
 		logMsg("added turbo event action %d", action);
 	}
 }
@@ -494,9 +506,9 @@ void TurboInput::removeEvent(unsigned action)
 {
 	for(auto &e : activeAction)
 	{
-		if(e.action == action)
+		if(e == action)
 		{
-			e.action = 0;
+			e = 0;
 			logMsg("removed turbo event action %d", action);
 		}
 	}
@@ -509,19 +521,19 @@ bool KeyConfig::operator ==(KeyConfig const& rhs) const
 
 KeyConfig::Key *KeyConfig::key(const KeyCategory &category)
 {
-	assert(category.configOffset + category.keys <= MAX_KEY_CONFIG_KEYS);
+	assert(category.configOffset + category.keys() <= MAX_KEY_CONFIG_KEYS);
 	return &key_[category.configOffset];
 }
 
 const KeyConfig::Key *KeyConfig::key(const KeyCategory &category) const
 {
-	assert(category.configOffset + category.keys <= MAX_KEY_CONFIG_KEYS);
+	assert(category.configOffset + category.keys() <= MAX_KEY_CONFIG_KEYS);
 	return &key_[category.configOffset];
 }
 
 void KeyConfig::unbindCategory(const KeyCategory &category)
 {
-	std::fill_n(key(category), category.keys, 0);
+	std::fill_n(key(category), category.keys(), 0);
 }
 
 bool InputDeviceSavedConfig::matchesDevice(const Input::Device &dev) const
@@ -529,5 +541,12 @@ bool InputDeviceSavedConfig::matchesDevice(const Input::Device &dev) const
 	//logMsg("checking against device %s,%d", name, devId);
 	return dev.enumId() == enumId && dev.name() == name;
 }
+
+}
+
+namespace EmuEx::Controls
+{
+
+[[gnu::weak]] void transposeKeysForPlayer(KeyConfig::KeyArray &key, int player) {}
 
 }

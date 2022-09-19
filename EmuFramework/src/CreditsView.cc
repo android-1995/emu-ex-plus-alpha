@@ -15,7 +15,7 @@
 
 #define LOGTAG "CreditsView"
 #include <emuframework/CreditsView.hh>
-#include "private.hh"
+#include <emuframework/EmuApp.hh>
 #include <imagine/base/Window.hh>
 #include <imagine/input/Input.hh>
 #include <imagine/gfx/RendererCommands.hh>
@@ -25,7 +25,7 @@
 namespace EmuEx
 {
 
-CreditsView::CreditsView(ViewAttachParams attach, IG::utf16String str):
+CreditsView::CreditsView(ViewAttachParams attach, UTF16String str):
 	View{attach},
 	text{std::move(str), &defaultFace()},
 	animate
@@ -47,11 +47,11 @@ void CreditsView::prepareDraw()
 	text.makeGlyphs(renderer());
 }
 
-void CreditsView::draw(Gfx::RendererCommands &cmds)
+void CreditsView::draw(Gfx::RendererCommands &__restrict__ cmds)
 {
 	using namespace IG::Gfx;
 	cmds.setColor(1., 1., 1., fade);
-	cmds.setCommonProgram(CommonProgram::TEX_ALPHA, projP.makeTranslate());
+	cmds.basicEffect().enableAlphaTexture(cmds);
 	auto textRect = viewRect();
 	if(IG::isOdd(textRect.ySize()))
 		textRect.y2--;
@@ -69,7 +69,7 @@ bool CreditsView::inputEvent(const Input::Event &e)
 		{
 			[&](const Input::MotionEvent &e) { return viewRect().overlaps(e.pos()) && e.released(); },
 			[&](const Input::KeyEvent &e) { return e.pushed(Input::DefaultKey::CANCEL); }
-		}, e.asVariant()))
+		}, e))
 	{
 		dismiss();
 		return true;
@@ -84,7 +84,7 @@ CreditsView::~CreditsView()
 
 std::u16string_view CreditsView::name() const
 {
-	return appViewTitle();
+	return EmuApp::mainViewName();
 }
 
 }

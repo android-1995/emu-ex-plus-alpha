@@ -16,19 +16,16 @@
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <imagine/config/defs.hh>
-#include <imagine/gfx/defs.hh>
-#include <imagine/gfx/TextureConfig.hh>
 
 #ifdef CONFIG_GFX_OPENGL
 #include <imagine/gfx/opengl/GLTexture.hh>
 #endif
 
+#include <imagine/gfx/defs.hh>
+#include <imagine/gfx/TextureConfig.hh>
+#include <imagine/gfx/TextureSamplerConfig.hh>
+#include <imagine/pixmap/Pixmap.hh>
 #include <utility>
-
-namespace IG
-{
-class Pixmap;
-}
 
 namespace IG::Data
 {
@@ -38,17 +35,11 @@ class PixmapSource;
 namespace IG::Gfx
 {
 
-class Renderer;
-class RendererTask;
-class RendererCommands;
-class TextureSampler;
-class Mat4;
-
 class LockedTextureBuffer: public LockedTextureBufferImpl
 {
 public:
 	using LockedTextureBufferImpl::LockedTextureBufferImpl;
-	IG::Pixmap pixmap() const;
+	MutablePixmapView pixmap() const;
 	IG::WindowRect sourceDirtyRect() const;
 	explicit operator bool() const;
 };
@@ -62,29 +53,22 @@ public:
 	static constexpr uint32_t BUFFER_FLAG_CLEARED = IG::bit(0);
 
 	using TextureImpl::TextureImpl;
-	Texture(RendererTask &, TextureConfig, IG::ErrorCode *errorPtr = nullptr);
-	Texture(RendererTask &, IG::Data::PixmapSource, const TextureSampler *compatSampler, bool makeMipmaps, IG::ErrorCode *errorPtr = nullptr);
-	Texture(Texture &&o) noexcept;
-	Texture &operator=(Texture &&o) noexcept;
-	static uint8_t bestAlignment(IG::Pixmap pixmap);
+	Texture(RendererTask &, TextureConfig);
+	Texture(RendererTask &, IG::Data::PixmapSource, TextureSamplerConfig, bool makeMipmaps);
+	static int bestAlignment(PixmapView pixmap);
 	bool canUseMipmaps() const;
 	bool generateMipmaps();
-	uint8_t levels() const;
-	IG::ErrorCode setFormat(IG::PixmapDesc, uint8_t levels, ColorSpace c = {}, const TextureSampler *compatSampler = {});
-	void write(uint8_t level, IG::Pixmap pixmap, IG::WP destPos, uint32_t writeFlags = 0);
-	void writeAligned(uint8_t level, IG::Pixmap pixmap, IG::WP destPos, uint8_t assumedDataAlignment, uint32_t writeFlags = 0);
-	void clear(uint8_t level);
-	LockedTextureBuffer lock(uint8_t level, uint32_t bufferFlags = 0);
-	LockedTextureBuffer lock(uint8_t level, IG::WindowRect rect, uint32_t bufferFlags = 0);
+	int levels() const;
+	ErrorCode setFormat(PixmapDesc, int levels, ColorSpace c = {}, TextureSamplerConfig samplerConf = {});
+	void write(int level, PixmapView pixmap, IG::WP destPos, uint32_t writeFlags = 0);
+	void writeAligned(int level, PixmapView pixmap, IG::WP destPos, int assumedDataAlignment, uint32_t writeFlags = 0);
+	void clear(int level);
+	LockedTextureBuffer lock(int level, uint32_t bufferFlags = 0);
+	LockedTextureBuffer lock(int level, IG::WindowRect rect, uint32_t bufferFlags = 0);
 	void unlock(LockedTextureBuffer lockBuff, uint32_t writeFlags = 0);
-	IG::WP size(uint8_t level) const;
-	IG::PixmapDesc pixmapDesc() const;
-	void setCompatTextureSampler(const TextureSampler &compatSampler);
-	bool compileDefaultProgram(uint32_t mode) const;
-	bool compileDefaultProgramOneShot(uint32_t mode) const;
-	void useDefaultProgram(RendererCommands &cmds, uint32_t mode, const Mat4 *modelMat) const;
-	void useDefaultProgram(RendererCommands &cmds, uint32_t mode) const { useDefaultProgram(cmds, mode, nullptr); }
-	void useDefaultProgram(RendererCommands &cmds, uint32_t mode, Mat4 modelMat) const;
+	IG::WP size(int level) const;
+	PixmapDesc pixmapDesc() const;
+	void setSampler(TextureSamplerConfig);
 	explicit operator bool() const;
 	Renderer &renderer() const;
 	RendererTask &task() const;

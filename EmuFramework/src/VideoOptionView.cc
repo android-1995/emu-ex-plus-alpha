@@ -13,19 +13,17 @@
 	You should have received a copy of the GNU General Public License
 	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <emuframework/OptionView.hh>
+#include <emuframework/VideoOptionView.hh>
 #include <emuframework/EmuApp.hh>
 #include <emuframework/EmuAppHelper.hh>
 #include <emuframework/EmuVideoLayer.hh>
 #include <emuframework/EmuVideo.hh>
 #include <emuframework/VideoImageEffect.hh>
 #include "EmuOptions.hh"
-#include "private.hh"
 #include <imagine/base/Screen.hh>
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/gfx/Renderer.hh>
 #include <imagine/gfx/RendererCommands.hh>
-#include <imagine/gui/AlertView.hh>
 #include <imagine/gui/TextTableView.hh>
 #include <imagine/util/format.hh>
 
@@ -41,17 +39,17 @@ public:
 	IG::FrameTime totalFrameTime{};
 	IG::FrameTime lastFrameTimestamp{};
 	Gfx::Text fpsText;
-	unsigned allTotalFrames = 0;
-	unsigned callbacks = 0;
+	int allTotalFrames{};
+	int callbacks{};
 	std::vector<IG::FrameTime> frameTimeSample{};
 	bool useRenderTaskTime = false;
 
 	DetectFrameRateView(ViewAttachParams attach): View(attach),
-		fpsText{{}, &defaultFace()}
+		fpsText{&defaultFace()}
 	{
 		defaultFace().precacheAlphaNum(attach.renderer());
 		defaultFace().precache(attach.renderer(), ".");
-		fpsText.setString("准备检测刷新率...");
+		fpsText.resetString("准备检测刷新率...");
 		useRenderTaskTime = !screen()->supportsTimestamps();
 		frameTimeSample.reserve(std::round(screen()->frameRate() * 2.));
 	}
@@ -79,18 +77,17 @@ public:
 		return false;
 	}
 
-	void draw(Gfx::RendererCommands &cmds) final
+	void draw(Gfx::RendererCommands &__restrict__ cmds) final
 	{
 		using namespace IG::Gfx;
 		cmds.setColor(1., 1., 1., 1.);
-		cmds.setCommonProgram(CommonProgram::TEX_ALPHA, projP.makeTranslate());
-		fpsText.draw(cmds, projP.alignXToPixel(projP.bounds().xCenter()),
-			projP.alignYToPixel(projP.bounds().yCenter()), C2DO, projP);
+		cmds.basicEffect().enableAlphaTexture(cmds);
+		fpsText.draw(cmds, projP.alignToPixel(projP.bounds().center()), C2DO, projP);
 	}
 
 	bool runFrameTimeDetection(IG::FrameTime timestampDiff, double slack)
 	{
-		const unsigned framesToTime = frameTimeSample.capacity() * 10;
+		const int framesToTime = frameTimeSample.capacity() * 10;
 		allTotalFrames++;
 		frameTimeSample.emplace_back(timestampDiff);
 		if(frameTimeSample.size() == frameTimeSample.capacity())
@@ -119,9 +116,9 @@ public:
 			{
 				waitForDrawFinished();
 				if(detectedFrameTime.count())
-					fpsText.setString(fmt::format("{:.2f}fps", 1. / detectedFrameTime.count()));
+					fpsText.resetString(fmt::format("{:.2f}fps", 1. / detectedFrameTime.count()));
 				else
-					fpsText.setString("0fps");
+					fpsText.resetString("0fps");
 				fpsText.compile(renderer(), projP);
 			}
 			if(stableFrameTime)
@@ -158,7 +155,7 @@ public:
 		detectFrameRate =
 			[this](IG::FrameParams params)
 			{
-				const unsigned callbacksToSkip = 10;
+				const int callbacksToSkip = 10;
 				callbacks++;
 				if(callbacks < callbacksToSkip)
 				{
@@ -176,13 +173,13 @@ public:
 static auto makeFrameRateStr(EmuSystem &sys)
 {
 	return fmt::format("刷新率: {:.2f}Hz",
-		sys.frameRate(EmuSystem::VIDSYS_NATIVE_NTSC));
+		sys.frameRate(VideoSystem::NATIVE_NTSC));
 }
 
 static auto makeFrameRatePALStr(EmuSystem &sys)
 {
 	return fmt::format("刷新率 (PAL): {:.2f}Hz",
-		sys.frameRate(EmuSystem::VIDSYS_PAL));
+		sys.frameRate(VideoSystem::PAL));
 }
 
 TextMenuItem::SelectDelegate VideoOptionView::setFrameIntervalDel()
@@ -212,7 +209,7 @@ TextMenuItem::SelectDelegate VideoOptionView::setOverlayEffectDel()
 	return [this](TextMenuItem &item)
 	{
 		app().overlayEffectOption() = item.id();
-		videoLayer->setOverlay(item.id());
+		videoLayer->setOverlay((ImageOverlayId)item.id());
 		app().viewController().postDrawToEmuWindows();
 	};
 }
@@ -262,9 +259,9 @@ TextMenuItem::SelectDelegate VideoOptionView::setImageBuffersDel()
 
 static int aspectRatioValueIndex(double val)
 {
-	iterateTimes(EmuSystem::aspectRatioInfos, i)
+	for(auto i : iotaCount(EmuSystem::aspectRatioInfos().size()))
 	{
-		if(val == (double)EmuSystem::aspectRatioInfo[i])
+		if(val == (double)EmuSystem::aspectRatioInfos()[i])
 		{
 			return i;
 		}
@@ -304,19 +301,19 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	frameRate
 	{
-		{}, &defaultFace(),
+		u"", &defaultFace(),
 		[this](const Input::Event &e)
 		{
-			pushAndShowFrameRateSelectMenu(EmuSystem::VIDSYS_NATIVE_NTSC, e);
+			pushAndShowFrameRateSelectMenu(VideoSystem::NATIVE_NTSC, e);
 			postDraw();
 		}
 	},
 	frameRatePAL
 	{
-		{}, &defaultFace(),
+		u"", &defaultFace(),
 		[this](const Input::Event &e)
 		{
-			pushAndShowFrameRateSelectMenu(EmuSystem::VIDSYS_PAL, e);
+			pushAndShowFrameRateSelectMenu(VideoSystem::PAL, e);
 			postDraw();
 		}
 	},
@@ -325,14 +322,14 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		"显示比例", &defaultFace(),
 		[this](auto idx, Gfx::Text &t)
 		{
-			if(idx == EmuSystem::aspectRatioInfos)
+			if(idx == EmuSystem::aspectRatioInfos().size())
 			{
-				t.setString(fmt::format("{:.2f}", app().videoAspectRatio()));
+				t.resetString(fmt::format("{:.2f}", app().videoAspectRatio()));
 				return true;
 			}
 			return false;
 		},
-		(int)EmuSystem::aspectRatioInfos,
+		(int)EmuSystem::aspectRatioInfos().size(),
 		aspectRatioItem
 	},
 	zoomItem
@@ -345,23 +342,16 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		{"自定义", &defaultFace(),
 			[this](const Input::Event &e)
 			{
-				app().pushAndShowNewCollectValueInputView<int>(attachParams(), e, "输入10到100", "",
+				app().pushAndShowNewCollectValueRangeInputView<int, 10, 100>(attachParams(), e, "输入10到100", "",
 					[this](EmuApp &app, auto val)
 					{
-						if(app.setVideoZoom(val))
-						{
-							zoom.setSelected(std::size(zoomItem) - 1, *this);
-							dismissPrevious();
-							return true;
-						}
-						else
-						{
-							app.postErrorMessage("值错误");
-							return false;
-						}
+						app.setVideoZoom(val);
+						zoom.setSelected((MenuItem::Id)val, *this);
+						dismissPrevious();
+						return true;
 					});
 				return false;
-			}
+			}, MenuItem::DEFAULT_ID
 		},
 	},
 	zoom
@@ -371,7 +361,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		{
 			if(app().videoZoom() <= 100)
 			{
-				t.setString(fmt::format("{}%", app().videoZoom()));
+				t.resetString(fmt::format("{}%", app().videoZoom()));
 				return true;
 			}
 			return false;
@@ -387,23 +377,16 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		{"自定义", &defaultFace(),
 			[this](const Input::Event &e)
 			{
-				app().pushAndShowNewCollectValueInputView<int>(attachParams(), e, "输入50到100", "",
+				app().pushAndShowNewCollectValueRangeInputView<int, 50, 100>(attachParams(), e, "输入50到100", "",
 					[this](EmuApp &app, auto val)
 					{
-						if(app.setViewportZoom(val))
-						{
-							viewportZoom.setSelected(std::size(viewportZoomItem) - 1, *this);
-							dismissPrevious();
-							return true;
-						}
-						else
-						{
-							app.postErrorMessage("值错误");
-							return false;
-						}
+						app.setViewportZoom(val);
+						viewportZoom.setSelected((MenuItem::Id)val, *this);
+						dismissPrevious();
+						return true;
 					});
 				return false;
-			}
+			}, MenuItem::DEFAULT_ID
 		},
 	},
 	viewportZoom
@@ -411,11 +394,25 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		"应用缩放", &defaultFace(),
 		[this](auto idx, Gfx::Text &t)
 		{
-			t.setString(fmt::format("{}%", app().viewportZoom()));
+			t.resetString(fmt::format("{}%", app().viewportZoom()));
 			return true;
 		},
 		(MenuItem::Id)app().viewportZoom(),
 		viewportZoomItem
+	},
+	contentRotationItem
+	{
+		{"Auto",        &defaultFace(), setContentRotationDel(), std::to_underlying(Rotation::ANY)},
+		{"Standard",    &defaultFace(), setContentRotationDel(), std::to_underlying(Rotation::UP)},
+		{"90° Right",   &defaultFace(), setContentRotationDel(), std::to_underlying(Rotation::RIGHT)},
+		{"Upside Down", &defaultFace(), setContentRotationDel(), std::to_underlying(Rotation::DOWN)},
+		{"90° Left",    &defaultFace(), setContentRotationDel(), std::to_underlying(Rotation::LEFT)},
+	},
+	contentRotation
+	{
+		"Content Rotation", &defaultFace(),
+		(MenuItem::Id)app().contentRotation(),
+		contentRotationItem
 	},
 	imgFilter
 	{
@@ -431,10 +428,10 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	imgEffectItem
 	{
-		{"关",         &defaultFace(), setImgEffectDel(), (uint8_t)ImageEffectId::DIRECT},
-		{"hq2x",        &defaultFace(), setImgEffectDel(), (uint8_t)ImageEffectId::HQ2X},
-		{"Scale2x",     &defaultFace(), setImgEffectDel(), (uint8_t)ImageEffectId::SCALE2X},
-		{"Prescale 2x", &defaultFace(), setImgEffectDel(), (uint8_t)ImageEffectId::PRESCALE2X}
+		{"关",         &defaultFace(), setImgEffectDel(), std::to_underlying(ImageEffectId::DIRECT)},
+		{"hq2x",        &defaultFace(), setImgEffectDel(), std::to_underlying(ImageEffectId::HQ2X)},
+		{"Scale2x",     &defaultFace(), setImgEffectDel(), std::to_underlying(ImageEffectId::SCALE2X)},
+		{"Prescale 2x", &defaultFace(), setImgEffectDel(), std::to_underlying(ImageEffectId::PRESCALE2X)}
 	},
 	imgEffect
 	{
@@ -444,12 +441,14 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	overlayEffectItem
 	{
-		{"关",          &defaultFace(), setOverlayEffectDel(), 0},
-		{"扫描线",    &defaultFace(), setOverlayEffectDel(), VideoImageOverlay::SCANLINES},
-		{"扫描线 2x", &defaultFace(), setOverlayEffectDel(), VideoImageOverlay::SCANLINES_2},
-		{"CRT Mask",     &defaultFace(), setOverlayEffectDel(), VideoImageOverlay::CRT},
-		{"CRT",          &defaultFace(), setOverlayEffectDel(), VideoImageOverlay::CRT_RGB},
-		{"CRT 2x",       &defaultFace(), setOverlayEffectDel(), VideoImageOverlay::CRT_RGB_2}
+		{"关",            &defaultFace(), setOverlayEffectDel(), 0},
+		{"扫描线",      &defaultFace(), setOverlayEffectDel(), std::to_underlying(ImageOverlayId::SCANLINES)},
+		{"扫描线 2x",   &defaultFace(), setOverlayEffectDel(), std::to_underlying(ImageOverlayId::SCANLINES_2)},
+		{"LCD Grid",       &defaultFace(), setOverlayEffectDel(), std::to_underlying(ImageOverlayId::LCD)},
+		{"CRT Mask",       &defaultFace(), setOverlayEffectDel(), std::to_underlying(ImageOverlayId::CRT_MASK)},
+		{"CRT Mask .5x",   &defaultFace(), setOverlayEffectDel(), std::to_underlying(ImageOverlayId::CRT_MASK_2)},
+		{"CRT Grille",     &defaultFace(), setOverlayEffectDel(), std::to_underlying(ImageOverlayId::CRT_GRILLE)},
+		{"CRT Grille .5x", &defaultFace(), setOverlayEffectDel(), std::to_underlying(ImageOverlayId::CRT_GRILLE_2)}
 	},
 	overlayEffect
 	{
@@ -466,23 +465,16 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		{"自定义", &defaultFace(),
 			[this](const Input::Event &e)
 			{
-				app().pushAndShowNewCollectValueInputView<int>(attachParams(), e, "输入10到100", "",
+				app().pushAndShowNewCollectValueRangeInputView<int, 0, 100>(attachParams(), e, "输入10到100", "",
 					[this](EmuApp &app, auto val)
 					{
-						if(app.setOverlayEffectLevel(*videoLayer, val))
-						{
-							overlayEffectLevel.setSelected(std::size(overlayEffectLevelItem) - 1, *this);
-							dismissPrevious();
-							return true;
-						}
-						else
-						{
-							app.postErrorMessage("值错误");
-							return false;
-						}
+						app.setOverlayEffectLevel(*videoLayer, val);
+						overlayEffectLevel.setSelected((MenuItem::Id)val, *this);
+						dismissPrevious();
+						return true;
 					});
 				return false;
-			}
+			}, MenuItem::DEFAULT_ID
 		},
 	},
 	overlayEffectLevel
@@ -490,7 +482,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		"叠加效果级别", &defaultFace(),
 		[this](auto idx, Gfx::Text &t)
 		{
-			t.setString(fmt::format("{}%", app().overlayEffectLevel()));
+			t.resetString(fmt::format("{}%", app().overlayEffectLevel()));
 			return true;
 		},
 		(MenuItem::Id)app().overlayEffectLevel(),
@@ -509,7 +501,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		{
 			if(idx == 0)
 			{
-				t.setString(app().videoEffectPixelFormat().name());
+				t.resetString(app().videoEffectPixelFormat().name());
 				return true;
 			}
 			else
@@ -525,7 +517,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		{
 			if(idx == 0)
 			{
-				t.setString(autoWindowPixelFormatStr(appContext()));
+				t.resetString(autoWindowPixelFormatStr(appContext()));
 				return true;
 			}
 			else
@@ -534,18 +526,15 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		0,
 		windowPixelFormatItem
 	},
-	#if defined CONFIG_BASE_MULTI_WINDOW && defined CONFIG_BASE_X11
 	secondDisplay
 	{
 		"2nd Window (for testing only)", &defaultFace(),
 		false,
 		[this](BoolMenuItem &item)
 		{
-			app().viewController().setEmuViewOnExtraWindow(item.flipBoolValue(*this), appContext().mainScreen());
+			app().setEmuViewOnExtraWindow(item.flipBoolValue(*this), appContext().mainScreen());
 		}
 	},
-	#endif
-	#if defined CONFIG_BASE_MULTI_WINDOW && defined CONFIG_BASE_MULTI_SCREEN
 	showOnSecondScreen
 	{
 		"外接屏幕", &defaultFace(),
@@ -555,10 +544,9 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		{
 			app().showOnSecondScreenOption() = item.flipBoolValue(*this);
 			if(appContext().screens().size() > 1)
-				app().viewController().setEmuViewOnExtraWindow(app().showOnSecondScreenOption(), *appContext().screens()[1]);
+				app().setEmuViewOnExtraWindow(app().showOnSecondScreenOption(), *appContext().screens()[1]);
 		}
 	},
-	#endif
 	imageBuffersItem
 	{
 		{"自动",                                     &defaultFace(), setImageBuffersDel(), 0},
@@ -570,7 +558,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		"图像缓冲区", &defaultFace(),
 		[this](int idx, Gfx::Text &t)
 		{
-			t.setString(emuVideo().imageBuffers() == 1 ? "1" : "2");
+			t.resetString(emuVideo().imageBuffers() == 1 ? "1" : "2");
 			return true;
 		},
 		(MenuItem::Id)app().videoImageBuffersOption().val,
@@ -589,7 +577,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		{
 			if(idx == 0)
 			{
-				t.setString(emuVideo().internalRenderPixelFormat().name());
+				t.resetString(emuVideo().internalRenderPixelFormat().name());
 				return true;
 			}
 			return false;
@@ -600,14 +588,92 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	presentationTime
 	{
 		"减少合成器延迟", &defaultFace(),
-		app().viewController().usePresentationTime(),
+		app().usePresentationTime(),
 		[this](BoolMenuItem &item)
 		{
-			app().viewController().setUsePresentationTime(item.flipBoolValue(*this));
+			app().setUsePresentationTime(item.flipBoolValue(*this));
 		}
+	},
+	forceMaxScreenFrameRate
+	{
+		"强制最大屏幕帧率", &defaultFace(),
+		app().shouldForceMaxScreenFrameRate(),
+		[this](BoolMenuItem &item)
+		{
+			app().setForceMaxScreenFrameRate(item.flipBoolValue(*this));
+		}
+	},
+	brightnessItem
+	{
+		{
+			"默认", &defaultFace(), [this](View &v)
+			{
+				app().setVideoBrightness(1.f, ImageChannel::All);
+				setAllColorLevelsSelected(MenuItem::Id{100});
+				v.dismiss();
+			}
+		},
+		{"自定义值", &defaultFace(), setVideoBrightnessCustomDel(ImageChannel::All)},
+	},
+	redItem
+	{
+		{"默认", &defaultFace(), [this](){ app().setVideoBrightness(1.f, ImageChannel::Red); }, 100},
+		{"自定义值", &defaultFace(), setVideoBrightnessCustomDel(ImageChannel::Red), MenuItem::DEFAULT_ID},
+	},
+	greenItem
+	{
+		{"默认", &defaultFace(), [this](){ app().setVideoBrightness(1.f, ImageChannel::Green); }, 100},
+		{"自定义值", &defaultFace(), setVideoBrightnessCustomDel(ImageChannel::Green), MenuItem::DEFAULT_ID},
+	},
+	blueItem
+	{
+		{"默认", &defaultFace(), [this](){ app().setVideoBrightness(1.f, ImageChannel::Blue); }, 100},
+		{"自定义值", &defaultFace(), setVideoBrightnessCustomDel(ImageChannel::Blue), MenuItem::DEFAULT_ID},
+	},
+	brightness
+	{
+		"设置所有级别", &defaultFace(),
+		[this](const Input::Event &e)
+		{
+			pushAndShow(makeViewWithName<TableView>("All Levels", brightnessItem), e);
+		}
+	},
+	red
+	{
+		"红", &defaultFace(),
+		[this](size_t idx, Gfx::Text &t)
+		{
+			t.resetString(fmt::format("{}%", app().videoBrightnessAsInt(ImageChannel::Red)));
+			return true;
+		},
+		MenuItem::Id{app().videoBrightnessAsInt(ImageChannel::Red)},
+		redItem
+	},
+	green
+	{
+		"绿", &defaultFace(),
+		[this](size_t idx, Gfx::Text &t)
+		{
+			t.resetString(fmt::format("{}%", app().videoBrightnessAsInt(ImageChannel::Green)));
+			return true;
+		},
+		MenuItem::Id{app().videoBrightnessAsInt(ImageChannel::Green)},
+		greenItem
+	},
+	blue
+	{
+		"蓝", &defaultFace(),
+		[this](size_t idx, Gfx::Text &t)
+		{
+			t.resetString(fmt::format("{}%", app().videoBrightnessAsInt(ImageChannel::Blue)));
+			return true;
+		},
+		MenuItem::Id{app().videoBrightnessAsInt(ImageChannel::Blue)},
+		blueItem
 	},
 	visualsHeading{"视觉效果", &defaultBoldFace()},
 	screenShapeHeading{"屏幕形状", &defaultBoldFace()},
+	colorLevelsHeading{"颜色级别", &defaultBoldFace()},
 	advancedHeading{"高级", &defaultBoldFace()},
 	systemSpecificHeading{"系统特定", &defaultBoldFace()}
 {
@@ -620,15 +686,15 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		}
 		windowPixelFormat.setSelected(IG::findIndex(descs, app().windowDrawableConfig()) + 1);
 	}
-	iterateTimes(EmuSystem::aspectRatioInfos, i)
+	for(const auto &i : EmuSystem::aspectRatioInfos())
 	{
-		aspectRatioItem.emplace_back(EmuSystem::aspectRatioInfo[i].name, &defaultFace(),
-			[this, i]()
+		aspectRatioItem.emplace_back(i.name, &defaultFace(),
+			[this, aspect = i.aspect]()
 			{
-				app().setVideoAspectRatio((double)EmuSystem::aspectRatioInfo[i]);
+				app().setVideoAspectRatio(aspect.ratio<double>());
 			});
 	}
-	aspectRatioItem.emplace_back("自定义", &defaultFace(),
+	aspectRatioItem.emplace_back("自定义值", &defaultFace(),
 		[this](const Input::Event &e)
 		{
 			app().pushAndShowNewCollectValueInputView<std::pair<double, double>>(attachParams(), e,
@@ -697,12 +763,9 @@ void VideoOptionView::loadStockItems()
 	if(used(frameInterval))
 		item.emplace_back(&frameInterval);
 	item.emplace_back(&dropLateFrames);
-	if(!app().frameTimeIsConst(EmuSystem::VIDSYS_NATIVE_NTSC))
-	{
-		frameRate.setName(makeFrameRateStr(system()));
-		item.emplace_back(&frameRate);
-	}
-	if(!app().frameTimeIsConst(EmuSystem::VIDSYS_PAL))
+	frameRate.setName(makeFrameRateStr(system()));
+	item.emplace_back(&frameRate);
+	if(EmuSystem::hasPALVideoSystem)
 	{
 		frameRatePAL.setName(makeFrameRatePALStr(system()));
 		item.emplace_back(&frameRatePAL);
@@ -716,6 +779,12 @@ void VideoOptionView::loadStockItems()
 	item.emplace_back(&zoom);
 	item.emplace_back(&viewportZoom);
 	item.emplace_back(&aspectRatio);
+	item.emplace_back(&contentRotation);
+	item.emplace_back(&colorLevelsHeading);
+	item.emplace_back(&brightness);
+	item.emplace_back(&red);
+	item.emplace_back(&green);
+	item.emplace_back(&blue);
 	item.emplace_back(&advancedHeading);
 	item.emplace_back(&textureBufferMode);
 	if(windowPixelFormatItem.size() > 2)
@@ -729,15 +798,12 @@ void VideoOptionView::loadStockItems()
 		item.emplace_back(&imageBuffers);
 	if(IG::used(presentationTime) && renderer().supportsPresentationTime())
 		item.emplace_back(&presentationTime);
-	#if defined CONFIG_BASE_MULTI_WINDOW && defined CONFIG_BASE_X11
-	item.emplace_back(&secondDisplay);
-	#endif
-	#if defined CONFIG_BASE_MULTI_WINDOW && defined CONFIG_BASE_MULTI_SCREEN
-	if(!app().showOnSecondScreenOption().isConst)
-	{
+	if(IG::used(forceMaxScreenFrameRate) && appContext().androidSDK() >= 30)
+		item.emplace_back(&forceMaxScreenFrameRate);
+	if(IG::used(secondDisplay))
+		item.emplace_back(&secondDisplay);
+	if(IG::used(showOnSecondScreen) && !app().showOnSecondScreenOption().isConst)
 		item.emplace_back(&showOnSecondScreen);
-	}
-	#endif
 }
 
 void VideoOptionView::setEmuVideoLayer(EmuVideoLayer &videoLayer_)
@@ -745,33 +811,26 @@ void VideoOptionView::setEmuVideoLayer(EmuVideoLayer &videoLayer_)
 	videoLayer = &videoLayer_;
 }
 
-bool VideoOptionView::onFrameTimeChange(EmuSystem::VideoSystem vidSys, IG::FloatSeconds time)
+bool VideoOptionView::onFrameTimeChange(VideoSystem vidSys, IG::FloatSeconds time)
 {
-	auto wantedTime = time;
-	if(!time.count())
+	if(auto [effectiveFrameTime, isValid] = app().setFrameTime(vidSys, time);
+		!isValid)
 	{
-		wantedTime = app().viewController().emuWindowScreen()->frameTime();
-	}
-	if(!system().setFrameTime(vidSys, wantedTime))
-	{
-		app().postMessage(4, true, fmt::format("{:.2f}Hz 不在有效范围内", 1. / wantedTime.count()));
+		app().postMessage(4, true, fmt::format("{:.2f}Hz 不在有效范围内", 1. / effectiveFrameTime.count()));
 		return false;
 	}
-	system().configFrameTime(app().soundRate());
-	if(vidSys == EmuSystem::VIDSYS_NATIVE_NTSC)
+	if(vidSys == VideoSystem::NATIVE_NTSC)
 	{
-		app().setFrameTime(EmuSystem::VIDSYS_NATIVE_NTSC, time);
 		frameRate.compile(makeFrameRateStr(system()), renderer(), projP);
 	}
 	else
 	{
-		app().setFrameTime(EmuSystem::VIDSYS_PAL, time);
 		frameRatePAL.compile(makeFrameRatePALStr(system()), renderer(), projP);
 	}
 	return true;
 }
 
-void VideoOptionView::pushAndShowFrameRateSelectMenu(EmuSystem::VideoSystem vidSys, const Input::Event &e)
+void VideoOptionView::pushAndShowFrameRateSelectMenu(VideoSystem vidSys, const Input::Event &e)
 {
 	const bool includeFrameRateDetection = !Config::envIsIOS;
 	auto multiChoiceView = makeViewWithName<TextTableView>("刷新率", includeFrameRateDetection ? 4 : 3);
@@ -780,14 +839,12 @@ void VideoOptionView::pushAndShowFrameRateSelectMenu(EmuSystem::VideoSystem vidS
 		{
 			if(!app().viewController().emuWindowScreen()->frameRateIsReliable())
 			{
-				#ifdef __ANDROID__
-				if(appContext().androidSDK() <= 10)
+				if(Config::envIsAndroid && appContext().androidSDK() <= 10)
 				{
 					app().postErrorMessage("许多 Android 2.3 设备错误报告其刷新率,"
 						"使用检测到的或默认刷新率可能会更好");
 				}
 				else
-				#endif
 				{
 					app().postErrorMessage("报告的刷新率可能不可靠,"
 						"使用检测到的或默认刷新率可能会更好");
@@ -796,7 +853,7 @@ void VideoOptionView::pushAndShowFrameRateSelectMenu(EmuSystem::VideoSystem vidS
 			if(onFrameTimeChange(vidSys, {}))
 				view.dismiss();
 		});
-	multiChoiceView->appendItem("设置默认刷新率",
+	multiChoiceView->appendItem("设置为模拟系统的刷新率",
 		[this, vidSys](View &view)
 		{
 			onFrameTimeChange(vidSys, EmuSystem::defaultFrameTime(vidSys));
@@ -823,7 +880,7 @@ void VideoOptionView::pushAndShowFrameRateSelectMenu(EmuSystem::VideoSystem vidS
 		multiChoiceView->appendItem("检测屏幕刷新率并设置",
 			[this, vidSys](const Input::Event &e)
 			{
-				window().setIntendedFrameRate(vidSys == EmuSystem::VIDSYS_NATIVE_NTSC ? 60. : 50.);
+				window().setIntendedFrameRate(1. / EmuSystem::defaultFrameTime(vidSys).count());
 				auto frView = makeView<DetectFrameRateView>();
 				frView->onDetectFrameTime =
 					[this, vidSys](IG::FloatSeconds frameTime)
@@ -854,9 +911,50 @@ TextMenuItem::SelectDelegate VideoOptionView::setViewportZoomDel()
 	return [this](TextMenuItem &item) { app().setViewportZoom(item.id()); };
 }
 
+TextMenuItem::SelectDelegate VideoOptionView::setContentRotationDel()
+{
+	return [this](TextMenuItem &item) { app().setContentRotation((IG::Rotation)item.id()); };
+}
+
 TextMenuItem::SelectDelegate VideoOptionView::setOverlayEffectLevelDel()
 {
 	return [this](TextMenuItem &item) { app().setOverlayEffectLevel(*videoLayer, item.id()); };
+}
+
+TextMenuItem::SelectDelegate VideoOptionView::setVideoBrightnessCustomDel(ImageChannel ch)
+{
+	return [=, this](const Input::Event &e)
+	{
+		app().pushAndShowNewCollectValueRangeInputView<int, 0, 200>(attachParams(), e, "Input 0 to 200", "",
+			[=, this](EmuApp &app, auto val)
+			{
+				app.setVideoBrightness(val / 100.f, ch);
+				if(ch == ImageChannel::All)
+					setAllColorLevelsSelected(MenuItem::Id{val});
+				else
+					[&]() -> MultiChoiceMenuItem&
+					{
+						switch(ch)
+						{
+							case ImageChannel::All: break;
+							case ImageChannel::Red: return red;
+							case ImageChannel::Green: return green;
+							case ImageChannel::Blue: return blue;
+						}
+						bug_unreachable("invalid ImageChannel");
+					}().setSelected(MenuItem::Id{val}, *this);
+				dismissPrevious();
+				return true;
+			});
+		return false;
+	};
+}
+
+void VideoOptionView::setAllColorLevelsSelected(MenuItem::Id val)
+{
+	red.setSelected(val, *this);
+	green.setSelected(val, *this);
+	blue.setSelected(val, *this);
 }
 
 EmuVideo &VideoOptionView::emuVideo() const

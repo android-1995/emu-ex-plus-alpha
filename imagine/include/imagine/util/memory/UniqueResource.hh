@@ -15,20 +15,26 @@
 
 #pragma once
 
-#include <imagine/util/concepts.hh>
+#include <concepts>
 #include <utility>
 
 namespace IG
 {
 
-template <class T, IG::invocable<T> Deleter, T NULL_VALUE = T()>
+template <class T, std::invocable<T> Deleter, T NULL_VALUE = T()>
 class UniqueResource
 {
 public:
 	constexpr UniqueResource() = default;
 
-	constexpr UniqueResource(T r, Deleter del = {}):
+	constexpr UniqueResource(T r, Deleter del):
 		r{r}, del{del} {}
+
+	constexpr UniqueResource(T r):
+		r{r} {}
+
+	constexpr UniqueResource(Deleter del):
+		del{del} {}
 
 	UniqueResource(UniqueResource &&o) noexcept
 	{
@@ -58,6 +64,8 @@ public:
 			return;
 		del(release());
 	}
+
+	constexpr T &get() { return r; }
 
 	constexpr const T &get() const { return r; }
 
