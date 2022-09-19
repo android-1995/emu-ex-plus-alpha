@@ -2000,7 +2000,7 @@ void ApplicationContext::resetAiWu()
     auto &sys = app.system();
     if(!sys.hasContent())
         return;
-    sys.reset(app, EmuEx::EmuSystem::RESET_SOFT);
+    sys.reset(app, EmuSystem::ResetMode::SOFT);
 }
 bool ApplicationContext::isSoundEnabledAiWu()
 {
@@ -2027,10 +2027,10 @@ void ApplicationContext::fastForwardAiWu(int speed)
     if(speed < 2 || speed > 7){
         //内部的加速范围2-7
         //关闭加速
-        setRunSpeed(1.);
+        app.setRunSpeed(1.);
     } else {
         //开启加速
-        setRunSpeed(speed*1.);
+        app.setRunSpeed(speed*1.);
     }
 }
 bool ApplicationContext::saveStateAiWu(const char *filepath)
