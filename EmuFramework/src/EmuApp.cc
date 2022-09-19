@@ -1964,7 +1964,7 @@ void ApplicationContext::onKeyPressAiWu(uint emuKey)
     auto &sys = app.system();
     if(!sys.hasContent())
         return;
-    sys.handleInputAction(&app, Input::Action::PUSHED, emuKey);
+    sys.handleInputAction(&app, {emuKey, Input::Action::PUSHED});
 }
 void ApplicationContext::onKeyReleaseAiWu(uint emuKey)
 {
@@ -1972,7 +1972,7 @@ void ApplicationContext::onKeyReleaseAiWu(uint emuKey)
     auto &sys = app.system();
     if(!sys.hasContent())
         return;
-    sys.handleInputAction(&app, Input::Action::RELEASED, emuKey);
+    sys.handleInputAction(&app, {emuKey, Input::Action::RELEASED});
 }
 void ApplicationContext::showSettingAiWu()
 {
@@ -1980,7 +1980,7 @@ void ApplicationContext::showSettingAiWu()
     auto &sys = app.system();
     if(!sys.hasContent())
         return;
-    app.viewController().showUI();
+    app.showUI();
 }
 void ApplicationContext::changeEmulatorStateAiWu(bool pause)
 {
@@ -1989,9 +1989,9 @@ void ApplicationContext::changeEmulatorStateAiWu(bool pause)
     if(!sys.hasContent())
         return;
     if(pause){
-        app.viewController().pauseEmulation();
+        app.pauseEmulation();
     } else {
-        app.viewController().startEmulation();
+        app.startEmulation();
     }
 }
 void ApplicationContext::resetAiWu()
@@ -2027,10 +2027,10 @@ void ApplicationContext::fastForwardAiWu(int speed)
     if(speed < 2 || speed > 7){
         //内部的加速范围2-7
         //关闭加速
-        app.viewController().setFastForwardSpeed(0);
+        setRunSpeed(1.);
     } else {
         //开启加速
-        app.viewController().setFastForwardSpeed(speed);
+        setRunSpeed(speed*1.);
     }
 }
 bool ApplicationContext::saveStateAiWu(const char *filepath)
