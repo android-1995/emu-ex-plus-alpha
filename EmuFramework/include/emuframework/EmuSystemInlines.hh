@@ -242,4 +242,11 @@ void EmuSystem::onStop()
 		static_cast<MainSystem*>(this)->onStop();
 }
 
+//region
+void EmuSystem::setCheatListAiWu(std::list<std::string> cheats)
+{
+	if(&MainSystem::setCheatListAiWu != &EmuSystem::setCheatListAiWu)
+		static_cast<MainSystem*>(this)->setCheatListAiWu();
+}
+//endregion
 }
