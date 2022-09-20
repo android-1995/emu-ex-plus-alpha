@@ -65,18 +65,18 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 
 	TextMenuItem saveTypeItem[7]
 	{
-		{"Auto",            &defaultFace(), setSaveTypeDel(), packSaveTypeOverride(GBA_SAVE_AUTO)},
+		{"自动",            &defaultFace(), setSaveTypeDel(), packSaveTypeOverride(GBA_SAVE_AUTO)},
 		{"EEPROM",          &defaultFace(), setSaveTypeDel(), packSaveTypeOverride(GBA_SAVE_EEPROM)},
 		{"SRAM",            &defaultFace(), setSaveTypeDel(), packSaveTypeOverride(GBA_SAVE_SRAM)},
 		{"Flash (64K)",     &defaultFace(), setSaveTypeDel(), packSaveTypeOverride(GBA_SAVE_FLASH, SIZE_FLASH512)},
 		{"Flash (128K)",    &defaultFace(), setSaveTypeDel(), packSaveTypeOverride(GBA_SAVE_FLASH, SIZE_FLASH1M)},
 		{"EEPROM + Sensor", &defaultFace(), setSaveTypeDel(), packSaveTypeOverride(GBA_SAVE_EEPROM_SENSOR)},
-		{"None",            &defaultFace(), setSaveTypeDel(), packSaveTypeOverride(GBA_SAVE_NONE)},
+		{"无",            &defaultFace(), setSaveTypeDel(), packSaveTypeOverride(GBA_SAVE_NONE)},
 	};
 
 	MultiChoiceMenuItem saveType
 	{
-		"Save Type", &defaultFace(),
+		"存档类型", &defaultFace(),
 		[this](int idx, Gfx::Text &t)
 		{
 			if(idx == 0)
@@ -105,7 +105,7 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 			if(saveMemoryHasContent())
 			{
 				auto ynAlertView = std::make_unique<YesNoAlertView>(attachParams(),
-					"Really change save type? Existing data in .sav file may be lost so please make a backup before proceeding.");
+					"确定改变存档类型？.sav文件中的现有数据可能会丢失，因此请在继续之前进行备份");
 				ynAlertView->setOnYes(
 					[this, optVal = item.id()](const Input::Event &e)
 					{
@@ -125,8 +125,8 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 	#ifdef IG_CONFIG_SENSORS
 	TextMenuItem hardwareSensorItem[5]
 	{
-		{"Auto",          &defaultFace(), setHardwareSensorDel(), to_underlying(GbaSensorType::Auto)},
-		{"None",          &defaultFace(), setHardwareSensorDel(), to_underlying(GbaSensorType::None)},
+		{"自动",          &defaultFace(), setHardwareSensorDel(), to_underlying(GbaSensorType::Auto)},
+		{"无",          &defaultFace(), setHardwareSensorDel(), to_underlying(GbaSensorType::None)},
 		{"Accelerometer", &defaultFace(), setHardwareSensorDel(), to_underlying(GbaSensorType::Accelerometer)},
 		{"Gyroscope",     &defaultFace(), setHardwareSensorDel(), to_underlying(GbaSensorType::Gyroscope)},
 		{"Light",         &defaultFace(), setHardwareSensorDel(), to_underlying(GbaSensorType::Light)},
@@ -134,7 +134,7 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 
 	MultiChoiceMenuItem hardwareSensor
 	{
-		"Hardware Sensor", &defaultFace(),
+		"硬件传感器", &defaultFace(),
 		[this](int idx, Gfx::Text &t)
 		{
 			if(idx == 0)
@@ -201,7 +201,7 @@ class CustomAudioOptionView : public AudioOptionView, public MainAppHelper<Custo
 	using MainAppHelper<CustomAudioOptionView>::system;
 	using MainAppHelper<CustomAudioOptionView>::app;
 
-	TextHeadingMenuItem mixer{"Mixer", &defaultBoldFace()};
+	TextHeadingMenuItem mixer{"混合器", &defaultBoldFace()};
 
 	using VolumeChoiceItemArr = std::array<TextMenuItem, 3>;
 
@@ -211,22 +211,22 @@ class CustomAudioOptionView : public AudioOptionView, public MainAppHelper<Custo
 		{
 			TextMenuItem
 			{
-				"Default", &defaultFace(),
+				"默认", &defaultFace(),
 				[this, gbVol]() { soundSetVolume(gGba, 1.f, gbVol); },
 				100
 			},
 			TextMenuItem
 			{
-				"Off", &defaultFace(),
+				"关", &defaultFace(),
 				[this, gbVol]() { soundSetVolume(gGba, 0, gbVol); },
 				0
 			},
 			TextMenuItem
 			{
-				"Custom Value", &defaultFace(),
+				"自定义值", &defaultFace(),
 				[this, gbVol](Input::Event e)
 				{
-					app().pushAndShowNewCollectValueRangeInputView<int, 0, 100>(attachParams(), e, "Input 0 to 100", "",
+					app().pushAndShowNewCollectValueRangeInputView<int, 0, 100>(attachParams(), e, "输入0到100", "",
 						[this, gbVol](EmuApp &app, auto val)
 						{
 							soundSetVolume(gGba, val / 100.f, gbVol);
@@ -251,7 +251,7 @@ class CustomAudioOptionView : public AudioOptionView, public MainAppHelper<Custo
 	{
 		return
 		{
-			gbVol ? "GB APU Volume" : "PCM Volume", &defaultFace(),
+			gbVol ? "GB APU音量" : "PCM音量", &defaultFace(),
 			[this, gbVol](size_t idx, Gfx::Text &t)
 			{
 				t.resetString(fmt::format("{}%", soundVolumeAsInt(gGba, gbVol)));
@@ -295,16 +295,16 @@ class CustomAudioOptionView : public AudioOptionView, public MainAppHelper<Custo
 	{
 		TextMenuItem
 		{
-			"Default", &defaultFace(),
+			"默认", &defaultFace(),
 			[this]() { soundSetFiltering(gGba, .5f); },
 			50
 		},
 		TextMenuItem
 		{
-			"Custom Value", &defaultFace(),
+			"自定义值", &defaultFace(),
 			[this](Input::Event e)
 			{
-				app().pushAndShowNewCollectValueRangeInputView<int, 0, 100>(attachParams(), e, "Input 0 to 100", "",
+				app().pushAndShowNewCollectValueRangeInputView<int, 0, 100>(attachParams(), e, "输入0到100", "",
 					[this](EmuApp &app, auto val)
 					{
 						soundSetFiltering(gGba, val / 100.f);
@@ -319,7 +319,7 @@ class CustomAudioOptionView : public AudioOptionView, public MainAppHelper<Custo
 
 	MultiChoiceMenuItem filteringLevel
 	{
-		"Filtering Level", &defaultFace(),
+		"过滤级别", &defaultFace(),
 		[this](size_t idx, Gfx::Text &t)
 		{
 			t.resetString(fmt::format("{}%", soundFilteringAsInt(gGba)));
@@ -331,7 +331,7 @@ class CustomAudioOptionView : public AudioOptionView, public MainAppHelper<Custo
 
 	BoolMenuItem filtering
 	{
-		"Filtering", &defaultFace(),
+		"过滤", &defaultFace(),
 		soundGetInterpolation(gGba),
 		[this](BoolMenuItem &item)
 		{
@@ -365,14 +365,14 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper<Cus
 	#ifdef IG_CONFIG_SENSORS
 	TextMenuItem lightSensorScaleItem[5]
 	{
-		{"Darkness",      &defaultFace(), setLightSensorScaleDel(), 0},
-		{"Indoor Light",  &defaultFace(), setLightSensorScaleDel(), 100},
-		{"Overcast Day",  &defaultFace(), setLightSensorScaleDel(), 1000},
-		{"Sunny Day",     &defaultFace(), setLightSensorScaleDel(), 10000},
-		{"Custom Value",  &defaultFace(),
+		{"黑暗",      &defaultFace(), setLightSensorScaleDel(), 0},
+		{"室内灯",  &defaultFace(), setLightSensorScaleDel(), 100},
+		{"阴天",  &defaultFace(), setLightSensorScaleDel(), 1000},
+		{"晴天",     &defaultFace(), setLightSensorScaleDel(), 10000},
+		{"自定义值",  &defaultFace(),
 			[this](Input::Event e)
 			{
-				app().pushAndShowNewCollectValueRangeInputView<int, 0, 50000>(attachParams(), e, "Input 0 to 50000", "",
+				app().pushAndShowNewCollectValueRangeInputView<int, 0, 50000>(attachParams(), e, "输入0到50000", "",
 					[this](EmuApp &app, auto val)
 					{
 						system().lightSensorScaleLux = val;
@@ -387,7 +387,7 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper<Cus
 
 	MultiChoiceMenuItem lightSensorScale
 	{
-		"Light Sensor Scale", &defaultFace(),
+		"光线传感器级别", &defaultFace(),
 		[this](int idx, Gfx::Text &t)
 		{
 			t.resetString(fmt::format("{} lux", (int)system().lightSensorScaleLux));
