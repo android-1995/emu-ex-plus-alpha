@@ -2018,19 +2018,18 @@ void ApplicationContext::screenshotAiWu(const char *filepath)
     auto &video = app.video();
     video.takeGameScreenshotAiWu(filepath);
 }
-void ApplicationContext::fastForwardAiWu(int speed)
+void ApplicationContext::fastForwardAiWu(double speed)
 {
     auto &app = EmuEx::EmuApp::get(*this);
     auto &sys = app.system();
     if(!sys.hasContent())
         return;
-    if(speed < 2 || speed > 7){
-        //内部的加速范围2-7
+    if(speed <= 0. || speed > 8.){
         //关闭加速
         app.setRunSpeed(1.);
     } else {
         //开启加速
-        app.setRunSpeed(speed*1.);
+        app.setRunSpeed(speed);
     }
 }
 bool ApplicationContext::saveStateAiWu(const char *filepath)

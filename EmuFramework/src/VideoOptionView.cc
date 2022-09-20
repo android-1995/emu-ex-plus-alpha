@@ -402,15 +402,15 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	contentRotationItem
 	{
-		{"Auto",        &defaultFace(), setContentRotationDel(), std::to_underlying(Rotation::ANY)},
-		{"Standard",    &defaultFace(), setContentRotationDel(), std::to_underlying(Rotation::UP)},
-		{"90° Right",   &defaultFace(), setContentRotationDel(), std::to_underlying(Rotation::RIGHT)},
-		{"Upside Down", &defaultFace(), setContentRotationDel(), std::to_underlying(Rotation::DOWN)},
-		{"90° Left",    &defaultFace(), setContentRotationDel(), std::to_underlying(Rotation::LEFT)},
+		{"自动",        &defaultFace(), setContentRotationDel(), std::to_underlying(Rotation::ANY)},
+		{"标准",    &defaultFace(), setContentRotationDel(), std::to_underlying(Rotation::UP)},
+		{"右旋转90°",   &defaultFace(), setContentRotationDel(), std::to_underlying(Rotation::RIGHT)},
+		{"上下翻转", &defaultFace(), setContentRotationDel(), std::to_underlying(Rotation::DOWN)},
+		{"左旋转90°",    &defaultFace(), setContentRotationDel(), std::to_underlying(Rotation::LEFT)},
 	},
 	contentRotation
 	{
-		"Content Rotation", &defaultFace(),
+		"画面旋转", &defaultFace(),
 		(MenuItem::Id)app().contentRotation(),
 		contentRotationItem
 	},
@@ -596,7 +596,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	forceMaxScreenFrameRate
 	{
-		"强制最大屏幕帧率", &defaultFace(),
+		"强制最高屏幕帧率", &defaultFace(),
 		app().shouldForceMaxScreenFrameRate(),
 		[this](BoolMenuItem &item)
 		{
@@ -635,7 +635,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		"设置所有级别", &defaultFace(),
 		[this](const Input::Event &e)
 		{
-			pushAndShow(makeViewWithName<TableView>("All Levels", brightnessItem), e);
+			pushAndShow(makeViewWithName<TableView>("所有级别", brightnessItem), e);
 		}
 	},
 	red
@@ -925,7 +925,7 @@ TextMenuItem::SelectDelegate VideoOptionView::setVideoBrightnessCustomDel(ImageC
 {
 	return [=, this](const Input::Event &e)
 	{
-		app().pushAndShowNewCollectValueRangeInputView<int, 0, 200>(attachParams(), e, "Input 0 to 200", "",
+		app().pushAndShowNewCollectValueRangeInputView<int, 0, 200>(attachParams(), e, "输入0到200", "",
 			[=, this](EmuApp &app, auto val)
 			{
 				app.setVideoBrightness(val / 100.f, ch);
