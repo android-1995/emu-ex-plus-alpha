@@ -13,10 +13,8 @@
 	You should have received a copy of the GNU General Public License
 	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <emuframework/OptionView.hh>
+#include <emuframework/AudioOptionView.hh>
 #include <emuframework/EmuApp.hh>
-#include <emuframework/EmuAudio.hh>
-#include "EmuOptions.hh"
 #include <imagine/util/format.hh>
 
 namespace EmuEx
@@ -33,13 +31,13 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 			app().setSoundEnabled(item.flipBoolValue(*this));
 		}
 	},
-	soundDuringFastForward
+	soundDuringFastSlowMode
 	{
-		"加速时声音", &defaultFace(),
-		app().soundDuringFastForwardIsEnabled(),
+		"变速时启用声音", &defaultFace(),
+		app().soundDuringFastSlowModeIsEnabled(),
 		[this](BoolMenuItem &item)
 		{
-			app().setSoundDuringFastForwardEnabled(item.flipBoolValue(*this));
+			app().setSoundDuringFastSlowModeEnabled(item.flipBoolValue(*this));
 		}
 	},
 	soundVolumeItem
@@ -50,23 +48,16 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 		{"自定义", &defaultFace(),
 			[this](const Input::Event &e)
 			{
-				app().pushAndShowNewCollectValueInputView<int>(attachParams(), e, "Input 0 to 100", "",
+				app().pushAndShowNewCollectValueRangeInputView<int, 0, 100>(attachParams(), e, "输入0到100", "",
 					[this](EmuApp &app, auto val)
 					{
-						if(app.setSoundVolume(val))
-						{
-							soundVolume.setSelected(std::size(soundVolumeItem) - 1, *this);
-							dismissPrevious();
-							return true;
-						}
-						else
-						{
-							app.postErrorMessage("值错误");
-							return false;
-						}
+						app.setSoundVolume(val);
+						soundVolume.setSelected((MenuItem::Id)val, *this);
+						dismissPrevious();
+						return true;
 					});
 				return false;
-			}
+			}, MenuItem::DEFAULT_ID
 		},
 	},
 	soundVolume
@@ -74,7 +65,7 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 		"音量", &defaultFace(),
 		[this](size_t idx, Gfx::Text &t)
 		{
-			t.setString(fmt::format("{}%", app().soundVolume()));
+			t.resetString(fmt::format("{}%", app().soundVolume()));
 			return true;
 		},
 		(MenuItem::Id)app().soundVolume(),
@@ -159,7 +150,7 @@ AudioOptionView::AudioOptionView(ViewAttachParams attach, bool customMenu):
 void AudioOptionView::loadStockItems()
 {
 	item.emplace_back(&snd);
-	item.emplace_back(&soundDuringFastForward);
+	item.emplace_back(&soundDuringFastSlowMode);
 	item.emplace_back(&soundVolume);
 	if(app().canChangeSoundRate())
 	{

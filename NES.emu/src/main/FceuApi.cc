@@ -18,10 +18,10 @@
 #include <imagine/logger/logger.h>
 #include <imagine/fs/FS.hh>
 #include <imagine/fs/ArchiveFS.hh>
-#include <imagine/io/FileIO.hh>
+#include <imagine/io/IO.hh>
 #include <emuframework/EmuApp.hh>
 #include <emuframework/FilePicker.hh>
-#include "internal.hh"
+#include "MainSystem.hh"
 #include <fceu/driver.h>
 #include <fceu/video.h>
 #include <fceu/fceu.h>
@@ -37,7 +37,7 @@ int closeFinishedMovie = 0;
 int StackAddrBackup = -1;
 int KillFCEUXonFrame = 0;
 
-void FCEUI_Emulate(EmuEx::EmuSystemTaskContext taskCtx, EmuEx::EmuVideo *video, int skip, EmuEx::EmuAudio *audio)
+void FCEUI_Emulate(EmuEx::EmuSystemTaskContext taskCtx, EmuEx::NesSystem &sys, EmuEx::EmuVideo *video, int skip, EmuEx::EmuAudio *audio)
 {
 	#ifdef _S9XLUA_H
 	FCEU_LuaFrameBoundary();
@@ -51,7 +51,7 @@ void FCEUI_Emulate(EmuEx::EmuSystemTaskContext taskCtx, EmuEx::EmuVideo *video, 
 	#endif
 
 	if (geniestage != 1) FCEU_ApplyPeriodicCheats();
-	FCEUPPU_Loop(taskCtx, video, audio, skip);
+	FCEUPPU_Loop(taskCtx, sys, video, audio, skip);
 
 	emulateSound(audio);
 
@@ -63,9 +63,9 @@ void FCEUI_Emulate(EmuEx::EmuSystemTaskContext taskCtx, EmuEx::EmuVideo *video, 
 	timestamp = 0;
 }
 
-void FCEUI_Emulate(EmuEx::EmuVideo *video, int skip, EmuEx::EmuAudio *audio)
+void FCEUI_Emulate(EmuEx::NesSystem &sys, EmuEx::EmuVideo *video, int skip, EmuEx::EmuAudio *audio)
 {
-	FCEUI_Emulate({}, video, skip, audio);
+	FCEUI_Emulate({}, sys, video, skip, audio);
 }
 
 FILE *FCEUD_UTF8fopen(const char *fn, const char *mode)
@@ -203,6 +203,8 @@ void FCEUD_SaveStateAs() {}
 
 void FCEUD_LoadStateFrom() {}
 
+void FCEUD_FlushTrace() {}
+
 void FCEUD_SetInput(bool fourscore, bool microphone, ESI port0, ESI port1, ESIFC fcexp)
 {
 	logMsg("called set input");
@@ -240,7 +242,7 @@ int FCEUD_FDSReadBIOS(void *buff, uint32 size)
 	}
 	else
 	{
-		auto io = appCtx.openFileUri(fdsBiosPath, IO::AccessHint::ALL);
+		auto io = appCtx.openFileUri(fdsBiosPath, IOAccessHint::ALL);
 		if(io.size() != size)
 		{
 			throw std::runtime_error{"Incompatible FDS BIOS"};

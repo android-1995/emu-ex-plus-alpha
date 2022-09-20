@@ -28,7 +28,6 @@
 #endif
 
 #include <imagine/pixmap/PixelFormat.hh>
-#include <imagine/base/Error.hh>
 #include <imagine/base/glDefs.hh>
 #include <imagine/util/concepts.hh>
 #include <optional>
@@ -40,6 +39,7 @@ namespace IG
 class Window;
 class GLDisplay;
 class ApplicationContext;
+class ErrorCode;
 
 class GLBufferConfigAttributes
 {
@@ -53,73 +53,18 @@ public:
 class GLContextAttributes
 {
 public:
+	int majorVersion{1};
+	int minorVersion{};
+	bool glesApi{};
+	bool debug{};
+	bool noError{};
+
 	constexpr GLContextAttributes() = default;
 
-	constexpr GLContextAttributes(int majorVer, int minorVer, GL::API api)
-	{
-		setMajorVersion(majorVer);
-		setMinorVersion(minorVer);
-		setOpenGLESAPI(api == GL::API::OPENGL_ES);
-	}
-
-	constexpr void setMajorVersion(int majorVer)
-	{
-		if(!majorVer)
-			majorVer = 1;
-		this->majorVer = majorVer;
-	}
-
-	constexpr int majorVersion() const
-	{
-		return majorVer;
-	}
-
-	constexpr void setMinorVersion(int minorVer)
-	{
-		this->minorVer = minorVer;
-	}
-
-	constexpr int minorVersion() const
-	{
-		return minorVer;
-	}
-
-	constexpr void setOpenGLESAPI(bool glesAPI)
-	{
-		this->glesAPI = glesAPI;
-	}
-
-	constexpr bool openGLESAPI() const
-	{
-		return glesAPI;
-	}
-
-	constexpr void setDebug(bool debug)
-	{
-		debug_ = debug;
-	}
-
-	constexpr bool debug() const
-	{
-		return debug_;
-	}
-
-	constexpr void setNoError(bool noError)
-	{
-		noError_ = noError;
-	}
-
-	constexpr bool noError() const
-	{
-		return noError_;
-	}
-
-private:
-	int majorVer{1};
-	int minorVer{};
-	bool glesAPI{};
-	bool debug_{};
-	bool noError_{};
+	constexpr GLContextAttributes(int majorVer, int minorVer, GL::API api):
+		majorVersion{majorVer},
+		minorVersion{minorVer},
+		glesApi{api == GL::API::OPENGL_ES} {}
 };
 
 enum class GLColorSpace : uint8_t
@@ -131,27 +76,11 @@ enum class GLColorSpace : uint8_t
 class GLDrawableAttributes
 {
 public:
+	GLBufferConfig bufferConfig{};
+	GLColorSpace colorSpace{};
+
 	constexpr GLDrawableAttributes() = default;
-	constexpr GLDrawableAttributes(GLBufferConfig config):bufferConfig_{config} {}
-
-	constexpr void setColorSpace(GLColorSpace c)
-	{
-		colorSpace_ = c;
-	}
-
-	constexpr GLColorSpace colorSpace() const
-	{
-		return colorSpace_;
-	}
-
-	constexpr GLBufferConfig bufferConfig() const
-	{
-		return bufferConfig_;
-	}
-
-private:
-	GLBufferConfig bufferConfig_{};
-	GLColorSpace colorSpace_{};
+	constexpr GLDrawableAttributes(GLBufferConfig config): bufferConfig{config} {}
 };
 
 class GLDisplay : public GLDisplayImpl
@@ -200,11 +129,11 @@ public:
 	GLDisplay getDefaultDisplay(NativeDisplayConnection) const;
 	std::optional<GLBufferConfig> makeBufferConfig(ApplicationContext, GLBufferConfigAttributes, GL::API, int majorVersion = 0) const;
 	NativeWindowFormat nativeWindowFormat(ApplicationContext, GLBufferConfig) const;
-	GLContext makeContext(GLContextAttributes, GLBufferConfig, NativeGLContext shareContext, IG::ErrorCode &);
-	GLContext makeContext(GLContextAttributes, GLBufferConfig, IG::ErrorCode &);
+	GLContext makeContext(GLContextAttributes, GLBufferConfig, NativeGLContext shareContext);
+	GLContext makeContext(GLContextAttributes, GLBufferConfig);
 	static NativeGLContext currentContext();
 	void resetCurrentContext() const;
-	GLDrawable makeDrawable(Window &, GLDrawableAttributes, IG::ErrorCode &) const;
+	GLDrawable makeDrawable(Window &, GLDrawableAttributes) const;
 	static bool hasCurrentDrawable(NativeGLDrawable);
 	static bool hasCurrentDrawable();
 	static void *procAddress(const char *funcName);

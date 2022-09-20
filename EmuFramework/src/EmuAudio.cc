@@ -25,9 +25,9 @@ namespace EmuEx
 
 struct AudioStats
 {
-	constexpr AudioStats() {}
-	unsigned underruns = 0;
-	unsigned overruns = 0;
+	constexpr AudioStats() = default;
+	int underruns{};
+	int overruns{};
 	std::atomic_uint callbacks{};
 	std::atomic_uint callbackBytes{};
 
@@ -90,24 +90,24 @@ bool EmuAudio::shouldStartAudioWrites(size_t bytesToWrite) const
 }
 
 template<typename T>
-static void simpleResample(T * __restrict__ dest, unsigned destFrames, const T * __restrict__ src, unsigned srcFrames)
+static void simpleResample(T * __restrict__ dest, size_t destFrames, const T * __restrict__ src, size_t srcFrames)
 {
 	if(!destFrames)
 		return;
 	float ratio = (float)srcFrames/(float)destFrames;
-	iterateTimes(destFrames, i)
+	for(auto i : iotaCount(destFrames))
 	{
-		unsigned srcPos = round(i * ratio);
-		if(srcPos > srcFrames) [[unlikely]]
+		size_t srcPos = std::floor((float)i * ratio);
+		if(srcPos >= srcFrames) [[unlikely]]
 		{
-			logMsg("resample pos %u too high", srcPos);
+			logMsg("resample pos %zu too high", srcPos);
 			srcPos = srcFrames-1;
 		}
 		dest[i] = src[srcPos];
 	}
 }
 
-static void simpleResample(void *dest, unsigned destFrames, const void *src, unsigned srcFrames, IG::Audio::Format format)
+static void simpleResample(void *dest, size_t destFrames, const void *src, size_t srcFrames, IG::Audio::Format format)
 {
 	if(format.channels == 1)
 	{
@@ -144,7 +144,7 @@ void EmuAudio::resizeAudioBuffer(size_t targetBufferFillBytes)
 void EmuAudio::open(IG::Audio::Api api)
 {
 	close();
-	audioStream = audioManager().makeOutputStream(api);
+	audioStream.setApi(audioManager(), api);
 }
 
 void EmuAudio::start(IG::Microseconds targetBufferFillUSecs, IG::Microseconds bufferIncrementUSecs)
@@ -158,7 +158,7 @@ void EmuAudio::start(IG::Microseconds targetBufferFillUSecs, IG::Microseconds bu
 	auto inputFormat = format();
 	targetBufferFillBytes = inputFormat.timeToBytes(targetBufferFillUSecs);
 	bufferIncrementBytes = inputFormat.timeToBytes(bufferIncrementUSecs);
-	if(!audioStream->isOpen())
+	if(!audioStream.isOpen())
 	{
 		resizeAudioBuffer(targetBufferFillBytes);
 		audioWriteState = AudioWriteState::BUFFER;
@@ -209,9 +209,9 @@ void EmuAudio::start(IG::Microseconds targetBufferFillUSecs, IG::Microseconds bu
 				}
 			}
 		};
-		outputConf.setWantedLatencyHint({});
+		outputConf.wantedLatencyHint = {};
 		startAudioStats(inputFormat);
-		audioStream->open(outputConf);
+		audioStream.open(outputConf);
 	}
 	else
 	{
@@ -226,7 +226,7 @@ void EmuAudio::start(IG::Microseconds targetBufferFillUSecs, IG::Microseconds bu
 		{
 			audioWriteState = AudioWriteState::BUFFER;
 		}
-		audioStream->play();
+		audioStream.play();
 	}
 }
 
@@ -235,7 +235,7 @@ void EmuAudio::stop()
 	stopAudioStats();
 	audioWriteState = AudioWriteState::BUFFER;
 	if(audioStream)
-		audioStream->close();
+		audioStream.close();
 	rBuff.clear();
 }
 
@@ -253,7 +253,7 @@ void EmuAudio::flush()
 	stopAudioStats();
 	audioWriteState = AudioWriteState::BUFFER;
 	if(audioStream)
-		audioStream->flush();
+		audioStream.flush();
 	rBuff.clear();
 }
 
@@ -264,7 +264,7 @@ void EmuAudio::writeFrames(const void *samples, size_t framesToWrite)
 	switch(audioWriteState)
 	{
 		case AudioWriteState::MULTI_UNDERRUN:
-			if(speedMultiplier == 1 && addSoundBuffersOnUnderrun &&
+			if(speedMultiplier == 1. && addSoundBuffersOnUnderrun &&
 				inputFormat.bytesToTime(rBuff.capacity()).count() <= 1.) // hard cap buffer increase to 1 sec
 			{
 				logWarn("increasing buffer size due to multiple underruns within a short time");
@@ -279,7 +279,7 @@ void EmuAudio::writeFrames(const void *samples, size_t framesToWrite)
 		break;
 	}
 	const size_t sampleFrames = framesToWrite;
-	if(speedMultiplier > 1) [[unlikely]]
+	if(speedMultiplier != 1.) [[unlikely]]
 	{
 		framesToWrite = std::ceil((double)framesToWrite / speedMultiplier);
 		framesToWrite = std::max(framesToWrite, 1zu);
@@ -288,7 +288,7 @@ void EmuAudio::writeFrames(const void *samples, size_t framesToWrite)
 	auto freeBytes = rBuff.freeSpace();
 	if(bytes <= freeBytes)
 	{
-		if(sampleFrames > framesToWrite)
+		if(sampleFrames != framesToWrite)
 		{
 			simpleResample(rBuff.writeAddr(), framesToWrite, samples, sampleFrames, inputFormat);
 			rBuff.commitWrite(bytes);
@@ -340,9 +340,18 @@ void EmuAudio::setStereo(bool on)
 	stop();
 }
 
-void EmuAudio::setSpeedMultiplier(uint8_t speed)
+void EmuAudio::setSpeedMultiplier(double speed)
 {
-	speedMultiplier = speed ? speed : 1;
+	assumeExpr(speed > 0.);
+	speedMultiplier = speed;
+	if(speedMultiplier > 1.)
+	{
+		volume = requestedVolume * .5f;
+	}
+	else
+	{
+		volume = requestedVolume;
+	}
 }
 
 void EmuAudio::setAddSoundBuffersOnUnderrun(bool on)
@@ -350,16 +359,16 @@ void EmuAudio::setAddSoundBuffersOnUnderrun(bool on)
 	addSoundBuffersOnUnderrun = on;
 }
 
-void EmuAudio::setVolume(uint8_t vol)
+void EmuAudio::setVolume(int8_t vol)
 {
 	if(vol == 100)
 	{
-		volume = 1.f;
+		requestedVolume = volume = 1.f;
 	}
 	else
 	{
 		assumeExpr(vol < 100);
-		volume = vol / 100.f;
+		requestedVolume = volume = vol / 100.f;
 	}
 }
 

@@ -35,7 +35,7 @@ public:
 	void setOnPushLeftBtn(OnPushDelegate del);
 	void setOnPushRightBtn(OnPushDelegate del);
 	void setOnPushMiddleBtn(OnPushDelegate del);
-	void setTitle(IG::utf16String title) { text.setString(std::move(title)); }
+	void setTitle(UTF16Convertible auto &&title) { text.resetString(IG_forward(title)); }
 	void prepareDraw() override;
 	void place() override;
 	bool inputEvent(const Input::Event &) override;
@@ -44,6 +44,7 @@ public:
 	virtual void showRightBtn(bool show) = 0;
 	Gfx::GlyphTextureSet *titleFace();
 	bool hasButtons() const;
+	Gfx::VertexColor separatorColor() const;
 
 protected:
 	struct Control
@@ -67,7 +68,7 @@ public:
 	BasicNavView(ViewAttachParams attach, Gfx::GlyphTextureSet *face, Gfx::TextureSpan leftRes, Gfx::TextureSpan rightRes);
 	void setBackImage(Gfx::TextureSpan img);
 	void setBackgroundGradient(std::span<const Gfx::LGradientStopDesc> gradStops);
-	void draw(Gfx::RendererCommands &cmds) override;
+	void draw(Gfx::RendererCommands &__restrict__) override;
 	void place() override;
 	void showLeftBtn(bool show) override;
 	void showRightBtn(bool show) override;
@@ -78,6 +79,7 @@ protected:
 	std::unique_ptr<Gfx::LGradientStopDesc[]> gradientStops{};
 	Gfx::Sprite leftSpr{}, rightSpr{};
 	Gfx::LGradient bg{};
+	Gfx::GeomRect topBg{};
 	bool centerTitle = true;
 	bool rotateLeftBtn{};
 };

@@ -17,8 +17,9 @@
 
 #include <imagine/gui/AlertView.hh>
 #include <imagine/gui/ViewManager.hh>
-#include <imagine/gfx/GeomRect.hh>
+#include <imagine/gfx/GeomQuad.hh>
 #include <imagine/gfx/RendererCommands.hh>
+#include <imagine/gfx/BasicEffect.hh>
 #include <imagine/input/Input.hh>
 #include <imagine/logger/logger.h>
 #include <imagine/util/math/int.hh>
@@ -26,15 +27,7 @@
 namespace IG
 {
 
-BaseAlertView::BaseAlertView(ViewAttachParams attach, IG::utf16String label, TableView::ItemsDelegate items, TableView::ItemDelegate item):
-	View{attach},
-	text{std::move(label), &attach.viewManager().defaultFace()},
-	menu
-	{
-		attach,
-		items,
-		item
-	}
+void BaseAlertView::init()
 {
 	menu.setAlign(C2DO);
 	menu.setScrollableIfNeeded(true);
@@ -68,8 +61,7 @@ void BaseAlertView::place()
 {
 	using namespace IG::Gfx;
 	int xSize = viewRect().xSize() * .8;
-	text.setMaxLineSize(projP.unprojectXSize(xSize) * 0.95f);
-	text.compile(renderer(), projP);
+	text.compile(renderer(), projP, {.maxLineSize = projP.unprojectXSize(xSize) * 0.95f});
 
 	int menuYSize = menu.cells() * text.face()->nominalHeight()*2;
 	int labelYSize = IG::makeEvenRoundedUp((int)projP.projectYSize(text.fullHeight()));
@@ -102,18 +94,19 @@ void BaseAlertView::prepareDraw()
 	menu.prepareDraw();
 }
 
-void BaseAlertView::draw(Gfx::RendererCommands &cmds)
+void BaseAlertView::draw(Gfx::RendererCommands &__restrict__ cmds)
 {
 	using namespace IG::Gfx;
-	cmds.setBlendMode(BLEND_MODE_ALPHA);
-	cmds.setCommonProgram(CommonProgram::NO_TEX, projP.makeTranslate());
+	auto &basicEffect = cmds.basicEffect();
+	cmds.set(BlendMode::ALPHA);
+	basicEffect.disableTexture(cmds);
 	cmds.setColor(.4, .4, .4, .8);
 	GeomRect::draw(cmds, labelFrame);
 	cmds.setColor(.1, .1, .1, .6);
 	GeomRect::draw(cmds, menu.viewRect(), projP);
 	cmds.set(ColorName::WHITE);
-	cmds.setCommonProgram(CommonProgram::TEX_ALPHA);
-	text.draw(cmds, labelFrame.xPos(C2DO), projP.alignYToPixel(labelFrame.yPos(C2DO)), C2DO, projP);
+	basicEffect.enableAlphaTexture(cmds);
+	text.draw(cmds, {labelFrame.xPos(C2DO), projP.alignYToPixel(labelFrame.yPos(C2DO))}, C2DO, projP);
 	//setClipRect(1);
 	//setClipRectBounds(menu.viewRect());
 	menu.draw(cmds);
@@ -124,39 +117,6 @@ void BaseAlertView::onAddedToController(ViewController *c, const Input::Event &e
 {
 	menu.setController(c, e);
 }
-
-void BaseAlertView::setLabel(IG::utf16String label)
-{
-	text.setString(std::move(label));
-}
-
-AlertView::AlertView(ViewAttachParams attach, IG::utf16String label, size_t menuItems):
-	BaseAlertView{attach, std::move(label), item},
-	item{menuItems}
-{}
-
-void AlertView::setItem(size_t idx, IG::utf16String name, TextMenuItem::SelectDelegate del)
-{
-	assert(idx < item.size());
-	item[idx].setName(std::move(name), &manager().defaultFace());
-	item[idx].setOnSelect(del);
-}
-
-YesNoAlertView::YesNoAlertView(ViewAttachParams attach, IG::utf16String label,
-	IG::utf16String yesStr, IG::utf16String noStr,
-	TextMenuItem::SelectDelegate onYes, TextMenuItem::SelectDelegate onNo):
-	BaseAlertView(attach, std::move(label),
-		[](const TableView &) -> size_t
-		{
-			return 2;
-		},
-		[this](const TableView &, size_t idx) -> MenuItem&
-		{
-			return idx == 0 ? yes : no;
-		}),
-	yes{yesStr.size() ? std::move(yesStr) : u"确定", &defaultFace(), onYes ? onYes : makeDefaultSelectDelegate()},
-	no{noStr.size() ? std::move(noStr) : u"取消", &defaultFace(), onNo ? onNo : makeDefaultSelectDelegate()}
-{}
 
 void YesNoAlertView::setOnYes(TextMenuItem::SelectDelegate del)
 {

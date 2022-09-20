@@ -17,9 +17,9 @@
 
 #include <imagine/config/defs.hh>
 #include <imagine/gfx/defs.hh>
-#include <imagine/gfx/GeomRect.hh>
 #include <imagine/gfx/GeomQuad.hh>
-#include <imagine/gfx/Vertex.hh>
+#include <imagine/gfx/Texture.hh>
+#include <imagine/gfx/BasicEffect.hh>
 
 namespace IG::Gfx
 {
@@ -33,31 +33,55 @@ class SpriteBase : public BaseRect
 {
 public:
 	constexpr SpriteBase():
-		BaseRect{{}, FRect{{}, {1., 1.}}}
-	{}
+		BaseRect{{}, FRect{{}, {1., 1.}}} {}
 
 	constexpr SpriteBase(GCRect pos, TextureSpan span = {}):
 		BaseRect{pos, span.uvBounds()},
-		img{span.texture()}
-	{}
+		texBinding{span.texture() ? span.texture()->binding() : TextureBinding{}} {}
 
-	void setImg(const Texture *img);
-	void setImg(TextureSpan span);
-	void setUVBounds(FRect uvBounds);
-	void draw(RendererCommands &r) const;
-	bool compileDefaultProgram(uint32_t mode);
-	bool compileDefaultProgramOneShot(uint32_t mode);
-	void setCommonProgram(RendererCommands &cmds, uint32_t mode, const Mat4 *modelMat = {}) const;
-	void setCommonProgram(RendererCommands &cmds, uint32_t mode, Mat4 modelMat) const;
-	const Texture *image() const;
+	constexpr void set(const Texture *tex)
+	{
+		if(tex)
+			texBinding = tex->binding();
+		else
+			texBinding = {};
+	}
+
+	constexpr void set(TextureSpan span, Rotation r = Rotation::UP)
+	{
+		set(span.texture());
+		setUVBounds(span.uvBounds(), r);
+	}
+
+	constexpr void setUVBounds(FRect uvBounds, Rotation r = Rotation::UP)
+	{
+		BaseRect::setUV(uvBounds, r);
+	}
+
+	void draw(RendererCommands &cmds) const
+	{
+		if(!texBinding.name) [[unlikely]]
+			return;
+		cmds.set(texBinding);
+		BaseRect::draw(cmds);
+	}
+
+	void draw(RendererCommands &cmds, BasicEffect &prog) const
+	{
+		if(!texBinding.name) [[unlikely]]
+			return;
+		prog.enableTexture(cmds, texBinding);
+		BaseRect::draw(cmds);
+	}
+
+	constexpr TextureBinding textureBinding() const { return texBinding; }
+	constexpr bool hasTexture() const { return texBinding.name; }
 
 private:
-	const Texture *img{};
+	TextureBinding texBinding{};
 };
 
 using Sprite = SpriteBase<TexRect>;
 using ShadedSprite = SpriteBase<ColTexQuad>;
-
-std::array<TexVertex, 4> makeTexVertArray(GCRect pos, TextureSpan img);
 
 }

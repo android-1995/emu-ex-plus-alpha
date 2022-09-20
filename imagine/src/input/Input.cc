@@ -19,7 +19,7 @@
 #include <imagine/base/Timer.hh>
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/base/Application.hh>
-#include <imagine/util/algorithm.h>
+#include <imagine/util/ranges.hh>
 #include <imagine/logger/logger.h>
 #include <optional>
 
@@ -308,7 +308,7 @@ void BaseApplication::removeInputDevice(InputDeviceContainer::iterator it, bool 
 uint8_t BaseApplication::nextInputDeviceEnumId(std::string_view name) const
 {
 	static constexpr uint8_t maxEnum = 64;
-	iterateTimes(maxEnum, i)
+	for(auto i : iotaCount(maxEnum))
 	{
 		auto it = std::find_if(inputDev.begin(), inputDev.end(),
 			[&](auto &devPtr){ return devPtr->name() == name && devPtr->enumId() == i; });
@@ -378,6 +378,8 @@ uint8_t BaseApplication::keyEventFlags() const
 {
 	return swappedConfirmKeys();
 }
+
+[[gnu::weak]] void ApplicationContext::enumInputDevices() const {}
 
 bool ApplicationContext::keyInputIsPresent() const
 {

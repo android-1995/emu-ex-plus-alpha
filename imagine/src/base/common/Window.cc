@@ -22,11 +22,12 @@
 #include <imagine/util/algorithm.h>
 #include <imagine/util/variant.hh>
 #include <imagine/logger/logger.h>
+#include <limits>
 
 namespace IG
 {
 
-static constexpr uint8_t MAX_DRAW_EVENT_PRIORITY = 0xFF;
+constexpr int8_t MAX_DRAW_EVENT_PRIORITY = std::numeric_limits<int8_t>::max();
 
 static auto defaultOnSurfaceChange = [](Window &, Window::SurfaceChange){};
 static auto defaultOnDraw = [](Window &, Window::DrawParams){ return true; };
@@ -59,14 +60,13 @@ BaseWindow::BaseWindow(ApplicationContext ctx, WindowConfig config):
 			}
 			return true;
 		}, ctx, WINDOW_ON_EXIT_PRIORITY},
-	onSurfaceChange{config.onSurfaceChange() ? config.onSurfaceChange() : defaultOnSurfaceChange},
-	onDraw{config.onDraw() ? config.onDraw() : defaultOnDraw},
-	onInputEvent{config.onInputEvent() ? config.onInputEvent() : defaultOnInputEvent},
-	onFocusChange{config.onFocusChange() ? config.onFocusChange() : defaultOnFocusChange},
-	onDragDrop{config.onDragDrop() ? config.onDragDrop() : defaultOnDragDrop},
-	onDismissRequest{config.onDismissRequest() ? config.onDismissRequest() : defaultOnDismissRequest},
-	onDismiss{config.onDismiss() ? config.onDismiss() : defaultOnDismiss},
-	validSoftOrientations_{ctx.defaultSystemOrientations()}
+	onSurfaceChange{config.onSurfaceChange ? config.onSurfaceChange : defaultOnSurfaceChange},
+	onDraw{config.onDraw ? config.onDraw : defaultOnDraw},
+	onInputEvent{config.onInputEvent ? config.onInputEvent : defaultOnInputEvent},
+	onFocusChange{config.onFocusChange ? config.onFocusChange : defaultOnFocusChange},
+	onDragDrop{config.onDragDrop ? config.onDragDrop : defaultOnDragDrop},
+	onDismissRequest{config.onDismissRequest ? config.onDismissRequest : defaultOnDismissRequest},
+	onDismiss{config.onDismiss ? config.onDismiss : defaultOnDismiss}
 {
 	attachDrawEvent();
 }
@@ -192,6 +192,12 @@ bool Window::removeOnFrame(OnFrameDelegate del, FrameTimeSource clock)
 	}
 }
 
+bool Window::moveOnFrame(Window &srcWin, OnFrameDelegate del, FrameTimeSource src)
+{
+	srcWin.removeOnFrame(del, src);
+	return addOnFrame(del, src);
+}
+
 void Window::resetAppData()
 {
 	appDataPtr.reset();
@@ -239,7 +245,7 @@ bool Window::needsDraw() const
 	return drawNeeded;
 }
 
-void Window::postDraw(uint8_t priority)
+void Window::postDraw(int8_t priority)
 {
 	if(priority < drawEventPriority())
 	{
@@ -267,7 +273,7 @@ void Window::postFrameReady()
 		drawEvent.notify();
 }
 
-void Window::postDrawToMainThread(uint8_t priority)
+void Window::postDrawToMainThread(int8_t priority)
 {
 	appContext().runOnMainThread(
 		[this, priority](ApplicationContext)
@@ -281,12 +287,12 @@ void Window::postFrameReadyToMainThread()
 	postFrameReady();
 }
 
-uint8_t Window::setDrawEventPriority(uint8_t priority)
+int8_t Window::setDrawEventPriority(int8_t priority)
 {
 	return std::exchange(drawEventPriority_, priority);
 }
 
-uint8_t Window::drawEventPriority() const
+int8_t Window::drawEventPriority() const
 {
 	return drawEventPriority_;
 }
@@ -294,11 +300,6 @@ uint8_t Window::drawEventPriority() const
 void Window::drawNow(bool needsSync)
 {
 	draw(needsSync);
-}
-
-void Window::setNeedsCustomViewportResize(bool needsResize)
-{
-	surfaceChangeFlags = setOrClearBits(surfaceChangeFlags, SurfaceChange::CUSTOM_VIEWPORT_RESIZED, needsResize);
 }
 
 bool Window::dispatchInputEvent(Input::Event event)
@@ -310,7 +311,7 @@ bool Window::dispatchInputEvent(Input::Event event)
 			return handled || (e.isAbsolute() && contentBounds().overlaps(e.pos()));
 		},
 		[&](const Input::KeyEvent &e) { return handled; }
-	}, event.asVariant());
+	}, event);
 }
 
 bool Window::dispatchRepeatableKeyInputEvent(Input::KeyEvent event)
@@ -352,6 +353,12 @@ void Window::dispatchSurfaceDestroyed()
 	onSurfaceChange.callCopy(*this, SurfaceChange::Action::DESTROYED);
 }
 
+void Window::signalSurfaceChanged(uint8_t flags)
+{
+	surfaceChangeFlags |= flags;
+	postDraw();
+}
+
 void Window::dispatchOnDraw(bool needsSync)
 {
 	if(!needsDraw() || drawPhase == DrawPhase::DRAW)
@@ -379,11 +386,11 @@ void Window::dispatchOnFrame()
 void Window::draw(bool needsSync)
 {
 	DrawParams params;
-	params.needsSync_ = needsSync;
+	params.needsSync = needsSync;
 	if(surfaceChangeFlags) [[unlikely]]
 	{
 		dispatchSurfaceChanged();
-		params.wasResized_ = true;
+		params.wasResized = true;
 	}
 	drawNeeded = false;
 	drawPhase = DrawPhase::DRAW;
@@ -395,7 +402,7 @@ void Window::draw(bool needsSync)
 
 bool Window::updateSize(IG::Point2D<int> surfaceSize)
 {
-	if(orientationIsSideways(softOrientation_))
+	if(isSideways(softOrientation_))
 		std::swap(surfaceSize.x, surfaceSize.y);
 	auto oldSize = std::exchange(winSizePixels, surfaceSize);
 	if(oldSize == winSizePixels)
@@ -418,7 +425,7 @@ bool Window::updateSize(IG::Point2D<int> surfaceSize)
 bool Window::updatePhysicalSize(IG::Point2D<float> surfaceSizeMM, IG::Point2D<float> surfaceSizeSMM)
 {
 	bool changed = false;
-	if(orientationIsSideways(softOrientation_))
+	if(isSideways(softOrientation_))
 		std::swap(surfaceSizeMM.x, surfaceSizeMM.y);
 	auto oldSizeMM = std::exchange(winSizeMM, surfaceSizeMM);
 	if(oldSizeMM != winSizeMM)
@@ -428,14 +435,14 @@ bool Window::updatePhysicalSize(IG::Point2D<float> surfaceSizeMM, IG::Point2D<fl
 	if constexpr(Config::envIsAndroid)
 	{
 		assert(surfaceSizeSMM.x && surfaceSizeSMM.y);
-		if(orientationIsSideways(softOrientation_))
+		if(isSideways(softOrientation_))
 			std::swap(surfaceSizeSMM.x, surfaceSizeSMM.y);
 		auto oldSizeSMM = std::exchange(winSizeSMM, surfaceSizeSMM);
 		if(oldSizeSMM != sizeScaledMM())
 			changed = true;
 		smmToPixelScaler = pixelSizeFloat / sizeScaledMM();
 	}
-	if(softOrientation_ == VIEW_ROTATE_0)
+	if(softOrientation_ == Rotation::UP)
 	{
 		logMsg("updated window size:%dx%d (%.2fx%.2fmm, scaled %.2fx%.2fmm)",
 			width(), height(), sizeMM().x, sizeMM().y, sizeScaledMM().x, sizeScaledMM().y);
@@ -463,37 +470,25 @@ bool Window::updatePhysicalSizeWithCurrentSize()
 }
 
 #ifdef CONFIG_GFX_SOFT_ORIENTATION
-bool Window::setValidOrientations(Orientation oMask)
+bool Window::setValidOrientations(OrientationMask oMask)
 {
-	oMask = appContext().validateOrientationMask(oMask);
-	validSoftOrientations_ = oMask;
-	if(validSoftOrientations_ & setSoftOrientation)
-		return requestOrientationChange(setSoftOrientation);
-	if(!(validSoftOrientations_ & softOrientation_))
-	{
-		if(validSoftOrientations_ & VIEW_ROTATE_0)
-			return requestOrientationChange(VIEW_ROTATE_0);
-		else if(validSoftOrientations_ & VIEW_ROTATE_90)
-			return requestOrientationChange(VIEW_ROTATE_90);
-		else if(validSoftOrientations_ & VIEW_ROTATE_180)
-			return requestOrientationChange(VIEW_ROTATE_180);
-		else if(validSoftOrientations_ & VIEW_ROTATE_270)
-			return requestOrientationChange(VIEW_ROTATE_270);
-		else
-		{
-			bug_unreachable("bad orientation mask: 0x%X", oMask);
-		}
-	}
-	return false;
+	if(to_underlying(oMask & OrientationMask::PORTRAIT))
+		return requestOrientationChange(Rotation::UP);
+	else if(to_underlying(oMask & OrientationMask::LANDSCAPE_RIGHT))
+		return requestOrientationChange(Rotation::RIGHT);
+	else if(to_underlying(oMask & OrientationMask::PORTRAIT_UPSIDE_DOWN))
+		return requestOrientationChange(Rotation::DOWN);
+	else if(to_underlying(oMask & OrientationMask::LANDSCAPE_LEFT))
+		return requestOrientationChange(Rotation::LEFT);
+	else
+		return requestOrientationChange(Rotation::UP);
 }
 
-bool Window::requestOrientationChange(Orientation o)
+bool Window::requestOrientationChange(Rotation o)
 {
-	assert(o == VIEW_ROTATE_0 || o == VIEW_ROTATE_90 || o == VIEW_ROTATE_180 || o == VIEW_ROTATE_270);
-	setSoftOrientation = o;
-	if((validSoftOrientations_ & o) && softOrientation_ != o)
+	if(softOrientation_ != o)
 	{
-		logMsg("setting orientation %s", orientationToStr(o));
+		logMsg("setting orientation %s", wise_enum::to_string(o).data());
 		int savedRealWidth = realWidth();
 		int savedRealHeight = realHeight();
 		softOrientation_ = o;
@@ -507,14 +502,9 @@ bool Window::requestOrientationChange(Orientation o)
 }
 #endif
 
-Orientation Window::softOrientation() const
+Rotation Window::softOrientation() const
 {
 	return softOrientation_;
-}
-
-Orientation Window::validSoftOrientations() const
-{
-	return validSoftOrientations_;
 }
 
 void Window::dismiss()
@@ -524,9 +514,9 @@ void Window::dismiss()
 	application().moveOutWindow(*this);
 }
 
-int Window::realWidth() const { return orientationIsSideways(softOrientation()) ? height() : width(); }
+int Window::realWidth() const { return isSideways(softOrientation()) ? height() : width(); }
 
-int Window::realHeight() const { return orientationIsSideways(softOrientation()) ? width() : height(); }
+int Window::realHeight() const { return isSideways(softOrientation()) ? width() : height(); }
 
 int Window::width() const { return winSizePixels.x; }
 
@@ -601,9 +591,9 @@ IG::WindowRect Window::bounds() const
 IG::Point2D<int> Window::transformInputPos(IG::Point2D<int> srcPos) const
 {
 	enum class PointerMode {NORMAL, INVERT};
-	const auto xPointerTransform = softOrientation() == VIEW_ROTATE_0 || softOrientation() == VIEW_ROTATE_90 ? PointerMode::NORMAL : PointerMode::INVERT;
-	const auto yPointerTransform = softOrientation() == VIEW_ROTATE_0 || softOrientation() == VIEW_ROTATE_270 ? PointerMode::NORMAL : PointerMode::INVERT;
-	const auto pointerAxis = softOrientation() == VIEW_ROTATE_0 || softOrientation() == VIEW_ROTATE_180 ? PointerMode::NORMAL : PointerMode::INVERT;
+	const auto xPointerTransform = softOrientation() == Rotation::UP || softOrientation() == Rotation::RIGHT ? PointerMode::NORMAL : PointerMode::INVERT;
+	const auto yPointerTransform = softOrientation() == Rotation::UP || softOrientation() == Rotation::LEFT ? PointerMode::NORMAL : PointerMode::INVERT;
+	const auto pointerAxis = softOrientation() == Rotation::UP || softOrientation() == Rotation::DOWN ? PointerMode::NORMAL : PointerMode::INVERT;
 
 	IG::Point2D<int> pos;
 	// x,y axis is swapped first
@@ -616,6 +606,16 @@ IG::Point2D<int> Window::transformInputPos(IG::Point2D<int> srcPos) const
 	if(yPointerTransform == PointerMode::INVERT)
 		pos.y = height() - pos.y;
 	return pos;
+}
+
+Viewport Window::viewport(WindowRect rect) const
+{
+	return {bounds(), rect, softOrientation()};
+}
+
+Viewport Window::viewport() const
+{
+	return {bounds(), softOrientation()};
 }
 
 Screen &WindowConfig::screen(ApplicationContext ctx) const

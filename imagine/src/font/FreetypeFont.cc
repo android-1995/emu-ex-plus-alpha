@@ -18,6 +18,7 @@
 #include <imagine/pixmap/Pixmap.hh>
 #include <imagine/util/ScopeGuard.hh>
 #include <imagine/util/algorithm.h>
+#include <imagine/io/IO.hh>
 #include <imagine/io/FileIO.hh>
 #include <imagine/fs/FSDefs.hh>
 #include <imagine/base/ApplicationContext.hh>
@@ -187,9 +188,9 @@ static FreetypeFont::GlyphRenderData makeGlyphRenderDataWithFace(FT_Library libr
 		assert(bitmap.num_grays == 2); // only handle 2 gray levels for now
 		//logMsg("new bitmap has %d gray levels", convBitmap.num_grays);
 		// scale 1-bit values to 8-bit range
-		iterateTimes(bitmap.rows, y)
+		for(auto y : iotaCount(bitmap.rows))
 		{
-			iterateTimes(bitmap.width, x)
+			for(auto x : iotaCount(bitmap.width))
 			{
 				if(bitmap.buffer[(y * bitmap.pitch) + x] != 0)
 					bitmap.buffer[(y * bitmap.pitch) + x] = 0xFF;
@@ -216,14 +217,14 @@ static FreetypeFont::GlyphRenderData makeGlyphRenderDataWithFace(FT_Library libr
 	return {metrics, bitmap};
 }
 
-FreetypeFaceData::FreetypeFaceData(FT_Library library, GenericIO file):
+FreetypeFaceData::FreetypeFaceData(FT_Library library, IO file):
 	streamRecPtr{std::make_unique<FT_StreamRec>()}
 {
 	if(!file)
 		return;
 	streamRecPtr->size = file.size();
 	streamRecPtr->pos = file.tell();
-	streamRecPtr->descriptor.pointer = file.release();
+	streamRecPtr->descriptor.pointer = std::make_unique<IO>(std::move(file)).release();
 	streamRecPtr->read = [](FT_Stream stream, unsigned long offset,
 		unsigned char* buffer, unsigned long count) -> unsigned long
 		{
@@ -255,7 +256,7 @@ FreetypeFaceData::FreetypeFaceData(FT_Library library, GenericIO file):
 	}
 }
 
-FreetypeFont::FreetypeFont(FT_Library library, GenericIO io):
+FreetypeFont::FreetypeFont(FT_Library library, IO io):
 	library{library}
 {
 	loadIntoNextSlot(std::move(io));
@@ -264,10 +265,10 @@ FreetypeFont::FreetypeFont(FT_Library library, GenericIO io):
 FreetypeFont::FreetypeFont(FT_Library library, const char *name):
 	library{library}
 {
-	loadIntoNextSlot(FileIO{name, IO::AccessHint::ALL});
+	loadIntoNextSlot(FileIO{name, IOAccessHint::ALL});
 }
 
-Font FontManager::makeFromFile(GenericIO io) const
+Font FontManager::makeFromFile(IO io) const
 {
 	return {library.get(), std::move(io)};
 }
@@ -299,7 +300,7 @@ Font FontManager::makeBoldSystem() const
 
 Font FontManager::makeFromAsset(const char *name, const char *appName) const
 {
-	return {library.get(), ctx.openAsset(name, IO::AccessHint::ALL, 0, appName)};
+	return {library.get(), ctx.openAsset(name, IOAccessHint::ALL, {}, appName)};
 }
 
 FreetypeFaceData::FreetypeFaceData(FreetypeFaceData &&o) noexcept
@@ -337,7 +338,7 @@ void FreetypeFaceData::deinit()
 	}
 }
 
-std::errc FreetypeFont::loadIntoNextSlot(GenericIO io)
+std::errc FreetypeFont::loadIntoNextSlot(IO io)
 {
 	if(f.isFull())
 		return std::errc::no_space_on_device;
@@ -357,8 +358,7 @@ std::errc FreetypeFont::loadIntoNextSlot(IG::CStringView name)
 		return std::errc::no_space_on_device;
 	try
 	{
-		FileIO io{name, IO::AccessHint::ALL};
-		if(auto ec = loadIntoNextSlot(io);
+		if(auto ec = loadIntoNextSlot(FileIO{name, IOAccessHint::ALL});
 			(bool)ec)
 		{
 			return ec;
@@ -374,7 +374,7 @@ std::errc FreetypeFont::loadIntoNextSlot(IG::CStringView name)
 
 FreetypeFont::GlyphRenderData FreetypeFont::makeGlyphRenderData(int idx, FreetypeFontSize &fontSize, bool keepPixData, std::errc &ec)
 {
-	iterateTimes(f.size(), i)
+	for(auto i : iotaCount(f.size()))
 	{
 		auto &font = f[i];
 		if(!font.face)
@@ -390,7 +390,7 @@ FreetypeFont::GlyphRenderData FreetypeFont::makeGlyphRenderData(int idx, Freetyp
 		auto data = makeGlyphRenderDataWithFace(library, font.face, idx, keepPixData, ec);
 		if((bool)ec)
 		{
-			logMsg("glyph 0x%X not found in slot %d", idx, i);
+			logMsg("glyph 0x%X not found in slot %zu", idx, i);
 			continue;
 		}
 		return data;
@@ -459,7 +459,7 @@ FontSize Font::makeSize(FontSettings settings, std::errc &ec)
 {
 	FontSize size{settings};
 	// create FT_Size objects for slots in use
-	iterateTimes(f.size(), i)
+	for(auto i : iotaCount(f.size()))
 	{
 		if(!f[i].face)
 		{
@@ -507,12 +507,12 @@ FontSettings FreetypeFontSize::fontSettings() const
 
 void FreetypeFontSize::deinit()
 {
-	iterateTimes(std::size(ftSize), i)
+	for(auto &s : ftSize)
 	{
-		if(ftSize[i])
+		if(s)
 		{
 			//logMsg("freeing size %p", ftSize[i]);
-			auto error = FT_Done_Size(ftSize[i]);
+			auto error = FT_Done_Size(s);
 			assert(!error);
 		}
 	}
@@ -545,13 +545,13 @@ void FreetypeGlyphImage::deinit()
 	}
 }
 
-IG::Pixmap IG::GlyphImage::pixmap()
+PixmapView IG::GlyphImage::pixmap()
 {
 	return
 		{
 			{{(int)bitmap.width, (int)bitmap.rows}, IG::PIXEL_FMT_A8},
 			bitmap.buffer,
-			{bitmap.pitch, IG::Pixmap::Units::BYTE}
+			{bitmap.pitch, PixmapView::Units::BYTE}
 		};
 }
 

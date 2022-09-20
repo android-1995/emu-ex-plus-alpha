@@ -37,7 +37,7 @@ void EmuView::prepareDraw()
 	#endif
 }
 
-void EmuView::draw(Gfx::RendererCommands &cmds)
+void EmuView::draw(Gfx::RendererCommands &__restrict__ cmds)
 {
 	using namespace IG::Gfx;
 	if(layer && system().isStarted())
@@ -63,7 +63,7 @@ void EmuView::place()
 {
 	if(layer)
 	{
-		layer->place(viewRect(), projP, inputView, system());
+		layer->place(viewRect(), displayRect(), projP, inputView, system());
 	}
 	#ifdef CONFIG_EMUFRAMEWORK_AUDIO_STATS
 	if(audioStatsText.compile(renderer(), projP))
@@ -85,7 +85,7 @@ void EmuView::setLayoutInputView(EmuInputView *view)
 	inputView = view;
 }
 
-void EmuView::updateAudioStats(unsigned underruns, unsigned overruns, unsigned callbacks, double avgCallbackFrames, unsigned frames)
+void EmuView::updateAudioStats(int underruns, int overruns, int callbacks, double avgCallbackFrames, int frames)
 {
 	#ifdef CONFIG_EMUFRAMEWORK_AUDIO_STATS
 	audioStatsText.setString(fmt::format("Underruns:{}\nOverruns:{}\nCallbacks per second:{}\nFrames per callback:{:.2f}\nTotal frames:{}",

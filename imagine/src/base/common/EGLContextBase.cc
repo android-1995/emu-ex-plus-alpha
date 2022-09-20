@@ -17,6 +17,7 @@
 #include <imagine/base/GLContext.hh>
 #include <imagine/base/EGLContextBase.hh>
 #include <imagine/base/Window.hh>
+#include <imagine/base/Error.hh>
 #include <imagine/thread/Thread.hh>
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
@@ -51,7 +52,7 @@ using EGLContextAttrList = StaticArrayList<int, 16>;
 
 static EGLAttrList glConfigAttrsToEGLAttrs(int renderableType, GLBufferConfigAttributes attr)
 {
-	EGLAttrList list{};
+	EGLAttrList list;
 	// don't accept slow configs
 	list.push_back(EGL_CONFIG_CAVEAT);
 	list.push_back(EGL_NONE);
@@ -89,36 +90,36 @@ static EGLAttrList glConfigAttrsToEGLAttrs(int renderableType, GLBufferConfigAtt
 
 static EGLContextAttrList glContextAttrsToEGLAttrs(GLContextAttributes attr)
 {
-	EGLContextAttrList list{};
+	EGLContextAttrList list;
 
-	if(attr.openGLESAPI())
+	if(attr.glesApi)
 	{
 		list.push_back(EGL_CONTEXT_CLIENT_VERSION);
-		list.push_back(attr.majorVersion());
+		list.push_back(attr.majorVersion);
 		//logDMsg("using OpenGL ES client version:%d", attr.majorVersion());
 	}
 	else
 	{
 		list.push_back(EGL_CONTEXT_MAJOR_VERSION_KHR);
-		list.push_back(attr.majorVersion());
+		list.push_back(attr.majorVersion);
 		list.push_back(EGL_CONTEXT_MINOR_VERSION_KHR);
-		list.push_back(attr.minorVersion());
+		list.push_back(attr.minorVersion);
 
-		if(attr.majorVersion() > 3
-			|| (attr.majorVersion() == 3 && attr.minorVersion() >= 2))
+		if(attr.majorVersion > 3
+			|| (attr.majorVersion == 3 && attr.minorVersion >= 2))
 		{
 			list.push_back(EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR);
 			list.push_back(EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT_KHR);
 		}
 	}
 
-	if(HAS_DEBUG_CONTEXT && attr.debug())
+	if(HAS_DEBUG_CONTEXT && attr.debug)
 	{
 		list.push_back(EGL_CONTEXT_FLAGS_KHR);
 		list.push_back(EGL_CONTEXT_OPENGL_DEBUG_BIT_KHR);
 	}
 
-	if(!attr.debug() && attr.noError())
+	if(!attr.debug && attr.noError)
 	{
 		list.push_back(EGL_CONTEXT_OPENGL_NO_ERROR_KHR);
 		list.push_back(EGL_TRUE);
@@ -157,7 +158,7 @@ static EGLSurface createWindowSurface(EGLDisplay display, EGLConfig config, Nati
 	return eglCreateWindowSurface(display, config, (EGLNativeWindowType)nativeWin, surfaceAttr);
 }
 
-EGLDrawable::EGLDrawable(EGLDisplay display, Window &win, EGLConfig config, const EGLint *surfaceAttr, IG::ErrorCode &ec):
+EGLDrawable::EGLDrawable(EGLDisplay display, Window &win, EGLConfig config, const EGLint *surfaceAttr):
 	surface
 	{
 		createWindowSurface(display, config, win.nativeObject(), surfaceAttr),
@@ -168,7 +169,7 @@ EGLDrawable::EGLDrawable(EGLDisplay display, Window &win, EGLConfig config, cons
 	{
 		if(Config::DEBUG_BUILD)
 			logErr("eglCreateWindowSurface returned:%s", GLManager::errorString(eglGetError()));
-		ec = {EINVAL};
+		throw Error{EINVAL};
 	}
 }
 
@@ -193,23 +194,22 @@ GLDisplay GLDrawable::display() const
 // GLContext
 
 EGLContextBase::EGLContextBase(EGLDisplay display, GLContextAttributes attr, EGLConfig config,
-	EGLContext shareContext, bool savePBuffConfig, IG::ErrorCode &ec):
+	EGLContext shareContext, bool savePBuffConfig):
 	context{eglCreateContext(display, config, shareContext, &glContextAttrsToEGLAttrs(attr)[0]), {display}}
 {
 	if(!context)
 	{
-		if(attr.debug())
+		if(attr.debug)
 		{
 			logMsg("retrying without debug bit");
-			attr.setDebug(false);
+			attr.debug = false;
 			context.reset(eglCreateContext(display, config, shareContext, &glContextAttrsToEGLAttrs(attr)[0]));
 		}
 		if(!context)
 		{
 			if(Config::DEBUG_BUILD)
 				logErr("error creating context: 0x%X", (int)eglGetError());
-			ec = {EINVAL};
-			return;
+			throw Error{EINVAL};
 		}
 	}
 	if(savePBuffConfig)
@@ -397,30 +397,30 @@ IG::ErrorCode EGLManager::initDisplay(EGLDisplay display)
 	}
 	int eglVersion = 10 * major + minor;
 	std::string_view extStr{eglQueryString(display, EGL_EXTENSIONS)};
-	supportsSurfaceless = eglVersion >= 15 || IG::stringContains(extStr, "EGL_KHR_surfaceless_context");
-	supportsNoConfig = IG::stringContains(extStr, "EGL_KHR_no_config_context");
-	supportsNoError = IG::stringContains(extStr, "EGL_KHR_create_context_no_error");
-	supportsSrgbColorSpace = eglVersion >= 15 || IG::stringContains(extStr, "EGL_KHR_gl_colorspace");
+	supportsSurfaceless = eglVersion >= 15 || extStr.contains("EGL_KHR_surfaceless_context");
+	supportsNoConfig = extStr.contains("EGL_KHR_no_config_context");
+	supportsNoError = extStr.contains("EGL_KHR_create_context_no_error");
+	supportsSrgbColorSpace = eglVersion >= 15 || extStr.contains("EGL_KHR_gl_colorspace");
 	if constexpr(Config::envIsLinux)
 	{
-		supportsTripleBufferSurfaces = IG::stringContains(extStr, "EGL_NV_triple_buffer");
+		supportsTripleBufferSurfaces = extStr.contains("EGL_NV_triple_buffer");
 	}
 	logFeatures();
 	return {};
 }
 
-GLContext GLManager::makeContext(GLContextAttributes attr, GLBufferConfig config, NativeGLContext shareContext, IG::ErrorCode &ec)
+GLContext GLManager::makeContext(GLContextAttributes attr, GLBufferConfig config, NativeGLContext shareContext)
 {
 	if(hasNoConfigContext())
 		config = EGL_NO_CONFIG_KHR;
 	if(!hasNoErrorContextAttribute())
-		attr.setNoError(false);
+		attr.noError = false;
 	logMsg("making context with version: %d.%d config:0x%llX share context:%p",
-		attr.majorVersion(), attr.minorVersion(), (long long)(EGLConfig)config, shareContext);
+		attr.majorVersion, attr.minorVersion, (long long)(EGLConfig)config, shareContext);
 	// Ignore surfaceless context support when using GL versions below 3.0 due to possible driver issues,
 	// such as on Tegra 3 GPUs
-	bool savePBuffConfig = attr.majorVersion() <= 2 || !supportsSurfaceless;
-	GLContext ctx{display(), attr, config, shareContext, savePBuffConfig, ec};
+	bool savePBuffConfig = attr.majorVersion <= 2 || !supportsSurfaceless;
+	GLContext ctx{display(), attr, config, shareContext, savePBuffConfig};
 	if(!ctx)
 		return {};
 	if(savePBuffConfig)
@@ -486,29 +486,25 @@ static bool supportsColorSpace(GLDisplay dpy, GLBufferConfig conf, GLColorSpace 
 	return false;
 }
 
-GLDrawable GLManager::makeDrawable(Window &win, GLDrawableAttributes attr, IG::ErrorCode &ec) const
+GLDrawable GLManager::makeDrawable(Window &win, GLDrawableAttributes attr) const
 {
 	auto dpy = display();
-	EGLSurfaceAttrList attrList{};
+	EGLSurfaceAttrList attrList;
 	if(Config::envIsLinux && supportsTripleBufferSurfaces)
 	{
 		// request triple-buffering on Nvidia GPUs
 		attrList.push_back(EGL_RENDER_BUFFER);
 		attrList.push_back(EGL_TRIPLE_BUFFER_NV);
 	}
-	bool useSrgbColorSpace = attr.colorSpace() == GLColorSpace::SRGB && hasSrgbColorSpace() &&
-		supportsColorSpace(dpy, attr.bufferConfig(), GLColorSpace::SRGB);
+	bool useSrgbColorSpace = attr.colorSpace == GLColorSpace::SRGB && hasSrgbColorSpace() &&
+		supportsColorSpace(dpy, attr.bufferConfig, GLColorSpace::SRGB);
 	if(useSrgbColorSpace)
 	{
 		attrList.push_back(EGL_GL_COLORSPACE);
 		attrList.push_back(EGL_GL_COLORSPACE_SRGB);
 	}
 	attrList.push_back(EGL_NONE);
-	GLDrawable drawable{dpy, win, attr.bufferConfig(), attrList.data(), ec};
-	if(ec)
-	{
-		return {};
-	}
+	GLDrawable drawable{dpy, win, attr.bufferConfig, attrList.data()};
 	logMsg("made surface:%p %s", (EGLSurface)drawable,
 		useSrgbColorSpace ? "(SRGB color space)" : "");
 	return drawable;

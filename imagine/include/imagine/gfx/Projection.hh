@@ -19,6 +19,7 @@
 #include <imagine/gfx/defs.hh>
 #include <imagine/gfx/ProjectionPlane.hh>
 #include <imagine/gfx/Mat4.hh>
+#include <imagine/base/Viewport.hh>
 
 namespace IG::Gfx
 {
@@ -28,11 +29,9 @@ class Projection
 public:
 	constexpr Projection() = default;
 
-	Projection(Viewport viewport, Mat4 matrix)
-	{
-		mat = matrix;
-		plane_ = ProjectionPlane::makeWithMatrix(viewport, matrix);
-	}
+	Projection(Viewport viewport, Mat4 matrix, float rotationAngle = 0.f):
+		mat{matrix.rollRotate(rotationAngle)},
+		plane_{viewport, matrix} {}
 
 	constexpr Mat4 matrix() const { return mat; };
 	constexpr ProjectionPlane plane() const { return plane_; };

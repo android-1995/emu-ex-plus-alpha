@@ -17,8 +17,7 @@
 #include <imagine/util/string.h>
 #include <imagine/logger/logger.h>
 #include <emuframework/Option.hh>
-#include <emuframework/EmuSystem.hh>
-#include "internal.hh"
+#include "MainSystem.hh"
 #include <mednafen/hash/md5.h>
 #include <mednafen/general.h>
 
@@ -37,25 +36,26 @@ uint8 ReadIBP(unsigned int A) { return 0; }
 namespace Mednafen
 {
 
-MDFNGI *MDFNGameInfo = &EmulatedPCE_Fast;
+MDFNGI *MDFNGameInfo;
 
 uint64 MDFN_GetSettingUI(const char *name)
 {
 	std::string_view nameV{name};
+	auto &sys = static_cast<EmuEx::PceSystem&>(EmuEx::gSystem());
 	if(EMU_MODULE".ocmultiplier" == nameV)
 		return 1;
 	if(EMU_MODULE".cdspeed" == nameV)
-		return 2;
+		return sys.cdSpeed;
 	if(EMU_MODULE".cdpsgvolume" == nameV)
 		return 100;
 	if(EMU_MODULE".cddavolume" == nameV)
-		return 100;
+		return sys.cddaVolume;
 	if(EMU_MODULE".adpcmvolume" == nameV)
-		return 100;
+		return sys.adpcmVolume;
 	if(EMU_MODULE".slstart" == nameV)
-		return 12;
+		return sys.visibleLines.first;
 	if(EMU_MODULE".slend" == nameV)
-		return 235;
+		return sys.visibleLines.last;
 	bug_unreachable("unhandled settingUI %s", name);
 	return 0;
 }
@@ -81,23 +81,22 @@ double MDFN_GetSettingF(const char *name)
 bool MDFN_GetSettingB(const char *name)
 {
 	std::string_view nameV{name};
+	auto &sys = static_cast<EmuEx::PceSystem&>(EmuEx::gSystem());
 	if("cheats" == nameV)
 		return 0;
 	if(EMU_MODULE".arcadecard" == nameV)
-		return EmuEx::optionArcadeCard;
+		return sys.optionArcadeCard;
 	if(EMU_MODULE".forcesgx" == nameV)
 		return 0;
 	if(EMU_MODULE".nospritelimit" == nameV)
-		return 0;
+		return sys.noSpriteLimit;
 	if(EMU_MODULE".forcemono" == nameV)
 		return 0;
 	if(EMU_MODULE".disable_softreset" == nameV)
 		return 0;
 	if(EMU_MODULE".adpcmlp" == nameV)
-		return 0;
+		return sys.adpcmFilter;
 	if(EMU_MODULE".correct_aspect" == nameV)
-		return 1;
-	if("cdrom.lec_eval" == nameV)
 		return 1;
 	if("filesys.untrusted_fip_check" == nameV)
 		return 0;
@@ -113,7 +112,7 @@ std::string MDFN_GetSettingS(const char *name)
 		return {};
 	}
 	bug_unreachable("unhandled settingS %s", name);
-	return 0;
+	return {};
 }
 
 std::string MDFN_MakeFName(MakeFName_Type type, int id1, const char *cd1)
@@ -137,18 +136,19 @@ std::string MDFN_MakeFName(MakeFName_Type type, int id1, const char *cd1)
 		case MDFNMKF_FIRMWARE:
 		{
 			// pce-specific
-			logMsg("system card path:%s", sysCardPath.data());
-			return std::string(sysCardPath);
+			auto &sys = static_cast<EmuEx::PceSystem&>(EmuEx::gSystem());
+			logMsg("system card path:%s", sys.sysCardPath.data());
+			return std::string{sys.sysCardPath};
 		}
 		default:
 			bug_unreachable("type == %d", type);
-			return 0;
+			return {};
 	}
 }
 
 void MDFN_DoSimpleCommand(int cmd)
 {
-	emuSys->DoSimpleCommand(cmd);
+	MDFNGameInfo->DoSimpleCommand(cmd);
 }
 
 }

@@ -28,14 +28,16 @@
 struct _XDisplay;
 union _XEvent;
 
-namespace IG
+namespace IG::FS
 {
-class LinuxApplication;
-class ApplicationContext;
+class PathString;
 }
 
 namespace IG
 {
+
+class LinuxApplication;
+class ApplicationContext;
 
 struct ApplicationInitParams
 {
@@ -59,7 +61,7 @@ public:
 	void endIdleByUserActivity();
 	bool registerInstance(ApplicationInitParams, const char *name);
 	void setAcceptIPC(bool on, const char *name);
-	FS::PathString appPath() const;
+	const FS::PathString &appPath() const;
 	void setAppPath(FS::PathString);
 
 protected:

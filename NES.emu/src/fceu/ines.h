@@ -43,6 +43,7 @@ extern uint8 *VROM;
 extern uint32 VROM_size;
 extern uint32 ROM_size;
 extern uint8 *ExtraNTARAM;
+extern uint8 **VPageR;
 extern int iNesSave(void); //bbit Edited: line added
 extern int iNesSaveAs(const char* name);
 extern char LoadedRomFName[2048]; //bbit Edited: line added
@@ -207,6 +208,7 @@ void Mapper119_Init(CartInfo *);
 void Mapper120_Init(CartInfo *);
 void Mapper121_Init(CartInfo *);
 void Mapper125_Init(CartInfo *);
+void Mapper126_Init(CartInfo *);
 void Mapper134_Init(CartInfo *);
 void Mapper140_Init(CartInfo *);
 void Mapper144_Init(CartInfo *);
@@ -267,6 +269,7 @@ void Mapper213_Init(CartInfo *);
 void Mapper214_Init(CartInfo *);
 void Mapper216_Init(CartInfo *);
 void Mapper217_Init(CartInfo *);
+void Mapper218_Init(CartInfo *);
 void Mapper220_Init(CartInfo *);
 void Mapper222_Init(CartInfo *);
 void Mapper225_Init(CartInfo *);
@@ -295,10 +298,15 @@ void Mapper253_Init(CartInfo *);
 void Mapper254_Init(CartInfo *);
 void Mapper282_Init(CartInfo *);
 void Mapper319_Init(CartInfo *);
+void Mapper370_Init(CartInfo *);
 void Mapper380_Init(CartInfo *);
 void Mapper406_Init(CartInfo *);
+void Mapper411_Init(CartInfo *);
 void Mapper414_Init(CartInfo *);
 void Mapper422_Init(CartInfo *);
+void Mapper452_Init(CartInfo *);
+void Mapper523_Init(CartInfo *);
+void Mapper534_Init(CartInfo *);
 
 typedef struct {
 	const char *name;

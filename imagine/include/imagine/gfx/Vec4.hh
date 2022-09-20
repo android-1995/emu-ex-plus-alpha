@@ -15,24 +15,18 @@
 	You should have received a copy of the GNU General Public License
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <imagine/config/defs.hh>
-
-#ifdef CONFIG_GFX_MATH_GLM
-
-#include <imagine/util/math/GLMVec4.hh>
+#include <imagine/glm/ext/vector_float4.hpp>
 
 namespace IG::Gfx
 {
-using Vec4 = GLMVec4;
-}
 
-#elif defined CONFIG_GFX_MATH_GLKIT
+using Vec4Impl = glm::vec4;
 
-#include <imagine/util/math/GLKitVec4.hh>
-
-namespace IG::Gfx
+class Vec4 : public Vec4Impl
 {
-using Vec4 = GLKitVec4;
-}
+public:
+	using Vec4Impl::Vec4Impl;
+	constexpr Vec4(Vec4Impl v): Vec4Impl{v} {}
+};
 
-#endif
+}

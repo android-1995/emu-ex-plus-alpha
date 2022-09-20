@@ -99,6 +99,7 @@ static uint8  mapperFDS_diskaccess;	// disk needs to be accessed at least once b
 #define fds_disk() (diskdata[InDisk][mapperFDS_blockstart + mapperFDS_diskaddr])
 #define mapperFDS_diskinsert (InDisk != 255)
 
+void setDiskIsAccessing(bool);
 
 #define DC_INC    1
 
@@ -169,6 +170,7 @@ static void FDSInit(void) {
 	mapperFDS_blocklen = 0;
 	mapperFDS_diskaddr = 0;
 	mapperFDS_diskaccess = 0;
+	setDiskIsAccessing(false);
 }
 
 void FCEU_FDSInsert(void)
@@ -224,7 +226,7 @@ void FCEU_FDSSelect(void)
 	FCEU_DispMessage("Disk %d Side %c Selected", 0, SelectDisk >> 1, (SelectDisk & 1) ? 'B' : 'A');
 }
 
-void FCEU_FDSSetDisk(uint8 side)
+void FCEU_FDSSetDisk(uint8 side, EmuEx::NesSystem &sys)
 {
 	if(side >= TotalSides)
 		return;
@@ -232,8 +234,8 @@ void FCEU_FDSSetDisk(uint8 side)
 	if(FCEU_FDSInserted())
 	{
 		FCEU_FDSInsert();
-		for(int i = 0; i < 60; i++)
-			FCEUI_Emulate(nullptr, false, nullptr); // wait 1 second in emu time for disk eject
+		for(int i = 0; i < 120; i++)
+			FCEUI_Emulate(sys, nullptr, false, nullptr); // wait 2 seconds in emu time for disk eject
 	}
 
 	while(SelectDisk != side)
@@ -259,14 +261,23 @@ uint8 FCEU_FDSSides()
 	return TotalSides;
 }
 
-#define IRQ_Repeat  (IRQa & 0x01)
-#define IRQ_Enabled (IRQa & 0x02)
+#define IRQ_Repeat  0x01
+#define IRQ_Enabled 0x02
 
 static void FDSFix(int a) {
-	if ((IRQa & IRQ_Enabled) && IRQCount) {
+	if (IRQa & IRQ_Enabled) {
 		IRQCount -= a;
 		if (IRQCount <= 0) {
 				IRQCount = IRQLatch;
+			/* Puff Puff Golf notes:
+			Game freezes while music playing ingame after inserting Disk Side B.
+			IRQ is usually fired at scanline 169 and 183 for music to work.
+
+			At some point after inserting disk B, an IRQ is fired at scanline 174 which
+			will just freeze game while music plays.
+
+			If you ignore triggering IRQ altogether, game plays but no music
+			*/
 			X6502_IRQBegin(FCEU_IQEXT);
 				if (!(IRQa & IRQ_Repeat)) {
 					IRQa &= ~IRQ_Enabled;
@@ -610,21 +621,30 @@ void FDSSoundReset(void) {
 static DECLFW(FDSWrite) {
 	switch (A) {
 	case 0x4020:
-		X6502_IRQEnd(FCEU_IQEXT);
 		IRQLatch &= 0xFF00;
 		IRQLatch |= V;
 		break;
 	case 0x4021:
-		X6502_IRQEnd(FCEU_IQEXT);
 		IRQLatch &= 0xFF;
 		IRQLatch |= V << 8;
 		break;
 	case 0x4022:
-		X6502_IRQEnd(FCEU_IQEXT);
-		IRQCount = IRQLatch;
-		IRQa = V & 3;
+		if (FDSRegs[3] & 1) {
+			IRQa = V & 0x03;
+			if (IRQa & IRQ_Enabled) {
+				IRQCount = IRQLatch;
+			} else {
+				X6502_IRQEnd(FCEU_IQEXT);
+			}
+		}
 		break;
-	case 0x4023: break;
+	case 0x4023:
+		if (!(V & 0x01)) {
+			IRQa &= ~IRQ_Enabled;
+			X6502_IRQEnd(FCEU_IQEXT);
+			X6502_IRQEnd(FCEU_IQEXT2);
+		}
+		break;
 	case 0x4024:
 		if (mapperFDS_diskinsert && ~mapperFDS_control & 0x04) {
 
@@ -703,6 +723,11 @@ static DECLFW(FDSWrite) {
 				mapperFDS_blocklen = 0;
 				mapperFDS_diskaddr = 0;
 				DiskSeekIRQ = 150;
+				setDiskIsAccessing(false);
+			}
+			else if (V & 0x80)
+			{
+				setDiskIsAccessing(true);
 			}
 			if (V & 0x40) { // turn on motor
 				DiskSeekIRQ = 150;
