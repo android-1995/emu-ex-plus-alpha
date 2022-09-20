@@ -246,7 +246,7 @@ void EmuSystem::onStop()
 void EmuSystem::setCheatListAiWu(std::list<std::string> cheats)
 {
 	if(&MainSystem::setCheatListAiWu != &EmuSystem::setCheatListAiWu)
-		static_cast<MainSystem*>(this)->setCheatListAiWu();
+		static_cast<MainSystem*>(this)->setCheatListAiWu(cheats);
 }
 //endregion
 }
