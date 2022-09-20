@@ -648,9 +648,9 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             }
                     },
                     {
-                            "fastForward", "(I)V",
+                            "fastForward", "(D)V",
                             (void*)
-                            +[](JNIEnv* env, jobject thiz,jint jSpeed)
+                            +[](JNIEnv* env, jobject thiz, jdouble jSpeed)
                             {
                                 IG::gAiWuAppContext().fastForwardAiWu(jSpeed);
                             }

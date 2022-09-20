@@ -197,13 +197,13 @@ void FSPicker::setEmptyPath(std::string_view message)
 	}
 	else
 	{
-		fileTableView().resetName("Select File Location");
+		fileTableView().resetName("选择文件位置");
 	}
 }
 
 void FSPicker::setEmptyPath()
 {
-	setEmptyPath("No folder is set");
+	setEmptyPath("未设置文件夹");
 }
 
 void FSPicker::setPath(IG::CStringView path, FS::RootPathInfo rootInfo, const Input::Event &e)

@@ -250,7 +250,7 @@ public:
     void setSoundEnabledAiWu(bool enabled);
     void showEmulationCallbackAiWu(bool showEmulation);
     void screenshotAiWu(const char *filepath);
-    void fastForwardAiWu(int speed);
+    void fastForwardAiWu(double speed);
     bool saveStateAiWu(const char *filepath);
     bool loadStateAiWu(const char *filepath);
     void setCheatListAiWu(std::list<std::string> cheats);
