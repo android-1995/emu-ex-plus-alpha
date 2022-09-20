@@ -5,6 +5,7 @@
 #include <imagine/base/Sensor.hh>
 #include <imagine/util/enum.hh>
 #include <vbam/gba/GBA.h>
+#include <list>
 
 namespace IG
 {
@@ -97,7 +98,9 @@ public:
 	void closeSystem();
 	bool onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat);
 	void renderFramebuffer(EmuVideo &);
-
+	//region爱吾
+    void setCheatListAiWu(std::list<std::string> cheats);
+    //endregion
 private:
 	void applyGamePatches(uint8_t *rom, int &romSize);
 };

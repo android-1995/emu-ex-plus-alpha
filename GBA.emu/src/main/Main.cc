@@ -238,7 +238,7 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 	view.setBackgroundGradient(navViewGrad);
 }
 //region爱吾
-void EmuSystem::setCheatListAiWu(std::list<std::string> cheats)
+void GbaSystem::setCheatListAiWu(std::list<std::string> cheats)
 {
     setCheatListForAiWu(cheats);
 }
