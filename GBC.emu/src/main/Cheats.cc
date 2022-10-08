@@ -339,7 +339,7 @@ void GbcSystem::setCheatListAiWu(std::list<std::string> cheats)
     for (std::list<std::string>::iterator it = cheats.begin(); it != cheats.end(); it++)
     {
         std::string& cheat = *it;
-        std::string &codeStr = IG::stringContains(cheat.c_str(), "-") ? ggCodeStr : gsCodeStr;
+        std::string &codeStr = std::string_view{cheat.c_str()}.contains('-') ? ggCodeStr : gsCodeStr;
         if(codeStr.size())
             codeStr += ";";
         codeStr += cheat.c_str();
