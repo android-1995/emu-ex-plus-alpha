@@ -26,10 +26,6 @@
 namespace IG
 {
 
-static jobject vibrator{};
-static JNI::InstMethod<void(jlong)> jVibrate{};
-static bool vibrationSystemIsInit = false;
-
 std::string AndroidApplication::androidBuildDevice(JNIEnv *env, jclass baseActivityClass) const
 {
 	JNI::ClassMethod<jstring()> jDevName{env, baseActivityClass, "devName", "()Ljava/lang/String;"};
@@ -40,20 +36,6 @@ std::string AndroidApplicationContext::androidBuildDevice() const
 {
 	auto env = mainThreadJniEnv();
 	return application().androidBuildDevice(env, env->GetObjectClass(baseActivityObject()));
-}
-
-bool AndroidApplicationContext::apkSignatureIsConsistent() const
-{
-	bool sigMatchesAPK = true;
-	//region 爱吾：去掉签名验证
-//	#ifdef ANDROID_APK_SIGNATURE_HASH
-//	auto env = mainThreadJniEnv();
-//	auto baseActivity = baseActivityObject();
-//	JNI::InstMethod<jint()> jSigHash{env, baseActivity, "sigHash", "()I"};
-//	sigMatchesAPK = jSigHash(env, baseActivity) == ANDROID_APK_SIGNATURE_HASH;
-//	#endif
-	//endregion
-	return sigMatchesAPK;
 }
 
 bool ApplicationContext::packageIsInstalled(IG::CStringView name) const
@@ -90,11 +72,6 @@ void VibrationManager::vibrate(IG::Milliseconds ms)
 	jVibrate(vibrator.jniEnv(), vibrator, (jlong)ms.count());
 }
 
-void setDeviceOrientationChangedSensor(bool)
-{
-	// TODO
-}
-
 void ApplicationContext::setOnDeviceOrientationChanged(DeviceOrientationChangedDelegate)
 {
 	// TODO
@@ -115,7 +92,7 @@ void NoopThread::start()
 			sem.release();
 			while(run)
 			{
-				iterateTimes(16, i)
+				for(auto i : iotaCount(16))
 				{
 					asm("nop");
 				}

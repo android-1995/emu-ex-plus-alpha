@@ -17,17 +17,19 @@
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/base/Application.hh>
 #include <imagine/base/VibrationManager.hh>
+#include <imagine/base/Sensor.hh>
 #include <imagine/input/Input.hh>
 #include <imagine/fs/FS.hh>
+#include <imagine/fs/FSUtils.hh>
 #include <imagine/fs/AssetFS.hh>
 #include <imagine/fs/ArchiveFS.hh>
-#include <imagine/io/FileIO.hh>
 #ifdef __ANDROID__
 #include <imagine/fs/AAssetFS.hh>
 #endif
+#include <imagine/io/FileIO.hh>
+#include <imagine/io/IO.hh>
 #include <imagine/util/ScopeGuard.hh>
 #include <imagine/util/format.hh>
-#include <imagine/util/string.h>
 #include <imagine/logger/logger.h>
 #include <cstring>
 
@@ -249,7 +251,7 @@ FS::RootPathInfo ApplicationContext::rootPathInfo(std::string_view path) const
 	return nearestPtr->root.info;
 }
 
-AssetIO ApplicationContext::openAsset(IG::CStringView name, IO::AccessHint hint, unsigned openFlags, const char *appName) const
+AssetIO ApplicationContext::openAsset(IG::CStringView name, IOAccessHint hint, OpenFlagsMask openFlags, const char *appName) const
 {
 	#ifdef __ANDROID__
 	return {*this, name, hint, openFlags};
@@ -269,25 +271,25 @@ FS::AssetDirectoryIterator ApplicationContext::openAssetDirectory(IG::CStringVie
 
 [[gnu::weak]] bool ApplicationContext::hasSystemPathPicker() const { return false; }
 
-[[gnu::weak]] void ApplicationContext::showSystemPathPicker(SystemDocumentPickerDelegate) {}
+[[gnu::weak]] bool ApplicationContext::showSystemPathPicker(SystemDocumentPickerDelegate) { return false; }
 
 [[gnu::weak]] bool ApplicationContext::hasSystemDocumentPicker() const { return false; }
 
-[[gnu::weak]] void ApplicationContext::showSystemDocumentPicker(SystemDocumentPickerDelegate) {}
+[[gnu::weak]] bool ApplicationContext::showSystemDocumentPicker(SystemDocumentPickerDelegate) { return false; }
 
-[[gnu::weak]] void ApplicationContext::showSystemCreateDocumentPicker(SystemDocumentPickerDelegate) {}
+[[gnu::weak]] bool ApplicationContext::showSystemCreateDocumentPicker(SystemDocumentPickerDelegate) { return false; }
 
-[[gnu::weak]] FileIO ApplicationContext::openFileUri(IG::CStringView uri, IO::AccessHint access, IODefs::OpenFlags openFlags) const
+[[gnu::weak]] FileIO ApplicationContext::openFileUri(CStringView uri, IOAccessHint access, OpenFlagsMask openFlags) const
 {
 	return {uri, access, openFlags};
 }
 
-FileIO ApplicationContext::openFileUri(IG::CStringView uri, IODefs::OpenFlags openFlags) const
+FileIO ApplicationContext::openFileUri(CStringView uri, OpenFlagsMask openFlags) const
 {
-	return openFileUri(uri, IO::AccessHint::NORMAL, openFlags);
+	return openFileUri(uri, IOAccessHint::NORMAL, openFlags);
 }
 
-[[gnu::weak]] UniqueFileDescriptor ApplicationContext::openFileUriFd(IG::CStringView uri, IODefs::OpenFlags openFlags) const
+[[gnu::weak]] UniqueFileDescriptor ApplicationContext::openFileUriFd(CStringView uri, OpenFlagsMask openFlags) const
 {
 	return PosixIO{uri, openFlags}.releaseFd();
 }
@@ -327,19 +329,9 @@ FileIO ApplicationContext::openFileUri(IG::CStringView uri, IODefs::OpenFlags op
 	return FS::remove(uri);
 }
 
-[[gnu::weak]] void ApplicationContext::forEachInDirectoryUri(IG::CStringView uri, FS::DirectoryEntryDelegate del) const
+[[gnu::weak]] void ApplicationContext::forEachInDirectoryUri(CStringView uri, DirectoryEntryDelegate del) const
 {
 	forEachInDirectory(uri, del);
-}
-
-Orientation ApplicationContext::validateOrientationMask(Orientation oMask) const
-{
-	if(!(oMask & VIEW_ROTATE_ALL))
-	{
-		// use default when none of the orientation bits are set
-		oMask = defaultSystemOrientations();
-	}
-	return oMask;
 }
 
 const InputDeviceContainer &ApplicationContext::inputDevices() const
@@ -395,13 +387,17 @@ void ApplicationContext::setOnInputDevicesEnumerated(InputDevicesEnumeratedDeleg
 
 [[gnu::weak]] void ApplicationContext::setDeviceOrientationChangeSensor(bool) {}
 
+[[gnu::weak]] SensorValues ApplicationContext::remapSensorValuesForDeviceRotation(SensorValues v) const { return v; }
+
 [[gnu::weak]] void ApplicationContext::setOnDeviceOrientationChanged(DeviceOrientationChangedDelegate) {}
 
-[[gnu::weak]] void ApplicationContext::setSystemOrientation(Orientation) {}
+[[gnu::weak]] void ApplicationContext::setSystemOrientation(Rotation) {}
 
-[[gnu::weak]] Orientation ApplicationContext::defaultSystemOrientations() const { return VIEW_ROTATE_ALL; }
+[[gnu::weak]] OrientationMask ApplicationContext::defaultSystemOrientations() const { return OrientationMask::ALL; }
 
 [[gnu::weak]] void ApplicationContext::setOnSystemOrientationChanged(SystemOrientationChangedDelegate) {}
+
+[[gnu::weak]] bool ApplicationContext::hasDisplayCutout() const { return false; }
 
 [[gnu::weak]] bool ApplicationContext::usesPermission(Permission) const { return false; }
 
@@ -420,6 +416,13 @@ void ApplicationContext::setOnInputDevicesEnumerated(InputDevicesEnumeratedDeleg
 [[gnu::weak]] NativeDisplayConnection ApplicationContext::nativeDisplayConnection() const { return {}; }
 
 [[gnu::weak]] bool ApplicationContext::packageIsInstalled(IG::CStringView name) const { return false; }
+
+[[gnu::weak]] int32_t ApplicationContext::androidSDK() const
+{
+	bug_unreachable("Invalid platform-specific function");
+}
+
+[[gnu::weak]] SensorListener::SensorListener(ApplicationContext, SensorType, SensorChangedDelegate) {}
 
 OnExit::OnExit(ResumeDelegate del, ApplicationContext ctx, int priority): del{del}, ctx{ctx}
 {
@@ -463,19 +466,19 @@ namespace IG::FileUtils
 
 ssize_t writeToUri(ApplicationContext ctx, IG::CStringView uri, std::span<const unsigned char> src)
 {
-	auto f = ctx.openFileUri(uri, IO::OPEN_NEW | IO::TEST_BIT);
+	auto f = ctx.openFileUri(uri, OpenFlagsMask::NEW | OpenFlagsMask::TEST);
 	return f.write(src.data(), src.size());
 }
 
 ssize_t readFromUri(ApplicationContext ctx, IG::CStringView uri, std::span<unsigned char> dest,
-	IO::AccessHint accessHint)
+	IOAccessHint accessHint)
 {
-	auto f = ctx.openFileUri(uri, accessHint, IO::TEST_BIT);
+	auto f = ctx.openFileUri(uri, accessHint, OpenFlagsMask::TEST);
 	return f.read(dest.data(), dest.size());
 }
 
 std::pair<ssize_t, FS::PathString> readFromUriWithArchiveScan(ApplicationContext ctx, IG::CStringView uri,
-	std::span<unsigned char> dest, bool(*nameMatchFunc)(std::string_view), IO::AccessHint accessHint)
+	std::span<unsigned char> dest, bool(*nameMatchFunc)(std::string_view), IOAccessHint accessHint)
 {
 	auto io = ctx.openFileUri(uri, accessHint);
 	if(FS::hasArchiveExtension(uri))
@@ -502,34 +505,34 @@ std::pair<ssize_t, FS::PathString> readFromUriWithArchiveScan(ApplicationContext
 	}
 }
 
-IOBuffer bufferFromUri(ApplicationContext ctx, CStringView uri, IO::OpenFlags openFlags, size_t sizeLimit)
+IOBuffer bufferFromUri(ApplicationContext ctx, CStringView uri, OpenFlagsMask openFlags, size_t sizeLimit)
 {
 	if(!sizeLimit) [[unlikely]]
 		return {};
-	auto file = ctx.openFileUri(uri, IO::AccessHint::ALL, openFlags);
+	auto file = ctx.openFileUri(uri, IOAccessHint::ALL, openFlags);
 	if(!file)
 		return {};
 	else if(file.size() > sizeLimit)
 	{
-		if(openFlags & IO::TEST_BIT)
+		if(to_underlying(openFlags & OpenFlagsMask::TEST))
 			return {};
 		else
 			throw std::runtime_error(fmt::format("{} exceeds {} byte limit", uri.data(), sizeLimit));
 	}
-	return file.buffer(IODefs::BufferMode::RELEASE);
+	return file.buffer(IOBufferMode::RELEASE);
 }
 
-IOBuffer rwBufferFromUri(ApplicationContext ctx, CStringView uri, IO::OpenFlags extraOFlags, size_t size, uint8_t initValue)
+IOBuffer rwBufferFromUri(ApplicationContext ctx, CStringView uri, OpenFlagsMask extraOFlags, size_t size, uint8_t initValue)
 {
 	if(!size) [[unlikely]]
 		return {};
-	auto file = ctx.openFileUri(uri, IO::AccessHint::RANDOM, IO::OPEN_RW | extraOFlags);
+	auto file = ctx.openFileUri(uri, IOAccessHint::RANDOM, OpenFlagsMask::CREATE_RW | extraOFlags);
 	if(!file) [[unlikely]]
 		return {};
 	auto fileSize = file.size();
 	if(fileSize != size)
 		file.truncate(size);
-	auto buff = file.buffer(IODefs::BufferMode::RELEASE);
+	auto buff = file.buffer(IOBufferMode::RELEASE);
 	if(initValue && fileSize < size)
 	{
 		std::fill(&buff[fileSize], &buff[size], initValue);
@@ -541,8 +544,8 @@ FILE *fopenUri(ApplicationContext ctx, IG::CStringView path, IG::CStringView mod
 {
 	if(IG::isUri(path))
 	{
-		int openFlags = IG::stringContains(mode, 'w') ? IO::OPEN_NEW : 0;
-		return GenericIO{ctx.openFileUri(path, openFlags | IO::TEST_BIT)}.moveToFileStream(mode);
+		auto openFlags = mode.contains('w') ? OpenFlagsMask::NEW : OpenFlagsMask{};
+		return ctx.openFileUri(path, openFlags | OpenFlagsMask::TEST).toFileStream(mode);
 	}
 	else
 	{

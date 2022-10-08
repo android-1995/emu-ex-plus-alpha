@@ -18,8 +18,11 @@
 #include <imagine/gfx/Renderer.hh>
 #include <imagine/gfx/RendererTask.hh>
 #include <imagine/gfx/Program.hh>
+#include <imagine/gfx/Texture.hh>
+#include <imagine/gfx/TextureSampler.hh>
 #include <imagine/base/Window.hh>
 #include <imagine/base/Screen.hh>
+#include <imagine/base/Viewport.hh>
 #include <imagine/logger/logger.h>
 #include "internalDefs.hh"
 #include "utils.hh"
@@ -30,26 +33,24 @@ namespace IG::Gfx
 static constexpr bool useGLCache = true;
 
 GLRendererCommands::GLRendererCommands(RendererTask &rTask, Window *winPtr, Drawable drawable,
-	GLDisplay glDpy, const GLContext &glCtx, std::binary_semaphore *drawCompleteSemPtr):
+	Rect2<int> viewport, GLDisplay glDpy, const GLContext &glCtx, std::binary_semaphore *drawCompleteSemPtr):
 	rTask{&rTask}, r{&rTask.renderer()}, drawCompleteSemPtr{drawCompleteSemPtr},
-	winPtr{winPtr}, glDpy{glDpy}, glContextPtr{&glCtx}, drawable{drawable}
+	winPtr{winPtr}, glDpy{glDpy}, glContextPtr{&glCtx}, drawable{drawable},
+	winViewport{viewport}
 {
 	assumeExpr(drawable);
-	setCurrentDrawable(drawable);
+	if(setCurrentDrawable(drawable) && viewport.x2)
+	{
+		setViewport(viewport);
+	}
 }
-
-void GLRendererCommands::discardTemporaryData() {}
 
 void GLRendererCommands::bindGLArrayBuffer(GLuint vbo)
 {
-	if(arrayBufferIsSet && vbo == arrayBuffer)
-		return;
 	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	arrayBuffer = vbo;
-	arrayBufferIsSet = true;
 }
 
-void GLRendererCommands::setCurrentDrawable(Drawable drawable)
+bool GLRendererCommands::setCurrentDrawable(Drawable drawable)
 {
 	auto &glCtx = glContext();
 	assert(glCtx);
@@ -57,7 +58,9 @@ void GLRendererCommands::setCurrentDrawable(Drawable drawable)
 	if(!GLManager::hasCurrentDrawable(drawable))
 	{
 		glCtx.setCurrentDrawable(drawable);
+		return true;
 	}
+	return false;
 }
 
 void GLRendererCommands::present(Drawable win)
@@ -77,13 +80,6 @@ void GLRendererCommands::present(Drawable win)
 void GLRendererCommands::doPresent()
 {
 	rTask->verifyCurrentContext();
-	if(Config::envIsAndroid && Config::MACHINE_IS_GENERIC_X86 && r->support.hasSamplerObjects)
-	{
-		// reset sampler object at the end of frame, fixes blank screen
-		// on Android SDK emulator when using mipmaps
-		r->support.glBindSampler(0, 0);
-	}
-	discardTemporaryData();
 	present(drawable);
 	notifyPresentComplete();
 }
@@ -102,11 +98,6 @@ void GLRendererCommands::notifyPresentComplete()
 	{
 		winPtr->postFrameReadyToMainThread();
 	}
-}
-
-void GLRendererCommands::setCachedProjectionMatrix(Mat4 mat)
-{
-	projectionMat = mat;
 }
 
 void RendererCommands::bindTempVertexBuffer()
@@ -212,50 +203,42 @@ void RendererCommands::setBlendFunc(BlendFunc s, BlendFunc d)
 	glcBlendFunc((GLenum)s, (GLenum)d);
 }
 
-void RendererCommands::setBlendMode(uint32_t mode)
+void RendererCommands::setBlendMode(BlendMode mode)
 {
-	rTask->verifyCurrentContext();
-	switch(mode)
+	if(mode == BlendMode::OFF)
 	{
-		bcase BLEND_MODE_OFF:
-			setBlend(false);
-		bcase BLEND_MODE_ALPHA:
-			setBlendFunc(BlendFunc::SRC_ALPHA, BlendFunc::ONE_MINUS_SRC_ALPHA); // general blending
-			//setBlendFunc(BlendFunc::ONE, BlendFunc::ONE_MINUS_SRC_ALPHA); // for premultiplied alpha
-			setBlend(true);
-		bcase BLEND_MODE_INTENSITY:
-			setBlendFunc(BlendFunc::SRC_ALPHA, BlendFunc::ONE);
-			setBlend(true);
-	}
-}
-
-void RendererCommands::setBlendEquation(uint32_t mode)
-{
-	rTask->verifyCurrentContext();
-	#if !defined CONFIG_GFX_OPENGL_ES \
-		|| (defined CONFIG_BASE_IOS || defined __ANDROID__)
-	glcBlendEquation(mode == BLEND_EQ_ADD ? GL_FUNC_ADD :
-		mode == BLEND_EQ_SUB ? GL_FUNC_SUBTRACT :
-		mode == BLEND_EQ_RSUB ? GL_FUNC_REVERSE_SUBTRACT :
-		GL_FUNC_ADD);
-	#endif
-}
-
-void RendererCommands::setImgBlendColor(ColorComp r, ColorComp g, ColorComp b, ColorComp a)
-{
-	rTask->verifyCurrentContext();
-	#ifdef CONFIG_GFX_OPENGL_FIXED_FUNCTION_PIPELINE
-	if(renderer().support.useFixedFunctionPipeline)
-	{
-		GLfloat col[4] {r, g, b, a};
-		glcTexEnvfv(GL_TEXTURE_ENV, GL_TEXTURE_ENV_COLOR, col);
+		setBlend(false);
 		return;
 	}
-	#endif
-	texEnvColor[0] = r;
-	texEnvColor[1] = g;
-	texEnvColor[2] = b;
-	texEnvColor[3] = a;
+	auto [srcFunc, destFunc] = [&]() -> std::pair<BlendFunc, BlendFunc>
+	{
+		switch(mode)
+		{
+			case BlendMode::ALPHA: return {BlendFunc::SRC_ALPHA, BlendFunc::ONE_MINUS_SRC_ALPHA};
+			case BlendMode::PREMULT_ALPHA: return{BlendFunc::ONE, BlendFunc::ONE_MINUS_SRC_ALPHA};
+			case BlendMode::INTENSITY: return{BlendFunc::SRC_ALPHA, BlendFunc::ONE};
+			case BlendMode::OFF: break;
+		}
+		bug_unreachable("invalid blend mode:%d", std::to_underlying(mode));
+	}();
+	setBlendFunc(srcFunc, destFunc);
+	setBlend(true);
+}
+
+void RendererCommands::setBlendEquation(BlendEquation mode)
+{
+	rTask->verifyCurrentContext();
+	auto glMode = [&]()
+	{
+		switch(mode)
+		{
+			case BlendEquation::ADD: return GL_FUNC_ADD;
+			case BlendEquation::SUB: return GL_FUNC_SUBTRACT;
+			case BlendEquation::RSUB: return GL_FUNC_REVERSE_SUBTRACT;
+		}
+		bug_unreachable("invalid BlendEquation:%d", std::to_underlying(mode));
+	}();
+	glcBlendEquation(glMode);
 }
 
 void RendererCommands::setZTest(bool on)
@@ -271,75 +254,26 @@ void RendererCommands::setZTest(bool on)
 	}
 }
 
-void RendererCommands::setZBlend(bool on)
-{
-	rTask->verifyCurrentContext();
-	//	#ifdef CONFIG_GFX_OPENGL_FIXED_FUNCTION_PIPELINE
-	//	if(support.useFixedFunctionPipeline)
-	//	{
-	//		if(on)
-	//		{
-	//			#ifndef CONFIG_GFX_OPENGL_ES
-	//			glFogi(GL_FOG_MODE, GL_LINEAR);
-	//			#else
-	//			glFogf(GL_FOG_MODE, GL_LINEAR);
-	//			#endif
-	//			glFogf(GL_FOG_DENSITY, 0.1f);
-	//			glHint(GL_FOG_HINT, GL_DONT_CARE);
-	//			glFogf(GL_FOG_START, proj.zRange/2.0);
-	//			glFogf(GL_FOG_END, proj.zRange);
-	//			glcEnable(GL_FOG);
-	//		}
-	//		else
-	//		{
-	//			glcDisable(GL_FOG);
-	//		}
-	//	}
-	//	#endif
-	if(!renderer().support.useFixedFunctionPipeline)
-	{
-		bug_unreachable("TODO");
-	}
-}
-
-void RendererCommands::setZBlendColor(ColorComp r, ColorComp g, ColorComp b)
-{
-	rTask->verifyCurrentContext();
-	#ifdef CONFIG_GFX_OPENGL_FIXED_FUNCTION_PIPELINE
-	if(renderer().support.useFixedFunctionPipeline)
-	{
-		GLfloat c[4] = {r, g, b, 1.0f};
-		glFogfv(GL_FOG_COLOR, c);
-	}
-	#endif
-	if(!renderer().support.useFixedFunctionPipeline)
-	{
-		bug_unreachable("TODO");
-	}
-}
-
 void RendererCommands::clear()
 {
 	rTask->verifyCurrentContext();
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 }
 
-void RendererCommands::setClearColor(ColorComp r, ColorComp g, ColorComp b, ColorComp a)
+void RendererCommands::setClearColor(float r, float g, float b, float a)
 {
 	rTask->verifyCurrentContext();
-	//GLfloat c[4] = {r, g, b, a};
 	//logMsg("setting clear color %f %f %f %f", (float)r, (float)g, (float)b, (float)a);
 	glClearColor(r, g, b, a);
 }
 
-void RendererCommands::setColor(Color c)
+void RendererCommands::setColor(Color4F c)
 {
 	rTask->verifyCurrentContext();
-	auto [r, g, b, a] = c;
 	#ifdef CONFIG_GFX_OPENGL_FIXED_FUNCTION_PIPELINE
 	if(renderer().support.useFixedFunctionPipeline)
 	{
-		glcColor4f(r, g, b, a);
+		glcColor4f(c.r, c.g, c.b, c.a);
 		return;
 	}
 	#endif
@@ -348,12 +282,12 @@ void RendererCommands::setColor(Color c)
 	if(vColor == c)
 		return;
 	vColor = c;
-	glVertexAttrib4f(VATTR_COLOR, r, g, b, a);
+	glVertexAttrib4f(VATTR_COLOR, c.r, c.g, c.b, c.a);
 	//logMsg("set color: %f:%f:%f:%f", (double)r, (double)g, (double)b, (double)a);
 	#endif
 }
 
-void RendererCommands::setColor(ColorComp r, ColorComp g, ColorComp b, ColorComp a)
+void RendererCommands::setColor(float r, float g, float b, float a)
 {
 	setColor({r, g, b, a});
 }
@@ -371,7 +305,7 @@ Color RendererCommands::color() const
 	return vColor;
 }
 
-void RendererCommands::setImgMode(uint32_t mode)
+void RendererCommands::setImgMode(EnvMode mode)
 {
 	rTask->verifyCurrentContext();
 	#ifdef CONFIG_GFX_OPENGL_FIXED_FUNCTION_PIPELINE
@@ -379,10 +313,10 @@ void RendererCommands::setImgMode(uint32_t mode)
 	{
 		switch(mode)
 		{
-			bcase IMG_MODE_REPLACE: glcTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-			bcase IMG_MODE_MODULATE: glcTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
-			bcase IMG_MODE_ADD: glcTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_ADD);
-			bcase IMG_MODE_BLEND: glcTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_BLEND);
+			case EnvMode::REPLACE: return glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+			case EnvMode::MODULATE: return glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+			case EnvMode::ADD: return glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_ADD);
+			case EnvMode::BLEND: return glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_BLEND);
 		}
 		return;
 	}
@@ -417,21 +351,21 @@ void RendererCommands::setSrgbFramebufferWrite(bool on)
 		glDisable(GL_FRAMEBUFFER_SRGB);
 }
 
-void RendererCommands::setVisibleGeomFace(uint32_t sides)
+void RendererCommands::setVisibleGeomFace(Faces sides)
 {
 	rTask->verifyCurrentContext();
-	if(sides == BOTH_FACES)
+	if(sides == Faces::BOTH)
 	{
-		glcDisable(GL_CULL_FACE);
+		glDisable(GL_CULL_FACE);
 	}
-	else if(sides == FRONT_FACES)
+	else if(sides == Faces::FRONT)
 	{
-		glcEnable(GL_CULL_FACE);
+		glEnable(GL_CULL_FACE);
 		glCullFace(GL_FRONT); // our order is reversed from OpenGL
 	}
 	else
 	{
-		glcEnable(GL_CULL_FACE);
+		glEnable(GL_CULL_FACE);
 		glCullFace(GL_BACK);
 	}
 }
@@ -454,12 +388,17 @@ void RendererCommands::setClipRect(ClipRect r)
 
 void RendererCommands::setTexture(const Texture &t)
 {
+	set(t.binding());
+}
+
+void RendererCommands::set(TextureBinding binding)
+{
 	rTask->verifyCurrentContext();
-	if(renderer().support.hasSamplerObjects && !currSamplerName)
+	if(!binding.name) [[unlikely]]
 	{
-		logWarn("set texture without setting a sampler first");
+		logWarn("binding default texture");
 	}
-	t.bindTex(*this);
+	glBindTexture(binding.target, binding.name);
 }
 
 void RendererCommands::setTextureSampler(const TextureSampler &sampler)
@@ -475,26 +414,22 @@ void RendererCommands::setTextureSampler(const TextureSampler &sampler)
 	currSamplerName = sampler.name();
 }
 
-void RendererCommands::setCommonTextureSampler(CommonTextureSampler sampler)
+void GLRendererCommands::setViewport(Rect2<int> v)
 {
-	auto &samplerObj = renderer().commonTextureSampler(sampler);
-	assert(samplerObj);
-	setTextureSampler(samplerObj);
+	rTask->verifyCurrentContext();
+	//logMsg("set GL viewport %d:%d:%d:%d", v.x, v.y, v.x2, v.y2);
+	assert(v.x2 && v.y2);
+	glViewport(v.x, v.y, v.x2, v.y2);
 }
 
 void RendererCommands::setViewport(Viewport v)
 {
-	rTask->verifyCurrentContext();
-	auto inGLFormat = v.inGLFormat();
-	//logMsg("set GL viewport %d:%d:%d:%d", inGLFormat.x, inGLFormat.y, inGLFormat.x2, inGLFormat.y2);
-	assert(inGLFormat.x2 && inGLFormat.y2);
-	glViewport(inGLFormat.x, inGLFormat.y, inGLFormat.x2, inGLFormat.y2);
-	currViewport = v;
+	GLRendererCommands::setViewport(asYUpRelRect(v));
 }
 
-Viewport RendererCommands::viewport() const
+void RendererCommands::restoreViewport()
 {
-	return currViewport;
+	GLRendererCommands::setViewport(winViewport);
 }
 
 void RendererCommands::vertexBufferData(const void *v, size_t size)
@@ -505,6 +440,20 @@ void RendererCommands::vertexBufferData(const void *v, size_t size)
 	}
 }
 
+constexpr GLenum asGLType(AttribType type)
+{
+	switch(type)
+	{
+		case AttribType::UByte: return GL_UNSIGNED_BYTE;
+		case AttribType::Short: return GL_SHORT;
+		case AttribType::UShort: return GL_UNSIGNED_SHORT;
+		case AttribType::Float: return GL_FLOAT;
+	}
+	bug_unreachable("invalid AttribType");
+}
+
+constexpr bool shouldNormalize(AttribType type) { return type != AttribType::Float; }
+
 void RendererCommands::drawPrimitives(Primitive mode, int start, int count)
 {
 	runGLCheckedVerbose([&]()
@@ -513,81 +462,116 @@ void RendererCommands::drawPrimitives(Primitive mode, int start, int count)
 	}, "glDrawArrays()");
 }
 
-void RendererCommands::drawPrimitiveElements(Primitive mode, const VertexIndex *idx, int count)
+void RendererCommands::drawPrimitiveElements(Primitive mode, std::span<const VertexIndex> idxs)
 {
 	runGLCheckedVerbose([&]()
 	{
-		glDrawElements((GLenum)mode, count, GL_UNSIGNED_SHORT, idx);
+		glDrawElements((GLenum)mode, idxs.size(), asGLType(attribType<VertexIndex>), idxs.data());
 	}, "glDrawElements()");
 }
 
+bool GLRendererCommands::hasVBOFuncs() const { return r->support.hasVBOFuncs; }
+
+bool GLRendererCommands::useFixedFunctionPipeline() const { return r->support.useFixedFunctionPipeline; }
+
+#ifdef CONFIG_GFX_OPENGL_FIXED_FUNCTION_PIPELINE
+void GLRendererCommands::setupVertexArrayPointers(const char *v, int stride,
+	AttribDesc textureAttrib, AttribDesc colorAttrib, AttribDesc posAttrib)
+{
+	if(hasVBOFuncs() && v) // turn off VBO when rendering from memory
+	{
+		//logMsg("un-binding VBO");
+		bindGLArrayBuffer(0);
+	}
+	glcEnableClientState(GL_VERTEX_ARRAY);
+	glVertexPointer(posAttrib.size, asGLType(posAttrib.type), stride, v + posAttrib.offset);
+	if(textureAttrib.size)
+	{
+		glcEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		glTexCoordPointer(textureAttrib.size, asGLType(textureAttrib.type), stride, v + textureAttrib.offset);
+	}
+	else
+		glcDisableClientState(GL_TEXTURE_COORD_ARRAY);
+	if(colorAttrib.size)
+	{
+		glcEnableClientState(GL_COLOR_ARRAY);
+		glColorPointer(colorAttrib.size, asGLType(colorAttrib.type), stride, v + colorAttrib.offset);
+		glState.colorState[0] = -1; //invalidate glColor state cache
+	}
+	else
+		glcDisableClientState(GL_COLOR_ARRAY);
+}
+#endif
+
+#ifdef CONFIG_GFX_OPENGL_SHADER_PIPELINE
+void GLRendererCommands::setupShaderVertexArrayPointers(const char *v, int stride, int id,
+	AttribDesc textureAttrib, AttribDesc colorAttrib, AttribDesc posAttrib)
+{
+	if(currentVtxArrayPointerID != id)
+	{
+		//logMsg("setting vertex array pointers for type: %d", id);
+		if(textureAttrib.size)
+			glEnableVertexAttribArray(VATTR_TEX_UV);
+		else
+			glDisableVertexAttribArray(VATTR_TEX_UV);
+		if(colorAttrib.size)
+			glEnableVertexAttribArray(VATTR_COLOR);
+		else
+			glDisableVertexAttribArray(VATTR_COLOR);
+	}
+	glVertexAttribPointer(VATTR_POS, posAttrib.size, asGLType(posAttrib.type),
+		shouldNormalize(posAttrib.type), stride, v + posAttrib.offset);
+	if(textureAttrib.size)
+	{
+		glVertexAttribPointer(VATTR_TEX_UV, textureAttrib.size, asGLType(textureAttrib.type),
+			shouldNormalize(textureAttrib.type), stride, v + textureAttrib.offset);
+	}
+	if(colorAttrib.size)
+	{
+		glVertexAttribPointer(VATTR_COLOR, colorAttrib.size, asGLType(colorAttrib.type),
+			shouldNormalize(colorAttrib.type), stride, v + colorAttrib.offset);
+	}
+	currentVtxArrayPointerID = id;
+}
+#endif
+
 // shaders
 
-void GLRendererCommands::setProgram(NativeProgramBundle programBundle, Mat4 modelMat)
+void RendererCommands::setProgram(NativeProgram program)
 {
+	#ifdef CONFIG_GFX_OPENGL_SHADER_PIPELINE
 	rTask->verifyCurrentContext();
-	if(currProgram.program != programBundle.program)
+	if(currProgram != program)
 	{
-		currProgram = programBundle;
-		glUseProgram(programBundle.program);
+		glUseProgram(program);
+		currProgram = program;
 	}
-	static_cast<RendererCommands*>(this)->loadTransform(modelMat);
-}
-
-void GLRendererCommands::setProgram(NativeProgramBundle programBundle, const Mat4 *modelMatPtr)
-{
-	if(modelMatPtr)
-		setProgram(programBundle, *modelMatPtr);
-	else
-		setProgram(programBundle, modelMat);
+	#endif
 }
 
 void RendererCommands::setProgram(const Program &program)
 {
-	setProgram(program, modelMat);
+	setProgram(program.glProgram());
 }
 
-void RendererCommands::setProgram(const Program &program, Mat4 modelMat)
+#ifdef CONFIG_GFX_OPENGL_SHADER_PIPELINE
+void RendererCommands::uniform(int loc, float v1){ glUniform1f(loc, v1); }
+void RendererCommands::uniform(int loc, float v1, float v2){ glUniform2f(loc, v1, v2); }
+void RendererCommands::uniform(int loc, float v1, float v2, float v3){ glUniform3f(loc, v1, v2, v3); }
+void RendererCommands::uniform(int loc, float v1, float v2, float v3, float v4){ glUniform4f(loc, v1, v2, v3, v4); }
+void RendererCommands::uniform(int loc, int v1){ glUniform1i(loc, v1); }
+void RendererCommands::uniform(int loc, int v1, int v2){ glUniform2i(loc, v1, v2); }
+void RendererCommands::uniform(int loc, int v1, int v2, int v3){ glUniform3i(loc, v1, v2, v3); }
+void RendererCommands::uniform(int loc, int v1, int v2, int v3, int v4){ glUniform4i(loc, v1, v2, v3, v4); }
+
+void RendererCommands::uniform(int loc, Mat4 mat)
 {
-	GLRendererCommands::setProgram(program.programBundle(), modelMat);
+	glUniformMatrix4fv(loc, 1, GL_FALSE, &mat[0][0]);
 }
-
-void RendererCommands::setProgram(const Program &program, const Mat4 *modelMat)
-{
-	if(modelMat)
-		setProgram(program, *modelMat);
-	else
-		setProgram(program);
-}
-
-void RendererCommands::setCommonProgram(CommonProgram program)
-{
-	setCommonProgram(program, nullptr);
-}
-
-void RendererCommands::setCommonProgram(CommonProgram program, Mat4 modelMat)
-{
-	setCommonProgram(program, &modelMat);
-}
-
-void RendererCommands::setCommonProgram(CommonProgram program, const Mat4 *modelMat)
-{
-	rTask->verifyCurrentContext();
-	renderer().useCommonProgram(*this, program, modelMat);
-}
-
-void RendererCommands::uniformF(int uniformLocation, float v1, float v2)
-{
-	glUniform2f(uniformLocation, v1, v2);
-}
-
-#ifdef CONFIG_GFX_OPENGL_FIXED_FUNCTION_PIPELINE
-void GLRendererCommands::glcMatrixMode(GLenum mode)
-{ if(useGLCache) glState.matrixMode(mode); else glMatrixMode(mode); }
 #endif
 
-void GLRendererCommands::glcBindTexture(GLenum target, GLuint texture)
-{ if(useGLCache) glState.bindTexture(target, texture); else glBindTexture(target, texture); }
+BasicEffect &RendererCommands::basicEffect() { return renderer().basicEffect(); }
+
 void GLRendererCommands::glcBlendFunc(GLenum sfactor, GLenum dfactor)
 { if(useGLCache) glState.blendFunc(sfactor, dfactor); else glBlendFunc(sfactor, dfactor); }
 void GLRendererCommands::glcBlendEquation(GLenum mode)
@@ -610,10 +594,6 @@ void GLRendererCommands::glcEnableClientState(GLenum cap)
 { if(useGLCache) glState.enableClientState(cap); else glEnableClientState(cap); }
 void GLRendererCommands::glcDisableClientState(GLenum cap)
 { if(useGLCache) glState.disableClientState(cap); else glDisableClientState(cap); }
-void GLRendererCommands::glcTexEnvi(GLenum target, GLenum pname, GLint param)
-{ if(useGLCache) glState.texEnvi(target, pname, param); else glTexEnvi(target, pname, param); }
-void GLRendererCommands::glcTexEnvfv(GLenum target, GLenum pname, const GLfloat *params)
-{ if(useGLCache) glState.texEnvfv(target, pname, params); else glTexEnvfv(target, pname, params); }
 void GLRendererCommands::glcColor4f(GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha)
 {
 	if(useGLCache)

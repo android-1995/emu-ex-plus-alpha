@@ -42,7 +42,7 @@ public:
 	IdentInputDeviceView(ViewAttachParams attach);
 	void place() final;
 	bool inputEvent(const Input::Event &) final;
-	void draw(Gfx::RendererCommands &cmds) final;
+	void draw(Gfx::RendererCommands &__restrict__) final;
 
 private:
 	Gfx::Text text{};
@@ -61,9 +61,7 @@ private:
 	InputDeviceSavedConfigContainer *savedInputDevsPtr{};
 	TextMenuItem deleteDeviceConfig{};
 	TextMenuItem deleteProfile{};
-	#ifdef __ANDROID__
-	TextMenuItem rescanOSDevices{};
-	#endif
+	IG_UseMemberIf(Config::envIsAndroid, TextMenuItem, rescanOSDevices);
 	TextMenuItem identDevice{};
 	TextMenuItem generalOptions{};
 	TextHeadingMenuItem deviceListHeading{};
@@ -95,14 +93,14 @@ private:
 	BoolMenuItem btScanCache{};
 	#endif
 	BoolMenuItem altGamepadConfirm{};
-	StaticArrayList<MenuItem*, 10> item{};
+	StaticArrayList<MenuItem*, 10> item;
 	EmuInputView *emuInputView{};
 };
 
 class InputManagerDeviceView : public TableView, public EmuAppHelper<InputManagerDeviceView>
 {
 public:
-	InputManagerDeviceView(IG::utf16String name, ViewAttachParams,
+	InputManagerDeviceView(UTF16String name, ViewAttachParams,
 		InputManagerView &rootIMView, const Input::Device &,
 		KeyConfigContainer &, InputDeviceSavedConfigContainer &);
 	void setPlayer(int playerVal);
@@ -126,8 +124,8 @@ private:
 	BoolMenuItem joystickAxisHatDPad{};
 	IG_UseMemberIf(Config::envIsAndroid, BoolMenuItem, consumeUnboundKeys){};
 	//TextMenuItem disconnect {"Disconnect"}; // TODO
-	StaticArrayList<TextMenuItem, Controls::MAX_CATEGORIES> inputCategory{};
-	StaticArrayList<MenuItem*, Controls::MAX_CATEGORIES + 11> item{};
+	StaticArrayList<TextMenuItem, Controls::MAX_CATEGORIES> inputCategory;
+	StaticArrayList<MenuItem*, Controls::MAX_CATEGORIES + 11> item;
 	InputDeviceConfig *devConf{};
 
 	void confirmICadeMode();

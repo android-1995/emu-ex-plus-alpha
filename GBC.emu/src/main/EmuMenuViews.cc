@@ -14,27 +14,34 @@
 	along with GBC.emu.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <emuframework/EmuApp.hh>
-#include <emuframework/EmuAppHelper.hh>
 #include <emuframework/OptionView.hh>
+#include <emuframework/AudioOptionView.hh>
+#include <emuframework/VideoOptionView.hh>
 #include <emuframework/EmuSystemActionsView.hh>
 #include "EmuCheatViews.hh"
 #include "Palette.hh"
-#include "internal.hh"
+#include "MainApp.hh"
 #include <resample/resamplerinfo.h>
 
 namespace EmuEx
 {
 
-static constexpr unsigned MAX_RESAMPLERS = 4;
+template <class T>
+using MainAppHelper = EmuAppHelper<T, MainApp>;
 
-class CustomAudioOptionView : public AudioOptionView
+static constexpr size_t MAX_RESAMPLERS = 4;
+
+class CustomAudioOptionView : public AudioOptionView, public MainAppHelper<CustomAudioOptionView>
 {
-	StaticArrayList<TextMenuItem, MAX_RESAMPLERS> resamplerItem{};
+	using MainAppHelper<CustomAudioOptionView>::app;
+	using MainAppHelper<CustomAudioOptionView>::system;
+
+	StaticArrayList<TextMenuItem, MAX_RESAMPLERS> resamplerItem;
 
 	MultiChoiceMenuItem resampler
 	{
 		"重采样器", &defaultFace(),
-		optionAudioResampler.val,
+		system().optionAudioResampler.val,
 		resamplerItem
 	};
 
@@ -43,15 +50,15 @@ public:
 	{
 		loadStockItems();
 		logMsg("%d resamplers", (int)ResamplerInfo::num());
-		auto resamplers = std::min((unsigned)ResamplerInfo::num(), MAX_RESAMPLERS);
-		iterateTimes(resamplers, i)
+		auto resamplers = std::min(ResamplerInfo::num(), MAX_RESAMPLERS);
+		for(auto i : iotaCount(resamplers))
 		{
 			ResamplerInfo r = ResamplerInfo::get(i);
-			logMsg("%d %s", i, r.desc);
+			logMsg("%zu %s", i, r.desc);
 			resamplerItem.emplace_back(r.desc, &defaultFace(),
 				[this, i]()
 				{
-					optionAudioResampler = i;
+					system().optionAudioResampler = i;
 					app().configFrameTime();
 				});
 		}
@@ -59,42 +66,53 @@ public:
 	}
 };
 
-class CustomVideoOptionView : public VideoOptionView
+class CustomVideoOptionView : public VideoOptionView, public MainAppHelper<CustomVideoOptionView>
 {
+	using MainAppHelper<CustomVideoOptionView>::system;
+
+	TextMenuItem::SelectDelegate setGbPaletteDel()
+	{
+		return [this](TextMenuItem &item)
+		{
+			system().optionGBPal = item.id();
+			system().applyGBPalette();
+		};
+	}
+
 	TextMenuItem gbPaletteItem[13]
 	{
-		{"原画", &defaultFace(), [](){ optionGBPal = 0; applyGBPalette(); }},
-		{"棕色", &defaultFace(), [](){ optionGBPal = 1; applyGBPalette(); }},
-		{"红色", &defaultFace(), [](){ optionGBPal = 2; applyGBPalette(); }},
-		{"深棕色", &defaultFace(), [](){ optionGBPal = 3; applyGBPalette(); }},
-		{"粉彩", &defaultFace(), [](){ optionGBPal = 4; applyGBPalette(); }},
-		{"橙色", &defaultFace(), [](){ optionGBPal = 5; applyGBPalette(); }},
-		{"黄色", &defaultFace(), [](){ optionGBPal = 6; applyGBPalette(); }},
-		{"蓝色", &defaultFace(), [](){ optionGBPal = 7; applyGBPalette(); }},
-		{"深蓝色", &defaultFace(), [](){ optionGBPal = 8; applyGBPalette(); }},
-		{"灰色", &defaultFace(), [](){ optionGBPal = 9; applyGBPalette(); }},
-		{"绿色", &defaultFace(), [](){ optionGBPal = 10; applyGBPalette(); }},
-		{"深绿色", &defaultFace(), [](){ optionGBPal = 11; applyGBPalette(); }},
-		{"反相", &defaultFace(), [](){ optionGBPal = 12; applyGBPalette(); }},
+		{"原画",   &defaultFace(), setGbPaletteDel(), 0},
+		{"棕色",      &defaultFace(), setGbPaletteDel(), 1},
+		{"红色",        &defaultFace(), setGbPaletteDel(), 2},
+		{"深棕色", &defaultFace(), setGbPaletteDel(), 3},
+		{"粉彩",     &defaultFace(), setGbPaletteDel(), 4},
+		{"橙色",     &defaultFace(), setGbPaletteDel(), 5},
+		{"黄色",     &defaultFace(), setGbPaletteDel(), 6},
+		{"蓝色",       &defaultFace(), setGbPaletteDel(), 7},
+		{"深蓝色",  &defaultFace(), setGbPaletteDel(), 8},
+		{"灰色",       &defaultFace(), setGbPaletteDel(), 9},
+		{"绿色",      &defaultFace(), setGbPaletteDel(), 10},
+		{"深绿色", &defaultFace(), setGbPaletteDel(), 11},
+		{"颜色反转",    &defaultFace(), setGbPaletteDel(), 12},
 	};
 
 	MultiChoiceMenuItem gbPalette
 	{
 		"GB调色板", &defaultFace(),
-		optionGBPal.val,
+		system().optionGBPal.val,
 		gbPaletteItem
 	};
 
 	BoolMenuItem fullSaturation
 	{
 		"饱和GBC颜色", &defaultFace(),
-		(bool)optionFullGbcSaturation,
+		(bool)system().optionFullGbcSaturation,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
-			optionFullGbcSaturation = item.flipBoolValue(*this);
+			system().optionFullGbcSaturation = item.flipBoolValue(*this);
 			if(system().hasContent())
 			{
-				gbEmu.refreshPalettes();
+				system().refreshPalettes();
 			}
 		}
 	};
@@ -109,28 +127,28 @@ public:
 	}
 };
 
-class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionView>
+class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionView>
 {
 	BoolMenuItem useBuiltinGBPalette
 	{
 		"使用内置GB调色板", &defaultFace(),
-		(bool)optionUseBuiltinGBPalette,
+		(bool)system().optionUseBuiltinGBPalette,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
 			system().sessionOptionSet();
-			optionUseBuiltinGBPalette = item.flipBoolValue(*this);
-			applyGBPalette();
+			system().optionUseBuiltinGBPalette = item.flipBoolValue(*this);
+			system().applyGBPalette();
 		}
 	};
 
 	BoolMenuItem reportAsGba
 	{
 		"将硬件报告为GBA", &defaultFace(),
-		(bool)optionReportAsGba,
+		(bool)system().optionReportAsGba,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
 			system().sessionOptionSet();
-			optionReportAsGba = item.flipBoolValue(*this);
+			system().optionReportAsGba = item.flipBoolValue(*this);
 			app().promptSystemReloadDueToSetOption(attachParams(), e);
 		}
 	};

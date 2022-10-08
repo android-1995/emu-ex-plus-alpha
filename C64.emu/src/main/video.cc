@@ -16,7 +16,7 @@
 #define LOGTAG "video"
 #include <emuframework/EmuSystem.hh>
 #include <emuframework/EmuApp.hh>
-#include "internal.hh"
+#include "MainSystem.hh"
 
 extern "C"
 {
@@ -30,25 +30,20 @@ extern "C"
 	#include "viewport.h"
 }
 
-namespace EmuEx
-{
-
-struct video_canvas_s *activeCanvas{};
-IG::Pixmap canvasSrcPix{};
-double systemFrameRate = 60.0;
-static std::atomic_bool runningFrame{};
-
-}
-
 using namespace EmuEx;
 
-void setCanvasSkipFrame(bool on)
+static EmuEx::C64System &c64Sys(struct video_canvas_s *c)
+{
+	return *(EmuEx::C64System*)c->systemPtr;
+}
+
+void C64System::setCanvasSkipFrame(bool on)
 {
 	if(activeCanvas)
 		activeCanvas->skipFrame = on;
 }
 
-void startCanvasRunningFrame()
+void C64System::startCanvasRunningFrame()
 {
 	runningFrame = true;
 }
@@ -56,12 +51,13 @@ void startCanvasRunningFrame()
 CLINK LVISIBLE void vsync_do_vsync2(struct video_canvas_s *c);
 void vsync_do_vsync2(struct video_canvas_s *c)
 {
-	if(runningFrame) [[likely]]
+	auto &sys = c64Sys(c);
+	if(sys.runningFrame) [[likely]]
 	{
 		//logMsg("vsync_do_vsync signaling main thread");
-		runningFrame = false;
-		execDoneSem.release();
-		execSem.acquire();
+		sys.runningFrame = false;
+		sys.execDoneSem.release();
+		sys.execSem.acquire();
 	}
 	else
 	{
@@ -72,16 +68,16 @@ void vsync_do_vsync2(struct video_canvas_s *c)
 void vsyncarch_refresh_frequency_changed(double rate)
 {
 	logMsg("system frame rate:%.4f", rate);
-	systemFrameRate = rate;
+	static_cast<C64System&>(EmuEx::gSystem()).systemFrameRate = rate;
 	EmuEx::gApp().configFrameTime();
 }
 
 static bool isValidPixelFormat(IG::PixelFormat fmt)
 {
-	return fmt == IG::PIXEL_FMT_RGB565 || fmt == IG::PIXEL_FMT_RGBA8888 || fmt == IG::PIXEL_FMT_BGRA8888;
+	return fmt == IG::PIXEL_FMT_RGBA8888 || fmt == IG::PIXEL_FMT_BGRA8888;
 }
 
-static IG::Pixmap makePixmapView(const struct video_canvas_s *c)
+static IG::PixmapView pixmapView(const struct video_canvas_s *c)
 {
 	IG::PixelFormat fmt{(IG::PixelFormatID)c->pixelFormat};
 	assumeExpr(isValidPixelFormat(fmt));
@@ -91,22 +87,22 @@ static IG::Pixmap makePixmapView(const struct video_canvas_s *c)
 static IG::PixelDesc pixelDesc(IG::PixelFormat fmt)
 {
 	assumeExpr(isValidPixelFormat(fmt));
-	return fmt == IG::PIXEL_FMT_RGB565 ? fmt.desc() : fmt.desc().nativeOrder();
+	return fmt.desc().nativeOrder();
 }
 
 static void updateInternalPixelFormat(struct video_canvas_s *c, IG::PixelFormat fmt)
 {
-	assumeExpr(isValidPixelFormat(pixFmt));
+	assumeExpr(isValidPixelFormat(fmt));
 	c->pixelFormat = fmt;
-	c->bpp = pixelDesc(fmt).bitsPerPixel();
 }
 
 void video_arch_canvas_init(struct video_canvas_s *c)
 {
 	logMsg("init canvas:%p with size %d,%d", c, c->draw_buffer->canvas_width, c->draw_buffer->canvas_height);
 	c->video_draw_buffer_callback = nullptr;
-	if(!activeCanvas)
-		activeCanvas = c;
+	c->systemPtr = (void*)&EmuEx::gSystem();
+	if(!c64Sys(c).activeCanvas)
+		c64Sys(c).activeCanvas = c;
 }
 
 int video_canvas_set_palette(video_canvas_t *c, struct palette_s *palette)
@@ -114,7 +110,8 @@ int video_canvas_set_palette(video_canvas_t *c, struct palette_s *palette)
 	IG::PixelFormat fmt{(IG::PixelFormatID)c->pixelFormat};
 	const auto pDesc = pixelDesc(fmt);
 	auto colorTables = &c->videoconfig->color_tables;
-	iterateTimes(256, i)
+	auto &plugin = c64Sys(c).plugin;
+	for(auto i : IG::iotaCount(256))
 	{
 		plugin.video_render_setrawrgb(colorTables, i, pDesc.build(i/255., 0., 0., 0.), pDesc.build(0., i/255., 0., 0.), pDesc.build(0., 0., i/255., 0.));
 	}
@@ -123,11 +120,11 @@ int video_canvas_set_palette(video_canvas_t *c, struct palette_s *palette)
 	if(palette)
 	{
 		c->palette = palette;
-		iterateTimes(palette->num_entries, i)
+		for(auto i : iotaCount(palette->num_entries))
 		{
 			auto col = pDesc.build(palette->entries[i].red/255., palette->entries[i].green/255., palette->entries[i].blue/255., 0.);
-			logMsg("set color %d to %X (%d bpp)", i, col, c->bpp);
-			plugin.video_render_setphysicalcolor(c->videoconfig, i, col, c->bpp);
+			logMsg("set color %d to %X", i, col);
+			plugin.video_render_setphysicalcolor(c->videoconfig, i, col, 32);
 		}
 	}
 
@@ -142,15 +139,15 @@ void video_canvas_refresh(struct video_canvas_s *c, unsigned int xs, unsigned in
 	w *= c->videoconfig->scalex;
 	yi *= c->videoconfig->scaley;
 	h *= c->videoconfig->scaley;
-	auto pixView = makePixmapView(c);
+	auto pixView = pixmapView(c);
 
 	w = std::min((int)w, pixView.w());
 	h = std::min((int)h, pixView.h());
 
-	plugin.video_canvas_render(c, (uint8_t*)pixView.data(), w, h, xs, ys, xi, yi, pixView.pitchBytes());
+	c64Sys(c).plugin.video_canvas_render(c, (uint8_t*)pixView.data(), w, h, xs, ys, xi, yi, pixView.pitchBytes());
 }
 
-void resetCanvasSourcePixmap(struct video_canvas_s *c)
+void C64System::resetCanvasSourcePixmap(struct video_canvas_s *c)
 {
 	if(activeCanvas != c)
 		return;
@@ -172,11 +169,11 @@ void resetCanvasSourcePixmap(struct video_canvas_s *c)
 		}
 		int width = 320+(xBorderSize*2 - startX*2);
 		int widthPadding = startX*2;
-		canvasSrcPix = makePixmapView(c).subView({startX, startY}, {width, height});
+		canvasSrcPix = pixmapView(c).subView({startX, startY}, {width, height});
 	}
 	else
 	{
-		canvasSrcPix = makePixmapView(c);
+		canvasSrcPix = pixmapView(c);
 	}
 }
 
@@ -190,7 +187,7 @@ static void updateCanvasMemPixmap(struct video_canvas_s *c, int x, int y)
 	delete[] c->pixmapData;
 	logMsg("allocating pixmap:%dx%d format:%s bytes:%d", x, y, fmt.name(), (int)desc.bytes());
 	c->pixmapData = new uint8_t[desc.bytes()];
-	resetCanvasSourcePixmap(c);
+	c64Sys(c).resetCanvasSourcePixmap(c);
 }
 
 static void refreshFullCanvas(video_canvas_t *canvas)
@@ -206,7 +203,7 @@ static void refreshFullCanvas(video_canvas_t *canvas)
 		std::min(canvas->draw_buffer->canvas_height, viewport->last_line - viewport->first_line + 1));
 }
 
-bool updateCanvasPixelFormat(struct video_canvas_s *c, IG::PixelFormat fmt)
+bool C64System::updateCanvasPixelFormat(struct video_canvas_s *c, IG::PixelFormat fmt)
 {
 	assumeExpr(isValidPixelFormat(fmt));
 	if(c->pixelFormat == fmt)
@@ -227,7 +224,7 @@ void video_canvas_resize(struct video_canvas_s *c, char resize_canvas)
 	x *= c->videoconfig->scalex;
 	y *= c->videoconfig->scaley;
 	logMsg("resized canvas to %d,%d, renderer %d", x, y, c->videoconfig->rendermode);
-	updateInternalPixelFormat(c, pixFmt);
+	updateInternalPixelFormat(c, c64Sys(c).pixFmt);
 	updateCanvasMemPixmap(c, x, y);
 }
 
@@ -235,7 +232,7 @@ video_canvas_t *video_canvas_create(video_canvas_t *c, unsigned int *width, unsi
 {
 	logMsg("create canvas:0x%p renderer %d", c, c->videoconfig->rendermode);
 	c->created = true;
-	updateInternalPixelFormat(c, pixFmt);
+	updateInternalPixelFormat(c, c64Sys(c).pixFmt);
 	return c;
 }
 
@@ -245,6 +242,6 @@ void video_canvas_destroy(struct video_canvas_s *c)
 	c->created = false;
 	delete[] c->pixmapData;
 	c->pixmapData = {};
-	if(c == activeCanvas)
-		activeCanvas = {};
+	if(c == c64Sys(c).activeCanvas)
+		c64Sys(c).activeCanvas = {};
 }

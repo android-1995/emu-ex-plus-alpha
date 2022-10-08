@@ -16,16 +16,17 @@
 #define LOGTAG "VControllerButton"
 #include <emuframework/VController.hh>
 #include <imagine/gfx/RendererCommands.hh>
+#include <imagine/gfx/BasicEffect.hh>
 #include <imagine/gui/View.hh>
 #include <imagine/logger/logger.h>
 
 namespace EmuEx
 {
 
-void VControllerButton::setPos(IG::WP pos, Gfx::ProjectionPlane projP, _2DOrigin o)
+void VControllerButton::setPos(IG::WP pos, IG::WindowRect viewBounds, Gfx::ProjectionPlane projP, _2DOrigin o)
 {
 	bounds_.setPos(pos, o);
-	bounds_.fitIn(projP.viewport().bounds());
+	bounds_.fitIn(viewBounds);
 	extendedBounds_.setPos(bounds_.pos(C2DO), C2DO);
 	IG::WindowRect spriteBounds{{0, 0}, {bounds_.xSize(), (int)(bounds_.ySize() / aspectRatio)}};
 	spriteBounds.setPos(bounds_.pos(C2DO), C2DO);
@@ -40,7 +41,7 @@ void VControllerButton::setSize(IG::WP size, IG::WP extendedSize)
 
 void VControllerButton::setImage(Gfx::TextureSpan img, float aR)
 {
-	spr.setImg(img);
+	spr.set(img);
 	aspectRatio = aR;
 }
 
@@ -70,21 +71,19 @@ void VControllerButton::draw(Gfx::RendererCommands &cmds, std::optional<Gfx::Col
 		return;
 	if(col)
 		cmds.setColor(*col);
-	cmds.set(View::imageCommonTextureSampler);
-	spr.setCommonProgram(cmds, Gfx::IMG_MODE_MODULATE);
-	spr.draw(cmds);
+	spr.draw(cmds, cmds.basicEffect());
 }
 
 VControllerButtonGroup::VControllerButtonGroup(int size):
 	btns{(size_t)size}
 {}
 
-void VControllerButtonGroup::setPos(IG::WP pos, Gfx::ProjectionPlane projP)
+void VControllerButtonGroup::setPos(IG::WP pos, IG::WindowRect viewBounds, Gfx::ProjectionPlane projP)
 {
 	int btnsPerRow = buttonsPerRow();
 	//logMsg("laying out %d buttons in %d row(s)", buttonsToLayout(), rows());
 	bounds_.setPos(pos, C2DO);
-	bounds_.fitIn(projP.viewport().bounds());
+	bounds_.fitIn(viewBounds);
 	auto btnArea = bounds_;
 	int row{}, btnPos{}, y{-btnSize.y};
 	int stagger = btnStagger;
@@ -97,7 +96,7 @@ void VControllerButtonGroup::setPos(IG::WP pos, Gfx::ProjectionPlane projP)
 		if(b.shouldSkipLayout() || !b.isEnabled())
 			continue;
 		IG::WP pos = btnArea.pos(LB2DO) + IG::WP{x, y + staggerOffset} + (btnSize/2);
-		b.setPos(pos, projP);
+		b.setPos(pos, viewBounds, projP);
 		x += btnSize.x + btnSpace;
 		staggerOffset -= stagger;
 		if(++btnPos == btnsPerRow)
@@ -190,7 +189,7 @@ std::array<int, 2> VControllerButtonGroup::findButtonIndices(IG::WP windowPos) c
 	std::array<int, 2> btnOut{-1, -1};
 	if(state() == VControllerState::OFF)
 		return btnOut;
-	for(unsigned count = 0; auto &b : buttons())
+	for(size_t count = 0; auto &b : buttons())
 	{
 		if(b.isEnabled() && b.realBounds().overlaps(windowPos))
 		{
@@ -206,10 +205,10 @@ void VControllerButtonGroup::draw(Gfx::RendererCommands &cmds, Gfx::ProjectionPl
 {
 	if(!VController::shouldDraw(state(), showHidden))
 		return;
-	cmds.set(View::imageCommonTextureSampler);
+	auto &basicEffect = cmds.basicEffect();
 	if(showBoundingArea)
 	{
-		cmds.setCommonProgram(Gfx::CommonProgram::NO_TEX);
+		basicEffect.disableTexture(cmds);
 		for(const auto &b : btns)
 		{
 			if(!b.isEnabled())
@@ -217,9 +216,9 @@ void VControllerButtonGroup::draw(Gfx::RendererCommands &cmds, Gfx::ProjectionPl
 			Gfx::GeomRect::draw(cmds, b.realBounds(), projP);
 		}
 	}
-	//cmds.setCommonProgram(Gfx::CommonProgram::NO_TEX);
+	//basicEffect.disableTexture(cmds);
 	//Gfx::GeomRect::draw(cmds, bounds(), projP);
-	btns[0].sprite().setCommonProgram(cmds, Gfx::IMG_MODE_MODULATE);
+	basicEffect.enableTexture(cmds);
 	for(auto &b : btns)
 	{
 		if(!b.isEnabled())

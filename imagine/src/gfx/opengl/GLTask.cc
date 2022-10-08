@@ -17,6 +17,7 @@
 #include <imagine/gfx/Renderer.hh>
 #include <imagine/gfx/opengl/GLRendererTask.hh>
 #include <imagine/thread/Thread.hh>
+#include <imagine/base/Error.hh>
 #include <imagine/logger/logger.h>
 #include "internalDefs.hh"
 #include <cassert>
@@ -101,9 +102,6 @@ bool GLTask::makeGLContext(GLTaskConfig config)
 							// unset the drawable and finish all commands before entering background
 							if(GLManager::hasCurrentDrawable())
 								glContext.setCurrentDrawable({});
-							#ifdef CONFIG_GFX_OPENGL_SHADER_PIPELINE
-							glReleaseShaderCompiler();
-							#endif
 							glFinish();
 						}, true);
 				}
@@ -170,9 +168,9 @@ static GLContextAttributes makeGLContextAttributes(int majorVersion, int minorVe
 {
 	GLContextAttributes glAttr{majorVersion, minorVersion, glAPI};
 	if(Config::DEBUG_BUILD)
-		glAttr.setDebug(true);
+		glAttr.debug = true;
 	else
-		glAttr.setNoError(true);
+		glAttr.noError = true;
 	return glAttr;
 }
 
@@ -180,8 +178,14 @@ static GLContext makeVersionedGLContext(GLManager &mgr, GLBufferConfig config,
 	int majorVersion, int minorVersion)
 {
 	auto glAttr = makeGLContextAttributes(majorVersion, minorVersion);
-	IG::ErrorCode ec{};
-	return mgr.makeContext(glAttr, config, ec);
+	try
+	{
+		return mgr.makeContext(glAttr, config);
+	}
+	catch(...)
+	{
+		return {};
+	}
 }
 
 GLContext GLTask::makeGLContext(GLManager &mgr, GLBufferConfig bufferConf)

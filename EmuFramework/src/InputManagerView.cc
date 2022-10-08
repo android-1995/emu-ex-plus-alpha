@@ -40,8 +40,7 @@ IdentInputDeviceView::IdentInputDeviceView(ViewAttachParams attach):
 
 void IdentInputDeviceView::place()
 {
-	text.setMaxLineSize(projP.width() * 0.95);
-	text.compile(renderer(), projP);
+	text.compile(renderer(), projP, {.maxLineSize = projP.width() * 0.95f});
 }
 
 bool IdentInputDeviceView::inputEvent(const Input::Event &e)
@@ -68,19 +67,20 @@ bool IdentInputDeviceView::inputEvent(const Input::Event &e)
 			}
 			return false;
 		}
-	}, e.asVariant());
+	}, e);
 }
 
-void IdentInputDeviceView::draw(Gfx::RendererCommands &cmds)
+void IdentInputDeviceView::draw(Gfx::RendererCommands &__restrict__ cmds)
 {
 	using namespace IG::Gfx;
-	cmds.setBlendMode(0);
-	cmds.setCommonProgram(CommonProgram::NO_TEX, projP.makeTranslate());
+	auto &basicEffect = cmds.basicEffect();
+	cmds.set(BlendMode::OFF);
+	basicEffect.disableTexture(cmds);
 	cmds.setColor(.4, .4, .4, 1.);
-	GeomRect::draw(cmds, viewRect(), projP);
+	GeomRect::draw(cmds, displayRect(), projP);
 	cmds.set(ColorName::WHITE);
-	cmds.setCommonProgram(CommonProgram::TEX_ALPHA);
-	text.draw(cmds, 0, 0, C2DO, projP);
+	basicEffect.enableAlphaTexture(cmds);
+	text.draw(cmds, {}, C2DO, projP);
 }
 
 static void removeKeyConfFromAllDevices(auto &savedInputDevs, const KeyConfig *conf, IG::ApplicationContext ctx)
@@ -180,14 +180,13 @@ InputManagerView::InputManagerView(ViewAttachParams attach,
 			pushAndShow(std::move(multiChoiceView), e);
 		}
 	},
-	#ifdef __ANDROID__
 	rescanOSDevices
 	{
 		"Re-scan OS Input Devices", &defaultFace(),
 		[this](const Input::Event &e)
 		{
 			appContext().enumInputDevices();
-			unsigned devices = 0;
+			int devices = 0;
 			for(auto &e : appContext().inputDevices())
 			{
 				if(e->map() == Input::Map::SYSTEM || e->map() == Input::Map::ICADE)
@@ -196,7 +195,6 @@ InputManagerView::InputManagerView(ViewAttachParams attach,
 			app().postMessage(2, false, fmt::format("{} OS devices present", devices));
 		}
 	},
-	#endif
 	identDevice
 	{
 		"Auto-detect Device To Setup", &defaultFace(),
@@ -257,12 +255,11 @@ void InputManagerView::loadItems()
 	item.emplace_back(&generalOptions);
 	item.emplace_back(&deleteDeviceConfig);
 	item.emplace_back(&deleteProfile);
-	#ifdef __ANDROID__
-	if(appContext().androidSDK() >= 12 && appContext().androidSDK() < 16)
+	doIfUsed(rescanOSDevices, [&](auto &mItem)
 	{
-		item.emplace_back(&rescanOSDevices);
-	}
-	#endif
+		if(appContext().androidSDK() >= 12 && appContext().androidSDK() < 16)
+			item.emplace_back(&mItem);
+	});
 	item.emplace_back(&deviceListHeading);
 	inputDevName.clear();
 	inputDevName.reserve(appContext().inputDevices().size());
@@ -492,14 +489,11 @@ public:
 					});
 			}
 		}
-		unsigned defaultConfs = 0;
-		auto defaultConf = KeyConfig::defaultConfigsForDevice(dev, defaultConfs);
-		iterateTimes(defaultConfs, c)
+		for(const auto &conf : KeyConfig::defaultConfigsForDevice(dev))
 		{
-			auto &conf = KeyConfig::defaultConfigsForDevice(dev)[c];
-			if(selectedName == defaultConf[c].name)
+			if(selectedName == conf.name)
 				activeItem = textItem.size();
-			textItem.emplace_back(defaultConf[c].name, &defaultFace(),
+			textItem.emplace_back(conf.name, &defaultFace(),
 				[this, &conf](const Input::Event &e)
 				{
 					auto del = onProfileChange;
@@ -510,13 +504,13 @@ public:
 	}
 };
 
-static unsigned playerConfToMenuIdx(unsigned player)
+static int playerConfToMenuIdx(int player)
 {
 	if(player == InputDeviceConfig::PLAYER_MULTI)
 		return 0;
 	else
 	{
-		assert(player < EmuSystem::maxPlayers);
+		assert(player < (int)EmuSystem::maxPlayers);
 		return player + 1;
 	}
 }
@@ -526,7 +520,7 @@ static bool customKeyConfigsContainName(auto &customKeyConfigs, std::string_view
 	return IG::find_if(customKeyConfigs, [&](auto &confPtr){ return confPtr->name == name; }) != customKeyConfigs.end();
 }
 
-InputManagerDeviceView::InputManagerDeviceView(IG::utf16String name, ViewAttachParams attach,
+InputManagerDeviceView::InputManagerDeviceView(UTF16String name, ViewAttachParams attach,
 	InputManagerView &rootIMView_, const Input::Device &dev,
 	KeyConfigContainer &customKeyConfigs_,
 	InputDeviceSavedConfigContainer &savedInputDevs_):
@@ -558,7 +552,7 @@ InputManagerDeviceView::InputManagerDeviceView(IG::utf16String name, ViewAttachP
 	},
 	loadProfile
 	{
-		{}, &defaultFace(),
+		u"", &defaultFace(),
 		[this](const Input::Event &e)
 		{
 			auto profileSelectMenu = makeView<ProfileSelectMenu>(devConf->device(),
@@ -646,7 +640,6 @@ InputManagerDeviceView::InputManagerDeviceView(IG::utf16String name, ViewAttachP
 					if(!conf)
 					{
 						bug_unreachable("confirmed deletion of a read-only key config, should never happen");
-						return;
 					}
 					logMsg("deleting profile: %s", conf->name.data());
 					removeKeyConfFromAllDevices(savedInputDevs(), conf, appContext());
@@ -761,7 +754,7 @@ void InputManagerDeviceView::loadItems()
 		auto &catItem = inputCategory.emplace_back(cat.name, &defaultFace(),
 			[this, &cat](const Input::Event &e)
 			{
-				pushAndShow(makeView<ButtonConfigView>(rootIMView, &cat, *this->devConf), e);
+				pushAndShow(makeView<ButtonConfigView>(rootIMView, cat, *this->devConf), e);
 			});
 		item.emplace_back(&catItem);
 	}

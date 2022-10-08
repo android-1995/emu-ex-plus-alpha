@@ -44,7 +44,7 @@ class ApplicationContext;
 class Application;
 class View;
 class ViewManager;
-class BaseTextMenuItem;
+class MenuItem;
 
 class ViewController
 {
@@ -67,7 +67,11 @@ class View
 {
 public:
 	using DismissDelegate = DelegateFunc<bool (View &view)>;
-	static constexpr auto imageCommonTextureSampler = ViewDefs::imageCommonTextureSampler;
+	static constexpr auto imageSamplerConfig = ViewDefs::imageSamplerConfig;
+	enum class Direction: uint8_t
+	{
+		TOP, RIGHT, BOTTOM, LEFT
+	};
 
 	constexpr View() = default;
 
@@ -80,7 +84,7 @@ public:
 	View &operator=(View &&) = delete;
 	virtual void place() = 0;
 	virtual void prepareDraw();
-	virtual void draw(Gfx::RendererCommands &cmds) = 0;
+	virtual void draw(Gfx::RendererCommands &__restrict__) = 0;
 	virtual bool inputEvent(const Input::Event &event) = 0;
 	virtual void clearSelection(); // de-select any items from previous input
 	virtual void onShow();
@@ -89,7 +93,8 @@ public:
 	virtual void setFocus(bool focused);
 	virtual std::u16string_view name() const;
 
-	void setViewRect(IG::WindowRect rect, Gfx::ProjectionPlane projP);
+	void setViewRect(WindowRect viewRect, WindowRect displayRect, Gfx::ProjectionPlane);
+	void setViewRect(WindowRect viewRect, Gfx::ProjectionPlane);
 	void setViewRect(Gfx::ProjectionPlane projP);
 	void postDraw();
 	Window &window() const;
@@ -99,7 +104,7 @@ public:
 	ViewAttachParams attachParams() const;
 	Screen *screen() const;
 	ApplicationContext appContext() const;
-	static std::u16string nameString(const BaseTextMenuItem &item);
+	static std::u16string nameString(const MenuItem &item);
 	Gfx::GlyphTextureSet &defaultFace();
 	Gfx::GlyphTextureSet &defaultBoldFace();
 	static Gfx::Color menuTextColor(bool isSelected);
@@ -116,8 +121,11 @@ public:
 	void setController(ViewController *c, const Input::Event &e);
 	void setController(ViewController *c);
 	ViewController *controller() const;
-	IG::WindowRect viewRect() const;
-	Gfx::ProjectionPlane projection() const;
+	WindowRect viewRect() const { return viewRect_; }
+	WindowRect displayRect() const { return displayRect_; }
+	WindowRect displayInsetRect(Direction) const;
+	static WindowRect displayInsetRect(Direction, WindowRect viewRect, WindowRect displayRect);
+	Gfx::ProjectionPlane projection() const { return projP; }
 	bool pointIsInView(IG::WP pos);
 	void waitForDrawFinished();
 
@@ -128,13 +136,13 @@ public:
 	}
 
 	template<class T>
-	std::unique_ptr<T> makeViewWithName(IG::utf16String name, auto &&...args)
+	std::unique_ptr<T> makeViewWithName(UTF16Convertible auto &&name, auto &&...args)
 	{
-		return std::make_unique<T>(std::move(name), attachParams(), IG_forward(args)...);
+		return std::make_unique<T>(IG_forward(name), attachParams(), IG_forward(args)...);
 	}
 
 	template<class T>
-	std::unique_ptr<T> makeViewWithName(const BaseTextMenuItem &item, auto &&...args)
+	std::unique_ptr<T> makeViewWithName(const MenuItem &item, auto &&...args)
 	{
 		return std::make_unique<T>(nameString(item), attachParams(), IG_forward(args)...);
 	}
@@ -146,6 +154,7 @@ protected:
 	ViewController *controller_{};
 	DismissDelegate dismissDel{};
 	IG::WindowRect viewRect_{};
+	IG::WindowRect displayRect_{};
 	Gfx::ProjectionPlane projP{};
 };
 

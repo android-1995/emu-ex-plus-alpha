@@ -24,6 +24,7 @@
 #include <imagine/base/Window.hh>
 #include <imagine/gfx/Renderer.hh>
 #include <imagine/gfx/RendererCommands.hh>
+#include <imagine/glm/gtc/color_space.hpp>
 #include <imagine/logger/logger.h>
 #include <algorithm>
 
@@ -33,96 +34,99 @@ namespace EmuEx
 EmuVideoLayer::EmuVideoLayer(EmuVideo &video):
 	video{video} {}
 
-void EmuVideoLayer::place(const IG::WindowRect &viewportRect, const Gfx::ProjectionPlane &projP, EmuInputView *inputView, EmuSystem &sys)
+void EmuVideoLayer::place(IG::WindowRect viewRect, IG::WindowRect displayRect, Gfx::ProjectionPlane projP, EmuInputView *inputView, EmuSystem &sys)
 {
 	if(sys.hasContent())
 	{
-		float viewportAspectRatio = viewportRect.xSize()/(float)viewportRect.ySize();
+		Gfx::GCRect contentGCRect{};
+		auto viewportAspectRatio = displayRect.xSize() / (float)displayRect.ySize();
 		auto zoom = zoom_;
+		auto contentSize = video.size();
+		if(isSideways(rotation))
+			std::swap(contentSize.x, contentSize.y);
 		// compute the video rectangle in pixel coordinates
 		if((zoom == optionImageZoomIntegerOnly || zoom == optionImageZoomIntegerOnlyY)
-			&& video.size().x)
+			&& contentSize.x)
 		{
-			unsigned gameX = video.size().x, gameY = video.size().y;
+			int x = contentSize.x, y = contentSize.y;
 
 			// Halve pixel sizes if image has mixed low/high-res content so scaling is based on lower res,
 			// this prevents jumping between two screen sizes in games like Seiken Densetsu 3 on SNES
-			if(sys.multiresVideoBaseX() && gameX > sys.multiresVideoBaseX())
+			auto multiresVideoBaseSize = sys.multiresVideoBaseSize();
+			if(multiresVideoBaseSize.x && x > multiresVideoBaseSize.x)
 			{
 				logMsg("halving X size for multires content");
-				gameX /= 2;
+				x /= 2;
 			}
-			if(sys.multiresVideoBaseY() && gameY > sys.multiresVideoBaseY())
+			if(multiresVideoBaseSize.y && y > multiresVideoBaseSize.y)
 			{
 				logMsg("halving Y size for multires content");
-				gameY /= 2;
+				y /= 2;
 			}
 
-			auto gameAR = float(gameX) / float(gameY);
+			auto aR = x / float(y);
 
 			// avoid overly wide images (SNES, etc.) or tall images (2600, etc.)
-			if(gameAR >= 2)
+			if(aR >= 2.f)
 			{
 				logMsg("unscaled image too wide, doubling height to compensate");
-				gameY *= 2;
-				gameAR = float(gameX) / float(gameY);
+				y *= 2;
+				aR = x / float(y);
 			}
-			else if(gameAR < 0.8)
+			else if(aR < 0.8f)
 			{
 				logMsg("unscaled image too tall, doubling width to compensate");
-				gameX *= 2;
-				gameAR = float(gameX) / float(gameY);
+				x *= 2;
+				aR = x / float(y);
 			}
 
-			unsigned scaleFactor;
-			if(gameAR > viewportAspectRatio)//Gfx::proj.aspectRatio)
+			int scaleFactor;
+			if(aR > viewportAspectRatio)
 			{
-				scaleFactor = std::max(1U, viewportRect.xSize() / gameX);
+				scaleFactor = std::max(1, displayRect.xSize() / x);
 				logMsg("using x scale factor %d", scaleFactor);
 			}
 			else
 			{
-				scaleFactor = std::max(1U, viewportRect.ySize() / gameY);
+				scaleFactor = std::max(1, displayRect.ySize() / y);
 				logMsg("using y scale factor %d", scaleFactor);
 			}
 
-			gameRect_.x = 0;
-			gameRect_.y = 0;
-			gameRect_.x2 = gameX * scaleFactor;
-			gameRect_.y2 = gameY * scaleFactor;
-			gameRect_.setPos({(int)viewportRect.xCenter() - gameRect_.x2/2, (int)viewportRect.yCenter() - gameRect_.y2/2});
+			contentRect_.x = 0;
+			contentRect_.y = 0;
+			contentRect_.x2 = x * scaleFactor;
+			contentRect_.y2 = y * scaleFactor;
+			contentRect_.setPos({(int)displayRect.xCenter() - contentRect_.x2/2, (int)displayRect.yCenter() - contentRect_.y2/2});
 		}
 
 		// compute the video rectangle in world coordinates for sub-pixel placement
 		if(zoom <= 100 || zoom == optionImageZoomIntegerOnlyY)
 		{
-			auto aR = aspectRatio();
-			if(sys.videoAspectRatioScale())
-			{
-				aR *= sys.videoAspectRatioScale();
-			}
+			auto aR = aspectRatio() * sys.videoAspectRatioScale();
+			if(isSideways(rotation))
+				aR = 1. / aR;
 			if(zoom == optionImageZoomIntegerOnlyY)
 			{
 				// get width from previously calculated pixel height
-				float width = projP.unprojectYSize(gameRect_.ySize()) * (float)aR;
+				float width = projP.unprojectYSize(contentRect_.ySize()) * (float)aR;
 				if(!aR)
 				{
 					width = projP.width();
 				}
-				gameRectG.x = -width/2.;
-				gameRectG.x2 = width/2.;
+				contentGCRect.x = -width / 2.f;
+				contentGCRect.x2 = width / 2.f;
 			}
 			else
 			{
-				Gfx::GP size = projP.size();
+				auto size = projP.size();
 				if(aR)
 				{
 					size = IG::sizesWithRatioBestFit((float)aR, size.x, size.y);
 				}
-				gameRectG.x = -size.x/2.;
-				gameRectG.x2 = size.x/2.;
-				gameRectG.y = -size.y/2.;
-				gameRectG.y2 = size.y/2.;
+				contentGCRect.x = -size.x / 2.f;
+				contentGCRect.x2 = size.x / 2.f;
+				contentGCRect.y = -size.y / 2.f;
+				contentGCRect.y2 = size.y / 2.f;
 			}
 		}
 
@@ -141,67 +145,69 @@ void EmuVideoLayer::place(const IG::WindowRect &viewportRect, const Gfx::Project
 		if(zoom < 100)
 		{
 			auto scaler = zoom / 100.f;
-			gameRectG.x *= scaler;
-			gameRectG.y *= scaler;
-			gameRectG.x2 *= scaler;
-			gameRectG.y2 *= scaler;
+			contentGCRect.x *= scaler;
+			contentGCRect.y *= scaler;
+			contentGCRect.x2 *= scaler;
+			contentGCRect.y2 *= scaler;
 		}
 
 		// adjust position
 		int layoutDirection = 0;
 		#ifdef CONFIG_EMUFRAMEWORK_VCONTROLS
-		if(inputView && viewportAspectRatio < 1. && inputView->activeVController()->gamepadIsActive())
+		if(inputView && viewportAspectRatio < 1. && !isSideways(rotation) &&
+			inputView->activeVController()->gamepadIsActive())
 		{
 			auto &vController = *inputView->activeVController();
 			auto padding = vController.bounds(3).ySize(); // adding menu button-sized padding
 			auto paddingG = projP.unProjectRect(vController.bounds(3)).ySize();
+			auto viewBoundsG = projP.unProjectRect(viewRect);
 			auto &layoutPos = vController.layoutPosition()[inputView->window().isPortrait() ? 1 : 0];
 			if(layoutPos[VCTRL_LAYOUT_DPAD_IDX].origin.onTop() && layoutPos[VCTRL_LAYOUT_FACE_BTN_GAMEPAD_IDX].origin.onTop())
 			{
 				layoutDirection = -1;
-				gameRectG.setYPos(projP.bounds().y + paddingG, CB2DO);
-				gameRect_.setYPos(viewportRect.y2 - padding, CB2DO);
+				contentGCRect.setYPos(viewBoundsG.y + paddingG, CB2DO);
+				contentRect_.setYPos(viewRect.y2 - padding, CB2DO);
 			}
 			else if(!(layoutPos[VCTRL_LAYOUT_DPAD_IDX].origin.onBottom() && layoutPos[VCTRL_LAYOUT_FACE_BTN_GAMEPAD_IDX].origin.onTop())
 				&& !(layoutPos[VCTRL_LAYOUT_DPAD_IDX].origin.onTop() && layoutPos[VCTRL_LAYOUT_FACE_BTN_GAMEPAD_IDX].origin.onBottom()))
 			{
 				// move controls to top if d-pad & face button aren't on opposite Y quadrants
 				layoutDirection = 1;
-				gameRectG.setYPos(projP.bounds().y2 - paddingG, CT2DO);
-				gameRect_.setYPos(viewportRect.y + padding, CT2DO);
+				contentGCRect.setYPos(viewBoundsG.y2 - paddingG, CT2DO);
+				contentRect_.setYPos(viewRect.y + padding, CT2DO);
 			}
 		}
 		#endif
 
 		// assign final coordinates
-		auto fromWorldSpaceRect = projP.projectRect(gameRectG);
-		auto fromPixelRect = projP.unProjectRect(gameRect_);
+		auto fromWorldSpaceRect = projP.projectRect(contentGCRect);
+		auto fromPixelRect = projP.unProjectRect(contentRect_);
 		if(getXCoordinateFromPixels)
 		{
-			gameRectG.x = fromPixelRect.x;
-			gameRectG.x2 = fromPixelRect.x2;
+			contentGCRect.x = fromPixelRect.x;
+			contentGCRect.x2 = fromPixelRect.x2;
 		}
 		else
 		{
-			gameRect_.x = fromWorldSpaceRect.x;
-			gameRect_.x2 = fromWorldSpaceRect.x2;
+			contentRect_.x = fromWorldSpaceRect.x;
+			contentRect_.x2 = fromWorldSpaceRect.x2;
 		}
 		if(getYCoordinateFromPixels)
 		{
-			gameRectG.y = fromPixelRect.y;
-			gameRectG.y2 = fromPixelRect.y2;
+			contentGCRect.y = fromPixelRect.y;
+			contentGCRect.y2 = fromPixelRect.y2;
 		}
 		else
 		{
-			gameRect_.y = fromWorldSpaceRect.y;
-			gameRect_.y2 = fromWorldSpaceRect.y2;
+			contentRect_.y = fromWorldSpaceRect.y;
+			contentRect_.y2 = fromWorldSpaceRect.y2;
 		}
 
-		disp.setPos(gameRectG);
+		disp.setPos(contentGCRect);
 		auto layoutStr = layoutDirection == 1 ? "top" : layoutDirection == -1 ? "bottom" : "center";
 		logMsg("placed game rect (%s), at pixels %d:%d:%d:%d, world %f:%f:%f:%f",
-				layoutStr, gameRect_.x, gameRect_.y, gameRect_.x2, gameRect_.y2,
-				(double)gameRectG.x, (double)gameRectG.y, (double)gameRectG.x2, (double)gameRectG.y2);
+				layoutStr, contentRect_.x, contentRect_.y, contentRect_.x2, contentRect_.y2,
+				(double)contentGCRect.x, (double)contentGCRect.y, (double)contentGCRect.x2, (double)contentGCRect.y2);
 	}
 	placeOverlay();
 }
@@ -209,18 +215,12 @@ void EmuVideoLayer::place(const IG::WindowRect &viewportRect, const Gfx::Project
 void EmuVideoLayer::draw(Gfx::RendererCommands &cmds, const Gfx::ProjectionPlane &projP)
 {
 	using namespace IG::Gfx;
-	bool replaceMode = true;
-	if(brightness != 1.f)
-	{
-		auto c = srgbColorSpace() ? brightnessSrgb : brightness;
-		cmds.setColor(c, c, c);
-		replaceMode = false;
-	}
-	cmds.setBlendMode(0);
+	bool srgbOutput = srgbColorSpace();
+	auto c = srgbOutput ? brightnessSrgb : brightness;
+	cmds.setColor(c.r, c.g, c.b);
+	cmds.set(BlendMode::OFF);
 	if(effects.size())
 	{
-		auto prevViewport = cmds.viewport();
-		cmds.setClipTest(false);
 		cmds.setDither(false);
 		TextureSpan srcTex = video.image();
 		for(auto &ePtr : effects)
@@ -234,22 +234,23 @@ void EmuVideoLayer::draw(Gfx::RendererCommands &cmds, const Gfx::ProjectionPlane
 		}
 		cmds.setDefaultRenderTarget();
 		cmds.setDither(true);
-		cmds.setViewport(prevViewport);
+		cmds.restoreViewport();
 	}
-	disp.setCommonProgram(cmds, replaceMode ? IMG_MODE_REPLACE : IMG_MODE_MODULATE, projP.makeTranslate());
-	bool srgbFrameBufferWrite = srgbColorSpace();
-	cmds.setTextureSampler(*texSampler);
-	if(srgbFrameBufferWrite)
+	if(srgbOutput)
 		cmds.setSrgbFramebufferWrite(true);
-	disp.draw(cmds);
-	if(srgbFrameBufferWrite)
-		cmds.setSrgbFramebufferWrite(false);
+	disp.draw(cmds, cmds.basicEffect());
 	video.addFence(cmds);
-	vidImgOverlay.draw(cmds);
+	vidImgOverlay.draw(cmds, c);
+	if(srgbOutput)
+		cmds.setSrgbFramebufferWrite(false);
 }
 
 void EmuVideoLayer::setFormat(EmuSystem &sys, IG::PixelFormat videoFmt, IG::PixelFormat effectFmt, Gfx::ColorSpace colorSpace)
 {
+	if(colSpace != colorSpace)
+	{
+		vidImgOverlay.setEffect(video.renderer(), {}, colSpace);
+	}
 	colSpace = colorSpace;
 	if(EmuSystem::canRenderRGBA8888 && colorSpace == Gfx::ColorSpace::SRGB)
 	{
@@ -259,13 +260,15 @@ void EmuVideoLayer::setFormat(EmuSystem &sys, IG::PixelFormat videoFmt, IG::Pixe
 	{
 		setEffectFormat(effectFmt);
 		updateConvertColorSpaceEffect();
+		updateSprite();
+		setOverlay(userOverlayEffectId);
 	}
 }
 
-void EmuVideoLayer::setOverlay(int effect)
+void EmuVideoLayer::setOverlay(ImageOverlayId id)
 {
-	userOverlayEffectId = effect;
-	vidImgOverlay.setEffect(video.renderer(), effect);
+	userOverlayEffectId = id;
+	vidImgOverlay.setEffect(video.renderer(), id, colSpace);
 	placeOverlay();
 }
 
@@ -276,12 +279,12 @@ void EmuVideoLayer::setOverlayIntensity(float intensity)
 
 void EmuVideoLayer::placeOverlay()
 {
-	vidImgOverlay.place(disp, video.size().y);
+	vidImgOverlay.place(disp, contentRect(), video.size(), rotation);
 }
 
 void EmuVideoLayer::setEffectFormat(IG::PixelFormat fmt)
 {
-	userEffect.setFormat(renderer(), fmt, colorSpace(), *texSampler);
+	userEffect.setFormat(renderer(), fmt, colorSpace(), samplerConfig());
 }
 
 void EmuVideoLayer::setEffect(EmuSystem &sys, ImageEffectId effect, IG::PixelFormat fmt)
@@ -299,7 +302,7 @@ void EmuVideoLayer::setEffect(EmuSystem &sys, ImageEffectId effect, IG::PixelFor
 	}
 	else
 	{
-		userEffect = {renderer(), effect, fmt, colorSpace(), *texSampler, video.size()};
+		userEffect = {renderer(), effect, fmt, colorSpace(), samplerConfig(), video.size()};
 		buildEffectChain();
 		video.setRenderPixelFormat(sys, video.renderPixelFormat(), Gfx::ColorSpace::LINEAR);
 	}
@@ -307,17 +310,17 @@ void EmuVideoLayer::setEffect(EmuSystem &sys, ImageEffectId effect, IG::PixelFor
 
 void EmuVideoLayer::setLinearFilter(bool on)
 {
-	texSampler = &renderer().make(on ? Gfx::CommonTextureSampler::NO_MIP_CLAMP : Gfx::CommonTextureSampler::NO_LINEAR_NO_MIP_CLAMP);
+	useLinearFilter = on;
 	if(effects.size())
-		effects.back()->setCompatTextureSampler(*texSampler);
+		effects.back()->setSampler(samplerConfig());
 	else
-		video.setCompatTextureSampler(*texSampler);
+		video.setSampler(samplerConfig());
 }
 
-void EmuVideoLayer::setBrightness(float b)
+void EmuVideoLayer::setBrightness(Gfx::Vec3 b)
 {
 	brightness = b;
-	brightnessSrgb = std::pow(b, 2.2f);
+	brightnessSrgb = glm::convertSRGBToLinear(b);
 }
 
 void EmuVideoLayer::onVideoFormatChanged(IG::PixelFormat effectFmt)
@@ -326,9 +329,16 @@ void EmuVideoLayer::onVideoFormatChanged(IG::PixelFormat effectFmt)
 	if(!updateConvertColorSpaceEffect())
 	{
 		updateEffectImageSize();
-		updateSprite();
 	}
+	updateSprite();
 	setOverlay(userOverlayEffectId);
+}
+
+void EmuVideoLayer::setRotation(IG::Rotation r)
+{
+	rotation = r;
+	disp.setUVBounds({{0.f, 0.f}, {1.f, 1.f}}, r);
+	placeOverlay();
 }
 
 Gfx::Renderer &EmuVideoLayer::renderer()
@@ -339,16 +349,14 @@ Gfx::Renderer &EmuVideoLayer::renderer()
 void EmuVideoLayer::updateEffectImageSize()
 {
 	auto &r = renderer();
-	auto &noLinearSampler = r.make(Gfx::CommonTextureSampler::NO_LINEAR_NO_MIP_CLAMP);
 	for(auto &e : effects)
 	{
-		e->setImageSize(r, video.size(), e == effects.back() ? *texSampler : noLinearSampler);
+		e->setImageSize(r, video.size(), e == effects.back() ? samplerConfig() : Gfx::SamplerConfigs::noLinearNoMipClamp);
 	}
 }
 
 void EmuVideoLayer::buildEffectChain()
 {
-	auto &r = renderer();
 	effects.clear();
 	if(userEffect)
 	{
@@ -366,7 +374,7 @@ bool EmuVideoLayer::updateConvertColorSpaceEffect()
 		&& userEffectId == ImageEffectId::DIRECT;
 	if(needsConversion && !userEffect)
 	{
-		userEffect = {renderer(), ImageEffectId::DIRECT, IG::PIXEL_RGBA8888, Gfx::ColorSpace::SRGB, *texSampler, video.size()};
+		userEffect = {renderer(), ImageEffectId::DIRECT, IG::PIXEL_RGBA8888, Gfx::ColorSpace::SRGB, samplerConfig(), video.size()};
 		logMsg("made sRGB conversion effect");
 		buildEffectChain();
 		return true;
@@ -385,16 +393,14 @@ void EmuVideoLayer::updateSprite()
 {
 	if(effects.size())
 	{
-		disp.setImg(effects.back()->renderTarget());
-		video.setCompatTextureSampler(renderer().make(Gfx::CommonTextureSampler::NO_LINEAR_NO_MIP_CLAMP));
+		disp.set(effects.back()->renderTarget(), rotation);
+		video.setSampler(Gfx::SamplerConfigs::noLinearNoMipClamp);
 	}
 	else
 	{
-		disp.setImg(video.image());
-		video.setCompatTextureSampler(*texSampler);
+		disp.set(video.image(), rotation);
+		video.setSampler(samplerConfig());
 	}
-	disp.compileDefaultProgramOneShot(Gfx::IMG_MODE_REPLACE);
-	disp.compileDefaultProgramOneShot(Gfx::IMG_MODE_MODULATE);
 }
 
 void EmuVideoLayer::logOutputFormat()
@@ -402,7 +408,7 @@ void EmuVideoLayer::logOutputFormat()
 	if constexpr(Config::DEBUG_BUILD)
 	{
 		IG::StaticString<255> str{"output format: main video:"};
-		str += video.image().usedPixmapDesc().format().name();
+		str += video.image().pixmapDesc().format().name();
 		for(auto &ePtr : effects)
 		{
 			auto &e = *ePtr;
@@ -419,5 +425,7 @@ Gfx::ColorSpace EmuVideoLayer::videoColorSpace(IG::PixelFormat videoFmt) const
 	return colorSpace() == Gfx::ColorSpace::SRGB && userEffectId == ImageEffectId::DIRECT ?
 			Gfx::Renderer::supportedColorSpace(videoFmt, colorSpace()) : Gfx::ColorSpace::LINEAR;
 }
+
+Gfx::TextureSamplerConfig EmuVideoLayer::samplerConfig() const { return EmuVideo::samplerConfigForLinearFilter(useLinearFilter); }
 
 }

@@ -17,8 +17,7 @@
 
 #include <imagine/config/defs.hh>
 #include <imagine/gfx/defs.hh>
-#include <imagine/gfx/PixmapTexture.hh>
-#include <imagine/gfx/PixmapBufferTexture.hh>
+#include <imagine/gfx/TextureSamplerConfig.hh>
 #include <imagine/pixmap/PixelFormat.hh>
 
 #ifdef CONFIG_GFX_OPENGL
@@ -36,6 +35,7 @@ class PixmapSource;
 namespace IG
 {
 class Window;
+class Viewport;
 }
 
 namespace IG::Gfx
@@ -43,6 +43,7 @@ namespace IG::Gfx
 
 class RendererTask;
 class Program;
+class Projection;
 
 struct TextureBufferModeDesc
 {
@@ -86,10 +87,12 @@ public:
 	bool attachWindow(Window &, DrawableConfig c = {});
 	void detachWindow(Window &);
 	bool setDrawableConfig(Window &, DrawableConfig);
+	void setDefaultViewport(Window &, Viewport);
 	bool canRenderToMultiplePixelFormats() const;
 	NativeWindowFormat nativeWindowFormat() const;
-	void setWindowValidOrientations(Window &win, Orientation validO);
-	void animateProjectionMatrixRotation(Window &win, float srcAngle, float destAngle);
+	void setWindowValidOrientations(Window &, OrientationMask);
+	void animateWindowRotation(Window &, float srcAngle, float destAngle);
+	Projection projection(const Window &, Viewport, Mat4) const;
 	static ClipRect makeClipRect(const Window &win, IG::WindowRect rect);
 	bool supportsSyncFences() const;
 	void setPresentationTime(Window &, IG::FrameTime time) const;
@@ -105,33 +108,28 @@ public:
 	Shader makeShader(std::string_view src, ShaderType type);
 	Shader makeCompatShader(std::span<std::string_view> srcs, ShaderType type);
 	Shader makeCompatShader(std::string_view src, ShaderType type);
-	NativeShader defaultVShader();
-	bool makeCommonProgram(CommonProgram);
-	bool commonProgramIsCompiled(CommonProgram program) const;
-	void uniformF(Program &program, int uniformLocation, float v1, float v2);
+	BasicEffect &basicEffect();
 	void releaseShaderCompiler();
 	void autoReleaseShaderCompiler();
 
 	// resources
 
 	Texture makeTexture(TextureConfig);
-	Texture makeTexture(IG::Data::PixmapSource, const TextureSampler *compatSampler = {}, bool makeMipmaps = true);
-	PixmapTexture makePixmapTexture(TextureConfig);
-	PixmapTexture makePixmapTexture(IG::Data::PixmapSource, const TextureSampler *compatSampler = {}, bool makeMipmaps = true);
+	Texture makeTexture(IG::Data::PixmapSource, TextureSamplerConfig samplerConf = {}, bool makeMipmaps = true);
 	PixmapBufferTexture makePixmapBufferTexture(TextureConfig config, TextureBufferMode mode = {}, bool singleBuffer = false);
 	std::vector<TextureBufferModeDesc> textureBufferModes();
 	TextureBufferMode makeValidTextureBufferMode(TextureBufferMode mode = {});
-	TextureSampler makeTextureSampler(TextureSamplerConfig config);
-	const TextureSampler &makeCommonTextureSampler(CommonTextureSampler sampler);
-	const TextureSampler &make(CommonTextureSampler sampler) { return makeCommonTextureSampler(sampler); }
-	const TextureSampler &commonTextureSampler(CommonTextureSampler sampler) const;
-	const TextureSampler &get(CommonTextureSampler sampler) const { return commonTextureSampler(sampler); }
+	TextureSampler makeTextureSampler(TextureSamplerConfig);
 
 	// color space control
 
 	bool supportsColorSpace() const;
 	bool hasSrgbColorSpaceWriteControl() const;
 	static ColorSpace supportedColorSpace(IG::PixelFormat, ColorSpace wantedColorSpace);
+
+	// optional features
+
+	static const bool enableSamplerObjects;
 };
 
 }

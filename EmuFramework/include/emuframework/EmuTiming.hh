@@ -22,7 +22,7 @@ namespace EmuEx
 
 struct EmuFrameTimeInfo
 {
-	uint32_t advanced;
+	int advanced;
 	IG::FrameTime presentTime;
 };
 
@@ -32,14 +32,14 @@ public:
 	EmuFrameTimeInfo advanceFramesWithTime(IG::FrameTime time);
 	void setFrameTime(IG::FloatSeconds time);
 	void reset();
-	void setSpeedMultiplier(uint8_t newSpeed);
+	void setSpeedMultiplier(double newSpeed);
 
 protected:
 	IG::FloatSeconds timePerVideoFrame{};
 	IG::FloatSeconds timePerVideoFrameScaled{};
 	IG::FrameTime startFrameTime{};
+	double speed = 1;
 	uint32_t lastFrame = 0;
-	uint8_t speed = 1;
 
 	void updateScaledFrameTime();
 };

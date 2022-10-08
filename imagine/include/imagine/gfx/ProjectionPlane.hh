@@ -17,29 +17,31 @@
 
 #include <imagine/config/defs.hh>
 #include <imagine/gfx/defs.hh>
-#include <imagine/gfx/Viewport.hh>
 #include <imagine/util/rectangle2.h>
+
+namespace IG
+{
+class Viewport;
+}
 
 namespace IG::Gfx
 {
 
-class RendererCommands;
 class Mat4;
 
 class ProjectionPlane
 {
 public:
 	constexpr ProjectionPlane() = default;
-	static ProjectionPlane makeWithMatrix(Viewport viewport, Mat4 mat);
+	ProjectionPlane(Viewport viewport, Mat4 mat);
 	float wHalf() const { return rect.x2; }
 	float hHalf() const { return rect.y2; }
 	GCRect bounds() const { return rect; }
-	void updateMMSize(Viewport v);
-	float width() const;
-	float height() const;
-	GP size() const;
-	float focalZ() const;
-	Viewport viewport() const;
+	float width() const { return w; }
+	float height() const { return h; }
+	FP size() const { return {w, h}; }
+	float focalZ() const { return focal; }
+	WindowRect windowBounds() const { return winBounds; }
 	float unprojectXSize(float x) const;
 	float unprojectYSize(float y) const;
 	float unprojectX(float x) const;
@@ -48,31 +50,25 @@ public:
 	float projectYSize(float y) const;
 	float projectX(float x) const;
 	float projectY(float y) const;
-	float unprojectXSize(IG::WindowRect r) const { return unprojectXSize(r.xSize()); }
-	float unprojectYSize(IG::WindowRect r) const { return unprojectYSize(r.ySize()); }
-	GP unprojectSize(IG::WindowRect r) const { return {unprojectXSize(r), unprojectYSize(r)}; }
+	float unprojectXSize(WindowRect r) const { return unprojectXSize(r.xSize()); }
+	float unprojectYSize(WindowRect r) const { return unprojectYSize(r.ySize()); }
+	FP unprojectSize(WindowRect r) const { return {unprojectXSize(r), unprojectYSize(r)}; }
 	GCRect unProjectRect(int x, int y, int x2, int y2) const;
-	GCRect unProjectRect(IG::WindowRect src) const;
+	GCRect unProjectRect(WindowRect src) const;
 	IG::WindowRect projectRect(GCRect src) const;
 	float alignXToPixel(float x) const;
 	float alignYToPixel(float y) const;
-	IG::Point2D<float> alignToPixel(IG::Point2D<float> p) const;
-	float xMMSize(float mm) const;
-	float yMMSize(float mm) const;
-	Mat4 makeTranslate(IG::Point2D<float> p) const;
+	FP alignToPixel(FP p) const;
+	Mat4 makeTranslate(FP p) const;
 	Mat4 makeTranslate() const;
-	void loadTranslate(Gfx::RendererCommands &cmds, float x, float y) const;
-	void loadTranslate(Gfx::RendererCommands &cmds, GP p) const;
-	void resetTransforms(Gfx::RendererCommands &cmds) const;
 
 private:
-	Viewport viewport_;
-	GCRect rect;
+	WindowRect winBounds{};
+	GCRect rect{};
 	float w{}, h{};
-	float focal{},
-		xToPixScale{}, yToPixScale{}, // screen -> projection space at focal z
-		pixToXScale{}, pixToYScale{}, // projection -> screen space at focal z
-		mmToXScale{}, mmToYScale{};   // MM of screen -> projection space at focal z
+	float focal{};
+	float xToPixScale{}, yToPixScale{}; // screen -> projection space at focal z
+	float pixToXScale{}, pixToYScale{}; // projection -> screen space at focal z
 };
 
 }

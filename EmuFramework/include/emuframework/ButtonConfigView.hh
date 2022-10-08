@@ -21,6 +21,7 @@
 #include <imagine/gui/MenuItem.hh>
 #include <imagine/input/config.hh>
 #include <string>
+#include <string_view>
 
 namespace EmuEx
 {
@@ -36,10 +37,10 @@ public:
 	using SetDelegate = DelegateFunc<void (const Input::KeyEvent &)>;
 
 	ButtonConfigSetView(ViewAttachParams attach, InputManagerView &rootIMView,
-		Input::Device &dev, const char *actionName, SetDelegate onSet);
+		Input::Device &dev, std::string_view actionName, SetDelegate onSet);
 	void place() final;
 	bool inputEvent(const Input::Event &) final;
-	void draw(Gfx::RendererCommands &cmds) final;
+	void draw(Gfx::RendererCommands &__restrict__) final;
 	void onAddedToController(ViewController *, const Input::Event &) final;
 
 private:
@@ -66,7 +67,7 @@ private:
 	struct BtnConfigMenuItem : public DualTextMenuItem
 	{
 		using DualTextMenuItem::DualTextMenuItem;
-		void draw(Gfx::RendererCommands &, float xPos, float yPos, float xSize, float ySize,
+		void draw(Gfx::RendererCommands &__restrict__ , float xPos, float yPos, float xSize, float ySize,
 			float xIndent, _2DOrigin align, const Gfx::ProjectionPlane &, Gfx::Color) const final;
 	};
 
@@ -81,7 +82,7 @@ private:
 	static std::string makeKeyNameStr(Input::Key key, std::string_view name);
 
 public:
-	ButtonConfigView(ViewAttachParams attach, InputManagerView &rootIMView, const KeyCategory *cat, InputDeviceConfig &devConf);
+	ButtonConfigView(ViewAttachParams attach, InputManagerView &rootIMView, const KeyCategory &cat, InputDeviceConfig &devConf);
 	bool inputEvent(const Input::Event &) final;
 };
 

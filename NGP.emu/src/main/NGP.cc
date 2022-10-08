@@ -19,7 +19,7 @@
 #include <imagine/logger/logger.h>
 #include <emuframework/Option.hh>
 #include <emuframework/EmuSystem.hh>
-#include "internal.hh"
+#include "MainSystem.hh"
 #include <mednafen/hash/md5.h>
 #include <mednafen/general.h>
 
@@ -28,7 +28,7 @@
 namespace Mednafen
 {
 
-MDFNGI *MDFNGameInfo = &EmulatedNGP;
+MDFNGI *MDFNGameInfo;
 
 uint64 MDFN_GetSettingUI(const char *name)
 {
@@ -57,7 +57,7 @@ bool MDFN_GetSettingB(const char *name)
 	if("cheats" == nameV)
 		return 0;
 	if(EMU_MODULE".language" == nameV)
-		return EmuEx::optionNGPLanguage;
+		return static_cast<EmuEx::NgpSystem&>(EmuEx::gSystem()).optionNGPLanguage;
 	if("filesys.untrusted_fip_check" == nameV)
 		return 0;
 	bug_unreachable("unhandled settingB %s", name);
@@ -67,7 +67,7 @@ bool MDFN_GetSettingB(const char *name)
 std::string MDFN_GetSettingS(const char *name)
 {
 	bug_unreachable("unhandled settingS %s", name);
-	return 0;
+	return {};
 }
 
 std::string MDFN_MakeFName(MakeFName_Type type, int id1, const char *cd1)
@@ -89,13 +89,13 @@ std::string MDFN_MakeFName(MakeFName_Type type, int id1, const char *cd1)
 		}
 		default:
 			bug_unreachable("type == %d", type);
-			return 0;
+			return {};
 	}
 }
 
 void MDFN_DoSimpleCommand(int cmd)
 {
-	emuSys->DoSimpleCommand(cmd);
+	MDFNGameInfo->DoSimpleCommand(cmd);
 }
 
 }

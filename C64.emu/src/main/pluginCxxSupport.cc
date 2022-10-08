@@ -18,8 +18,6 @@
 
 // minimal set of C++ symbols needed by reSID
 
-void *__gxx_personality_v0;
-
 void* operator new (std::size_t size) { return std::malloc(size); }
 
 void* operator new[] (std::size_t size) { return std::malloc(size); }

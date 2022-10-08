@@ -19,8 +19,8 @@
 #include <imagine/base/GLContext.hh>
 #include <imagine/base/MessagePort.hh>
 #include <imagine/base/ApplicationContext.hh>
-#include <imagine/util/concepts.hh>
 #include <imagine/util/utility.h>
+#include <concepts>
 #include <thread>
 
 namespace IG::Gfx
@@ -59,7 +59,7 @@ public:
 	};
 
 	// Align delegate data to 16 bytes in case we store SIMD types
-	using FuncDelegate = DelegateFuncA<sizeof(uintptr_t)*4 + sizeof(int)*10, 16, void(GLDisplay glDpy, std::binary_semaphore *semPtr)>;
+	using FuncDelegate = DelegateFuncA<sizeof(uintptr_t)*2 + sizeof(int)*16, 16, void(GLDisplay glDpy, std::binary_semaphore *semPtr)>;
 
 	enum class Command: uint8_t
 	{
@@ -100,7 +100,7 @@ public:
 	ApplicationContext appContext() const;
 	explicit operator bool() const;
 
-	void run(IG::invocable auto &&f, bool awaitReply = false)
+	void run(std::invocable auto &&f, bool awaitReply = false)
 	{
 		runFunc(
 			[=](GLDisplay, std::binary_semaphore *semPtr)
@@ -113,7 +113,7 @@ public:
 			}, awaitReply);
 	}
 
-	void run(IG::invocable<TaskContext> auto &&f, bool awaitReply = false)
+	void run(std::invocable<TaskContext> auto &&f, bool awaitReply = false)
 	{
 		runFunc(
 			[=](GLDisplay glDpy, std::binary_semaphore *semPtr)

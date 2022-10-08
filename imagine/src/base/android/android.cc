@@ -31,6 +31,7 @@
 #include <imagine/base/Timer.hh>
 #include <imagine/input/Input.hh>
 #include <imagine/fs/FS.hh>
+#include <imagine/fs/FSUtils.hh>
 #include <imagine/thread/Thread.hh>
 #include <imagine/pixmap/Pixmap.hh>
 #include <imagine/io/FileIO.hh>
@@ -86,17 +87,6 @@ AndroidApplication::AndroidApplication(ApplicationInitParams initParams):
 	}
 }
 
-void AndroidApplicationContext::setApplicationPtr(Application *appPtr)
-{
-	act->instance = appPtr;
-}
-
-Application &AndroidApplicationContext::application() const
-{
-	assert(act->instance);
-	return *static_cast<Application*>(act->instance);
-}
-
 IG::PixelFormat makePixelFormatFromAndroidFormat(int32_t androidFormat)
 {
 	switch(androidFormat)
@@ -117,7 +107,7 @@ IG::PixelFormat makePixelFormatFromAndroidFormat(int32_t androidFormat)
 	}
 }
 
-IG::Pixmap makePixmapView(JNIEnv *env, jobject bitmap, void *pixels, IG::PixelFormat format)
+MutablePixmapView makePixmapView(JNIEnv *env, jobject bitmap, void *pixels, IG::PixelFormat format)
 {
 	AndroidBitmapInfo info;
 	auto res = AndroidBitmap_getInfo(env, bitmap, &info);
@@ -132,7 +122,7 @@ IG::Pixmap makePixmapView(JNIEnv *env, jobject bitmap, void *pixels, IG::PixelFo
 		// use format from bitmap info
 		format = makePixelFormatFromAndroidFormat(info.format);
 	}
-	return {{{(int)info.width, (int)info.height}, format}, pixels, {(int)info.stride, IG::Pixmap::Units::BYTE}};
+	return {{{(int)info.width, (int)info.height}, format}, pixels, {(int)info.stride, MutablePixmapView::Units::BYTE}};
 }
 
 void ApplicationContext::exit(int returnVal)
@@ -195,18 +185,29 @@ FS::PathLocation ApplicationContext::sharedStoragePathLocation() const
 	return {path, "Storage Media", "Media"};
 }
 
+FS::PathString AndroidApplication::externalMediaPath(JNIEnv *env, jobject baseActivity) const
+{
+	JNI::InstMethod<jstring()> extMediaDir{env, baseActivity, "extMediaDir", "()Ljava/lang/String;"};
+	return FS::PathString{JNI::StringChars{env, extMediaDir(env, baseActivity)}};
+}
+
+FS::PathLocation AndroidApplicationContext::externalMediaPathLocation() const
+{
+	auto path = application().externalMediaPath(thisThreadJniEnv(), baseActivityObject());
+	return {path, "App Media Folder", "Media"};
+}
+
 std::vector<FS::PathLocation> ApplicationContext::rootFileLocations() const
 {
 	if(androidSDK() >= 30)
 	{
-		return {}; // only use scoped storage on Android 11+ so no file paths are useful
+		// When using scoped storage on Android 11+, provide the app's media directory since it's
+		// the only file location that's globally readable/writable
+		return {externalMediaPathLocation()};
 	}
 	if(androidSDK() < 14)
 	{
-		return
-			{
-				sharedStoragePathLocation(),
-			};
+		return {sharedStoragePathLocation()};
 	}
 	else if(androidSDK() < 24)
 	{
@@ -260,14 +261,14 @@ FS::PathString ApplicationContext::libPath(const char *) const
 	return {};
 }
 
-UniqueFileDescriptor AndroidApplication::openFileUriFd(JNIEnv *env, jobject baseActivity, IG::CStringView uri, IODefs::OpenFlags openFlags) const
+UniqueFileDescriptor AndroidApplication::openFileUriFd(JNIEnv *env, jobject baseActivity, CStringView uri, OpenFlagsMask openFlags) const
 {
-	int fd = openUriFd(env, baseActivity, env->NewStringUTF(uri), openFlags);
+	int fd = openUriFd(env, baseActivity, env->NewStringUTF(uri), (jint)openFlags);
 	if(fd == -1)
 	{
 		if constexpr(Config::DEBUG_BUILD)
 			logErr("error opening URI:%s", uri.data());
-		if(openFlags & IO::TEST_BIT)
+		if(to_underlying(openFlags & OpenFlagsMask::TEST))
 			return -1;
 		else
 			throw std::system_error{ENOENT, std::system_category(), uri};
@@ -276,14 +277,14 @@ UniqueFileDescriptor AndroidApplication::openFileUriFd(JNIEnv *env, jobject base
 	return fd;
 }
 
-FileIO ApplicationContext::openFileUri(IG::CStringView uri, IO::AccessHint access, IODefs::OpenFlags openFlags) const
+FileIO ApplicationContext::openFileUri(CStringView uri, IOAccessHint access, OpenFlagsMask openFlags) const
 {
 	if(androidSDK() < 19 || !IG::isUri(uri))
 		return {uri, access, openFlags};
 	return {application().openFileUriFd(thisThreadJniEnv(), baseActivityObject(), uri, openFlags), access, openFlags};
 }
 
-UniqueFileDescriptor ApplicationContext::openFileUriFd(IG::CStringView uri, IODefs::OpenFlags openFlags) const
+UniqueFileDescriptor ApplicationContext::openFileUriFd(CStringView uri, OpenFlagsMask openFlags) const
 {
 	if(androidSDK() < 19 || !IG::isUri(uri))
 		return PosixIO{uri, openFlags}.releaseFd();
@@ -376,7 +377,7 @@ bool ApplicationContext::removeDirectoryUri(IG::CStringView uri) const
 	return application().removeFileUri(thisThreadJniEnv(), baseActivityObject(), uri, true);
 }
 
-void AndroidApplication::forEachInDirectoryUri(JNIEnv *env, jobject baseActivity, IG::CStringView uri, FS::DirectoryEntryDelegate del) const
+void AndroidApplication::forEachInDirectoryUri(JNIEnv *env, jobject baseActivity, CStringView uri, DirectoryEntryDelegate del) const
 {
 	logMsg("listing directory URI:%s", uri.data());
 	if(!listUriFiles(env, baseActivity, (jlong)&del, env->NewStringUTF(uri)))
@@ -385,7 +386,7 @@ void AndroidApplication::forEachInDirectoryUri(JNIEnv *env, jobject baseActivity
 	}
 }
 
-void ApplicationContext::forEachInDirectoryUri(IG::CStringView uri, FS::DirectoryEntryDelegate del) const
+void ApplicationContext::forEachInDirectoryUri(CStringView uri, DirectoryEntryDelegate del) const
 {
 	if(androidSDK() < 21 || !IG::isUri(uri))
 	{
@@ -415,7 +416,7 @@ static jstring permissionToJString(JNIEnv *env, Permission p)
 
 bool ApplicationContext::usesPermission(Permission p) const
 {
-	if(androidSDK() < 23)
+	if(androidSDK() < 23 || androidSDK() >= 30)
 		return false;
 	return true;
 }
@@ -454,17 +455,12 @@ AAssetManager *AndroidApplicationContext::aAssetManager() const
 	return act->assetManager;
 }
 
-bool AndroidApplication::hasHardwareNavButtons() const
-{
-	return hasPermanentMenuKey;
-}
-
 bool ApplicationContext::hasHardwareNavButtons() const
 {
 	return application().hasHardwareNavButtons();
 }
 
-int32_t AndroidApplicationContext::androidSDK() const
+int32_t ApplicationContext::androidSDK() const
 {
 	#ifdef ANDROID_COMPAT_API
 	static_assert(__ANDROID_API__ <= 19, "Compiling with ANDROID_COMPAT_API and API higher than 19");
@@ -479,7 +475,10 @@ void AndroidApplication::setOnSystemOrientationChanged(SystemOrientationChangedD
 
 bool AndroidApplication::systemAnimatesWindowRotation() const
 {
-	return osAnimatesRotation;
+	if(Config::MACHINE_IS_GENERIC_ARMV7)
+		return !(deviceFlags & HANDLE_ROTATION_ANIMATION_BIT);
+	else
+		return true;
 }
 
 void ApplicationContext::setOnSystemOrientationChanged(SystemOrientationChangedDelegate del)
@@ -497,21 +496,26 @@ void AndroidApplication::setRequestedOrientation(JNIEnv *env, jobject baseActivi
 	jSetRequestedOrientation(env, baseActivity, orientation);
 }
 
-SurfaceRotation AndroidApplication::currentRotation() const
+Rotation AndroidApplication::currentRotation() const
 {
 	return osRotation;
 }
 
-void AndroidApplication::setCurrentRotation(ApplicationContext ctx, SurfaceRotation rotation, bool notify)
+void AndroidApplication::setCurrentRotation(ApplicationContext ctx, Rotation rotation, bool notify)
 {
 	auto oldRotation = std::exchange(osRotation, rotation);
 	if(notify && onSystemOrientationChanged)
 		onSystemOrientationChanged(ctx, oldRotation, rotation);
 }
 
-SurfaceRotation AndroidApplication::mainDisplayRotation(JNIEnv *env, jobject baseActivity) const
+Rotation AndroidApplication::mainDisplayRotation(JNIEnv *env, jobject baseActivity) const
 {
-	return (SurfaceRotation)jMainDisplayRotation(env, baseActivity);
+	// verify Surface.ROTATION_* maps to Rotation
+	static_assert(to_underlying(Rotation::UP) == 0);
+	static_assert(to_underlying(Rotation::RIGHT) == 1);
+	static_assert(to_underlying(Rotation::DOWN) == 2);
+	static_assert(to_underlying(Rotation::LEFT) == 3);
+	return (Rotation)jMainDisplayRotation(env, baseActivity);
 }
 
 jobject AndroidApplication::makeFontRenderer(JNIEnv *env, jobject baseActivity)
@@ -644,9 +648,9 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             }
                     },
                     {
-                            "fastForward", "(I)V",
+                            "fastForward", "(D)V",
                             (void*)
-                            +[](JNIEnv* env, jobject thiz,jint jSpeed)
+                            +[](JNIEnv* env, jobject thiz, jdouble jSpeed)
                             {
                                 IG::gAiWuAppContext().fastForwardAiWu(jSpeed);
                             }
@@ -736,7 +740,7 @@ void AndroidApplication::initActivity(JNIEnv *env, jobject baseActivity, jclass 
 					if(!screen)
 					{
 						app.addScreen(ctx, std::make_unique<Screen>(ctx,
-							Screen::InitParams{env, disp, metrics, id, refreshRate, (SurfaceRotation)rotation}), false);
+							Screen::InitParams{env, disp, metrics, id, refreshRate, (Rotation)rotation}), false);
 						return;
 					}
 					else
@@ -747,14 +751,15 @@ void AndroidApplication::initActivity(JNIEnv *env, jobject baseActivity, jclass 
 				}
 			},
 			{
-				"inputDeviceEnumerated", "(JILandroid/view/InputDevice;Ljava/lang/String;IIIZ)V",
+				"inputDeviceEnumerated", "(JILandroid/view/InputDevice;Ljava/lang/String;IIIIZ)V",
 				(void*)
-				+[](JNIEnv* env, jobject, jlong nUserData, jint devID, jobject jDev, jstring jName, jint src, jint kbType, jint jsAxisBits, jboolean isPowerButton)
+				+[](JNIEnv* env, jobject, jlong nUserData, jint devID, jobject jDev, jstring jName, jint src,
+					jint kbType, jint jsAxisBits, jint vendorProductId, jboolean isPowerButton)
 				{
 					auto &app = *((AndroidApplication*)nUserData);
 					const char *name = env->GetStringUTFChars(jName, nullptr);
 					Input::AndroidInputDevice sysDev{env, jDev, devID, src,
-						name, kbType, (uint32_t)jsAxisBits, (bool)isPowerButton};
+						name, kbType, (uint32_t)jsAxisBits, (uint32_t)vendorProductId, (bool)isPowerButton};
 					env->ReleaseStringUTFChars(jName, name);
 					auto devPtr = app.updateAndroidInputDevice(std::move(sysDev), false);
 					// check for special device IDs
@@ -786,7 +791,7 @@ void AndroidApplication::initActivity(JNIEnv *env, jobject baseActivity, jclass 
 				(void*)
 				+[](JNIEnv* env, jobject thiz, jlong userData, jstring jUri, jstring name, jboolean isDir)
 				{
-					auto &del = *((FS::DirectoryEntryDelegate*)userData);
+					auto &del = *((DirectoryEntryDelegate*)userData);
 					auto type = isDir ? FS::file_type::directory : FS::file_type::regular;
 					return del(FS::directory_entry{JNI::StringChars{env, jUri}, JNI::StringChars{env, name}, type});
 				}
@@ -795,29 +800,23 @@ void AndroidApplication::initActivity(JNIEnv *env, jobject baseActivity, jclass 
 		env->RegisterNatives(baseActivityClass, method, std::size(method));
 	}
 
-	if(androidSDK >= 11)
-		osAnimatesRotation = true;
-	else
-	{
-		JNI::ClassMethod<jboolean()> jAnimatesRotation{env, baseActivityClass, "gbAnimatesRotation", "()Z"};
-		osAnimatesRotation = jAnimatesRotation(env, baseActivityClass);
-	}
-	if(!osAnimatesRotation)
-	{
-		logMsg("app handles rotation animations");
-	}
-
 	if(androidSDK >= 14)
 	{
-		JNI::InstMethod<jboolean()> jHasPermanentMenuKey{env, baseActivityClass, "hasPermanentMenuKey", "()Z"};
-		hasPermanentMenuKey = jHasPermanentMenuKey(env, baseActivity);
-		if(hasPermanentMenuKey)
+		JNI::InstMethod<jint()> jDeviceFlags{env, baseActivityClass, "deviceFlags", "()I"};
+		deviceFlags = jDeviceFlags(env, baseActivity);
+		if(deviceFlags & PERMANENT_MENU_KEY_BIT)
 		{
 			logMsg("device has hardware nav/menu keys");
 		}
+		if(deviceFlags & DISPLAY_CUTOUT_BIT)
+		{
+			logMsg("device has display cutout");
+		}
+		if(deviceFlags & HANDLE_ROTATION_ANIMATION_BIT)
+		{
+			logMsg("app handles rotation animations");
+		}
 	}
-	else
-		hasPermanentMenuKey = 1;
 
 	/*if(unloadNativeLibOnDestroy)
 	{
@@ -971,6 +970,8 @@ bool ApplicationContext::hasTranslucentSysUI() const
 	return androidSDK() >= 19;
 }
 
+bool ApplicationContext::hasDisplayCutout() const { return application().hasDisplayCutout(); }
+
 bool AndroidApplication::hasFocus() const
 {
 	return aHasFocus;
@@ -978,7 +979,7 @@ bool AndroidApplication::hasFocus() const
 
 SustainedPerformanceType AndroidApplicationContext::sustainedPerformanceModeType() const
 {
-	int sdk = androidSDK();
+	int sdk = static_cast<const ApplicationContext*>(this)->androidSDK();
 	if(sdk >= 24)
 	{
 		return SustainedPerformanceType::DEVICE;
@@ -1029,6 +1030,19 @@ void AndroidApplicationContext::setSustainedPerformanceMode(bool on)
 		default:
 			return;
 	}
+}
+
+SensorValues ApplicationContext::remapSensorValuesForDeviceRotation(SensorValues v) const
+{
+	switch(application().currentRotation())
+	{
+		case Rotation::ANY:
+		case Rotation::UP: return v;
+		case Rotation::RIGHT: return {-v[1], v[0], v[2]};
+		case Rotation::DOWN: return {v[0], -v[1], v[2]};
+		case Rotation::LEFT: return {v[1], v[0], v[2]};
+	}
+	bug_unreachable("invalid Rotation");
 }
 
 Window *AndroidApplication::deviceWindow() const
