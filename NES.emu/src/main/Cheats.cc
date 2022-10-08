@@ -478,7 +478,7 @@ static std::vector<std::string> split(std::string s,char ch)
     return ret;
 }
 
-void NesSystem::setCheatListForAiWu(std::list<std::string> cheats)
+void NesSystem::setCheatListAiWu(std::list<std::string> cheats)
 {
     if(!hasContent())
         return;
