@@ -8,6 +8,7 @@
 #include <resample/resampler.h>
 #include <imagine/fs/FS.hh>
 #include <memory>
+#include <list>
 
 namespace EmuEx
 {
@@ -91,6 +92,9 @@ public:
 	bool resetSessionOptions(EmuApp &);
 	bool onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat);
 	void renderFramebuffer(EmuVideo &);
+	//region爱吾
+    void setCheatListAiWu(std::list<std::string> cheats);
+    //endregion
 protected:
 	uint_least32_t makeOutputColor(uint_least32_t rgb888) const;
 	size_t runUntilVideoFrame(gambatte::uint_least32_t *videoBuf, std::ptrdiff_t pitch,

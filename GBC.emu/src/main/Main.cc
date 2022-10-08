@@ -287,7 +287,7 @@ void GbcSystem::refreshPalettes()
 	gbEmu.refreshPalettes();
 }
 //region爱吾
-void EmuSystem::setCheatListAiWu(std::list<std::string> cheats)
+void GbcSystem::setCheatListAiWu(std::list<std::string> cheats)
 {
     setCheatListForAiWu(*this, cheats);
 }
