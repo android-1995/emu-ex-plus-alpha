@@ -5,6 +5,7 @@
 #include <fceu/driver.h>
 #include <fceu/palette.h>
 #include <fceu/state.h>
+#include <list>
 
 namespace EmuEx::Controls
 {
@@ -135,7 +136,9 @@ public:
 	double videoAspectRatioScale() const;
 	bool onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat);
 	bool shouldFastForward() const;
-
+	//region爱吾
+    void setCheatListAiWu(std::list<std::string> cheats);
+    //endregion
 private:
 	void cacheUsingZapper();
 	void setDefaultPalette(IO &io);
