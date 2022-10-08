@@ -330,10 +330,11 @@ void EmuCheatsView::loadCheatItems()
 		++it;
 	}
 }
-
 //region爱吾
-void setCheatListForAiWu(std::list<std::string> cheats)
+void GbcSystem::setCheatListAiWu(std::list<std::string> cheats)
 {
+	if(!hasContent())
+		return;
     std::string ggCodeStr, gsCodeStr;
     for (std::list<std::string>::iterator it = cheats.begin(); it != cheats.end(); it++)
     {

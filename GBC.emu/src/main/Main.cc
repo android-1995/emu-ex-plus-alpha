@@ -286,14 +286,6 @@ void GbcSystem::refreshPalettes()
 		return;
 	gbEmu.refreshPalettes();
 }
-//region爱吾
-void GbcSystem::setCheatListAiWu(std::list<std::string> cheats)
-{
-	if(!hasContent())
-		return;
-    setCheatListForAiWu(cheats);
-}
-//endregion
 }
 
 uint_least32_t gbcToRgb32(unsigned const bgr15, unsigned flags)

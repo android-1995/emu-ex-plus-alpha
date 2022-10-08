@@ -22,9 +22,6 @@ enum
 
 constexpr unsigned COLOR_CONVERSION_SATURATED_BIT = bit(0);
 constexpr unsigned COLOR_CONVERSION_BGR_BIT = bit(1);
-//region爱吾
-void setCheatListForAiWu(std::list<std::string> cheats);
-//endregion
 class GbcInput final : public gambatte::InputGetter
 {
 public:
