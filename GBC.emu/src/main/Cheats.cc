@@ -332,26 +332,23 @@ void EmuCheatsView::loadCheatItems()
 }
 
 //region爱吾
-void setCheatListForAiWu(EmuSystem &sys, std::list<std::string> cheats)
+void setCheatListForAiWu(std::list<std::string> cheats)
 {
-	if(sys.hasContent())
-	{
-        std::string ggCodeStr, gsCodeStr;
-        for (std::list<std::string>::iterator it = cheats.begin(); it != cheats.end(); it++)
-        {
-            std::string& cheat = *it;
-            std::string &codeStr = IG::stringContains(cheat.c_str(), "-") ? ggCodeStr : gsCodeStr;
-            if(codeStr.size())
-                codeStr += ";";
-            codeStr += cheat.c_str();
-        }
-        gbEmu.setGameGenie(ggCodeStr);
-        gbEmu.setGameShark(gsCodeStr);
-        if(ggCodeStr.size())
-            logMsg("set GG codes: %s", ggCodeStr.c_str());
-        if(gsCodeStr.size())
-            logMsg("set GS codes: %s", gsCodeStr.c_str());
+    std::string ggCodeStr, gsCodeStr;
+    for (std::list<std::string>::iterator it = cheats.begin(); it != cheats.end(); it++)
+    {
+        std::string& cheat = *it;
+        std::string &codeStr = IG::stringContains(cheat.c_str(), "-") ? ggCodeStr : gsCodeStr;
+        if(codeStr.size())
+            codeStr += ";";
+        codeStr += cheat.c_str();
     }
+    gbEmu.setGameGenie(ggCodeStr);
+    gbEmu.setGameShark(gsCodeStr);
+    if(ggCodeStr.size())
+        logMsg("set GG codes: %s", ggCodeStr.c_str());
+    if(gsCodeStr.size())
+        logMsg("set GS codes: %s", gsCodeStr.c_str());
 }
 //endregion
 }

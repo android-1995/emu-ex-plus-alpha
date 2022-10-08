@@ -289,7 +289,9 @@ void GbcSystem::refreshPalettes()
 //region爱吾
 void GbcSystem::setCheatListAiWu(std::list<std::string> cheats)
 {
-    setCheatListForAiWu(*this, cheats);
+	if(!hasContent())
+		return;
+    setCheatListForAiWu(cheats);
 }
 //endregion
 }
