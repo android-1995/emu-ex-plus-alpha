@@ -14,12 +14,8 @@
 	along with PCE.emu.  If not, see <http://www.gnu.org/licenses/> */
 
 #define LOGTAG "main"
-#include <emuframework/EmuApp.hh>
-#include <emuframework/EmuAudio.hh>
-#include <emuframework/EmuVideo.hh>
-#include <emuframework/EmuInput.hh>
+#include <emuframework/EmuSystemInlines.hh>
 #include <emuframework/EmuAppInlines.hh>
-#include "internal.hh"
 #include <imagine/fs/FS.hh>
 #include <imagine/util/ScopeGuard.hh>
 #include <imagine/util/format.hh>
@@ -38,13 +34,9 @@ namespace EmuEx
 {
 
 const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2022\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nMednafen Team\nmednafen.sourceforge.net";
-FS::PathString sysCardPath{};
-static std::vector<CDInterface *> CDInterfaces;
-static const unsigned vidBufferX = 512, vidBufferY = 242;
-alignas(8) static uint32_t pixBuff[vidBufferX*vidBufferY]{};
-static IG::Pixmap mSurfacePix;
-std::array<uint16, 5> inputBuff{}; // 5 gamepad buffers
-static bool prevUsing263Lines = false;
+constexpr double masterClockFrac = 21477272.727273 / 3.;
+constexpr double staticFrameTimeWith262Lines = (455. * 262.) / masterClockFrac; // ~60.05Hz
+double EmuSystem::staticFrameTime = (455. * 263.) / masterClockFrac; //~59.82Hz
 bool EmuApp::needsGlobalInstance = true;
 
 bool hasHuCardExtension(std::string_view name)
@@ -54,7 +46,7 @@ bool hasHuCardExtension(std::string_view name)
 
 static bool hasCDExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".toc", ".cue", ".ccd", ".TOC", ".CUE", ".CCD");
+	return IG::stringEndsWithAny(name, ".toc", ".cue", ".ccd", ".chd", ".TOC", ".CUE", ".CCD", ".CHD");
 }
 
 static bool hasPCEWithCDExtension(std::string_view name)
@@ -75,7 +67,7 @@ const char *EmuSystem::systemName() const
 EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter = hasPCEWithCDExtension;
 EmuSystem::NameFilterFunc EmuSystem::defaultBenchmarkFsFilter = hasHuCardExtension;
 
-void EmuSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
+void PceSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
 {
 	if(!hasContent())
 		return;
@@ -83,24 +75,14 @@ void EmuSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
 	MDFN_IEN_PCE_FAST::HuC_SaveNV();
 }
 
-static char saveSlotCharPCE(int slot)
+FS::FileString PceSystem::stateFilename(int slot, std::string_view name) const
 {
-	switch(slot)
-	{
-		case -1: return 'q';
-		case 0 ... 9: return '0' + slot;
-		default: bug_unreachable("slot == %d", slot); return 0;
-	}
+	return stateFilenameMDFN(*MDFNGameInfo, slot, name, 'q');
 }
 
-FS::FileString EmuSystem::stateFilename(int slot, std::string_view name) const
+void PceSystem::closeSystem()
 {
-	return IG::format<FS::FileString>("{}.{}.nc{}", name, md5_context::asciistr(MDFNGameInfo->MD5, 0), saveSlotCharPCE(slot));
-}
-
-void EmuSystem::closeSystem()
-{
-	emuSys->CloseGame();
+	mdfnGameInfo.CloseGame();
 	if(CDInterfaces.size())
 	{
 		assert(CDInterfaces.size() == 1);
@@ -109,12 +91,12 @@ void EmuSystem::closeSystem()
 	}
 }
 
-static void writeCDMD5()
+static void writeCDMD5(MDFNGI &mdfnGameInfo, CDInterface &cdInterface)
 {
 	CDUtility::TOC toc;
 	md5_context layout_md5;
 
-	CDInterfaces[0]->ReadTOC(&toc);
+	cdInterface.ReadTOC(&toc);
 
 	layout_md5.starts();
 
@@ -131,16 +113,16 @@ static void writeCDMD5()
 	uint8 LayoutMD5[16];
 	layout_md5.finish(LayoutMD5);
 
-	memcpy(emuSys->MD5, LayoutMD5, 16);
+	memcpy(mdfnGameInfo.MD5, LayoutMD5, 16);
 }
 
-unsigned EmuSystem::multiresVideoBaseX() { return 512; }
+WP PceSystem::multiresVideoBaseSize() const { return {512, 0}; }
 
-void EmuSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegate)
+void PceSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegate)
 {
-	emuSys->name = std::string{EmuSystem::contentName()};
+	mdfnGameInfo.name = std::string{EmuSystem::contentName()};
 	auto unloadCD = IG::scopeGuard(
-		[]()
+		[&]()
 		{
 			if(CDInterfaces.size())
 			{
@@ -161,8 +143,8 @@ void EmuSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 		}
 		CDInterfaces.reserve(1);
 		CDInterfaces.push_back(CDInterface::Open(&NVFS, contentLocation().data(), false, 0));
-		writeCDMD5();
-		emuSys->LoadCD(&CDInterfaces);
+		writeCDMD5(mdfnGameInfo, *CDInterfaces[0]);
+		mdfnGameInfo.LoadCD(&CDInterfaces);
 		PCECD_Drive_SetDisc(false, CDInterfaces[0]);
 	}
 	else
@@ -177,40 +159,34 @@ void EmuSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 		GameFile gf{&NVFS, std::string{contentDirectory()}, fp.stream(),
 			stringWithoutDotExtension<std::string>(contentFileName()),
 			std::string{contentName()}};
-		emuSys->Load(&gf);
+		mdfnGameInfo.Load(&gf);
 	}
 	//logMsg("%d input ports", MDFNGameInfo->InputInfo->InputPorts);
-	iterateTimes(5, i)
+	for(auto i : iotaCount(5))
 	{
-		emuSys->SetInput(i, "gamepad", (uint8*)&inputBuff[i]);
+		mdfnGameInfo.SetInput(i, "gamepad", (uint8*)&inputBuff[i]);
 	}
 	unloadCD.cancel();
 }
 
-bool EmuSystem::onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat fmt)
+bool PceSystem::onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat fmt)
 {
 	mSurfacePix = {{{vidBufferX, vidBufferY}, fmt}, pixBuff};
-	EmulateSpecStruct espec{};
-	auto mSurface = pixmapToMDFNSurface(mSurfacePix);
-	espec.surface = &mSurface;
-	MDFN_IEN_PCE_FAST::applyVideoFormat(&espec);
+	MDFN_IEN_PCE_FAST::VDC_SetPixelFormat(pixmapToMDFNSurface(mSurfacePix).format, nullptr, 0);
 	return false;
 }
 
-void EmuSystem::configAudioRate(IG::FloatSeconds frameTime, uint32_t rate)
+void PceSystem::configAudioRate(IG::FloatSeconds frameTime, int rate)
 {
-	EmulateSpecStruct espec{};
 	const bool using263Lines = vce.CR & 0x04;
 	prevUsing263Lines = using263Lines;
-	const double rateWith263Lines = 7159090.90909090 / 455 / 263;
-	const double rateWith262Lines = 7159090.90909090 / 455 / 262;
-	double systemFrameRate = using263Lines ? rateWith263Lines : rateWith262Lines;
-	espec.SoundRate = std::round(rate * (systemFrameRate * frameTime.count()));
-	logMsg("emu sound rate:%f, 263 lines:%d", (double)espec.SoundRate, using263Lines);
-	MDFN_IEN_PCE_FAST::applySoundFormat(&espec);
+	auto systemFrameTime = using263Lines ? staticFrameTime : staticFrameTimeWith262Lines;
+	auto soundRate = std::round(rate / systemFrameTime * frameTime.count());
+	logMsg("emu sound rate:%f, 263 lines:%d", soundRate, using263Lines);
+	MDFN_IEN_PCE_FAST::applySoundFormat(soundRate);
 }
 
-void EmuSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio *audio)
+void PceSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio *audio)
 {
 	unsigned maxFrames = 48000/54;
 	int16 audioBuff[maxFrames*2];
@@ -226,13 +202,14 @@ void EmuSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 		}
 	}
 	espec.taskCtx = taskCtx;
+	espec.sys = this;
 	espec.video = video;
 	espec.skip = !video;
 	auto mSurface = pixmapToMDFNSurface(mSurfacePix);
 	espec.surface = &mSurface;
 	int32 lineWidth[242];
 	espec.LineWidths = lineWidth;
-	emuSys->Emulate(&espec);
+	mdfnGameInfo.Emulate(&espec);
 	if(audio)
 	{
 		assert((unsigned)espec.SoundBufSize <= audio->format().bytesToFrames(sizeof(audioBuff)));
@@ -240,33 +217,41 @@ void EmuSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	}
 }
 
-void EmuSystem::reset(ResetMode mode)
+void PceSystem::reset(EmuApp &, ResetMode mode)
 {
 	assert(hasContent());
 	MDFN_IEN_PCE_FAST::PCE_Power();
 }
 
-void EmuSystem::saveState(IG::CStringView path)
+void PceSystem::saveState(IG::CStringView path)
 {
 	if(!MDFNI_SaveState(path, 0, 0, 0, 0))
 		throwFileWriteError();
 }
 
-void EmuSystem::loadState(IG::CStringView path)
+void PceSystem::loadState(EmuApp &, CStringView path)
 {
 	if(!MDFNI_LoadState(path, 0))
 		throwFileReadError();
+}
+
+double PceSystem::videoAspectRatioScale() const
+{
+	double baseLines = 224.;
+	double lineCount = (visibleLines.last - visibleLines.first) + 1;
+	assumeExpr(lineCount >= 0);
+	double lineAspectScaler = baseLines / lineCount;
+	return correctLineAspect ? lineAspectScaler : 1.;
 }
 
 void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 {
 	const Gfx::LGradientStopDesc navViewGrad[] =
 	{
-		{ .0, Gfx::VertexColorPixelFormat.build(.5, .5, .5, 1.) },
-		{ .03, Gfx::VertexColorPixelFormat.build((255./255.) * .4, (104./255.) * .4, (31./255.) * .4, 1.) },
+		{ .0, Gfx::VertexColorPixelFormat.build((255./255.) * .4, (104./255.) * .4, (31./255.) * .4, 1.) },
 		{ .3, Gfx::VertexColorPixelFormat.build((255./255.) * .4, (104./255.) * .4, (31./255.) * .4, 1.) },
 		{ .97, Gfx::VertexColorPixelFormat.build((85./255.) * .4, (35./255.) * .4, (10./255.) * .4, 1.) },
-		{ 1., Gfx::VertexColorPixelFormat.build(.5, .5, .5, 1.) },
+		{ 1., view.separatorColor() },
 	};
 	view.setBackgroundGradient(navViewGrad);
 }
@@ -277,7 +262,7 @@ namespace Mednafen
 {
 
 template <class Pixel>
-static void renderMultiresOutput(EmulateSpecStruct spec, IG::Pixmap srcPix, int multiResOutputWidth)
+static void renderMultiresOutput(EmulateSpecStruct spec, IG::PixmapView srcPix, int multiResOutputWidth)
 {
 	int pixHeight = spec.DisplayRect.h;
 	auto img = spec.video->startFrameWithFormat(spec.taskCtx, {{multiResOutputWidth, pixHeight}, srcPix.format()});
@@ -286,7 +271,7 @@ static void renderMultiresOutput(EmulateSpecStruct spec, IG::Pixmap srcPix, int 
 	if(multiResOutputWidth == 1024)
 	{
 		// scale 256x4, 341x3 + 1x4, 512x2
-		iterateTimes(pixHeight, h)
+		for(auto h : IG::iotaCount(pixHeight))
 		{
 			auto srcPixAddr = (Pixel*)srcPix.pixel({0,(int)h});
 			int width = lineWidth[h];
@@ -296,7 +281,7 @@ static void renderMultiresOutput(EmulateSpecStruct spec, IG::Pixmap srcPix, int 
 					bug_unreachable("width == %d", width);
 				bcase 256:
 				{
-					iterateTimes(256, w)
+					for(auto w : IG::iotaCount(256))
 					{
 						*destPixAddr++ = *srcPixAddr;
 						*destPixAddr++ = *srcPixAddr;
@@ -306,7 +291,7 @@ static void renderMultiresOutput(EmulateSpecStruct spec, IG::Pixmap srcPix, int 
 				}
 				bcase 341:
 				{
-					iterateTimes(340, w)
+					for(auto w : IG::iotaCount(340))
 					{
 						*destPixAddr++ = *srcPixAddr;
 						*destPixAddr++ = *srcPixAddr;
@@ -319,7 +304,7 @@ static void renderMultiresOutput(EmulateSpecStruct spec, IG::Pixmap srcPix, int 
 				}
 				bcase 512:
 				{
-					iterateTimes(512, w)
+					for(auto w : IG::iotaCount(512))
 					{
 						*destPixAddr++ = *srcPixAddr;
 						*destPixAddr++ = *srcPixAddr++;
@@ -331,7 +316,7 @@ static void renderMultiresOutput(EmulateSpecStruct spec, IG::Pixmap srcPix, int 
 	}
 	else // 512 width
 	{
-		iterateTimes(pixHeight, h)
+		for(auto h : IG::iotaCount(pixHeight))
 		{
 			auto srcPixAddr = (Pixel*)srcPix.pixel({0,(int)h});
 			int width = lineWidth[h];
@@ -341,7 +326,7 @@ static void renderMultiresOutput(EmulateSpecStruct spec, IG::Pixmap srcPix, int 
 					bug_unreachable("width == %d", width);
 				bcase 256:
 				{
-					iterateTimes(256, w)
+					for(auto w : IG::iotaCount(256))
 					{
 						*destPixAddr++ = *srcPixAddr;
 						*destPixAddr++ = *srcPixAddr++;
@@ -400,7 +385,7 @@ void MDFND_commitVideoFrame(EmulateSpecStruct *espec)
 			multiResOutputWidth = 1024;
 		}
 	}
-	IG::Pixmap srcPix = EmuEx::mSurfacePix.subView(
+	IG::PixmapView srcPix = static_cast<EmuEx::PceSystem&>(*espec->sys).mSurfacePix.subView(
 		{spec.DisplayRect.x, spec.DisplayRect.y},
 		{pixWidth, pixHeight});
 	if(multiResOutputWidth)

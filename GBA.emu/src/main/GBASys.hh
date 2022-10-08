@@ -16,7 +16,6 @@ struct GBAMem
 {
 	union IoMem
 	{
-		constexpr IoMem(): b{0} {}
 		uint8_t b[0x400] __attribute__ ((aligned(4)));
 		struct
 		{
@@ -186,11 +185,11 @@ struct GBAMem
 		}
 	};
 
-	uint8_t bios[0x4000] __attribute__ ((aligned(4))){};
+	uint8_t bios[0x4000] __attribute__ ((aligned(4)));
 	IoMem ioMem;
-	uint8_t internalRAM[0x8000] __attribute__ ((aligned(4))){};
-	uint8_t workRAM[0x40000] __attribute__ ((aligned(4))){};
-	uint8_t rom[0x2000000] __attribute__ ((aligned(4))){};
+	uint8_t internalRAM[0x8000] __attribute__ ((aligned(4)));
+	uint8_t workRAM[0x40000] __attribute__ ((aligned(4)));
+	uint8_t rom[0x2000000] __attribute__ ((aligned(4)));
 };
 
 struct GBADMA
@@ -345,8 +344,10 @@ constexpr unsigned cpuBitsSet[256] =
 		4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8
 };
 
-//#define VBAM_USE_SWITICKS
-//#define VBAM_USE_IRQTICKS
+#ifndef __arm__
+#define VBAM_USE_SWITICKS
+#define VBAM_USE_IRQTICKS
+#endif
 #define VBAM_USE_CPU_PREFETCH
 #define VBAM_USE_DELAYED_CPU_FLAGS
 
@@ -644,7 +645,7 @@ struct GBASys
 	GBALCD lcd{};
 	GBATimers timers{};
 	GBADMA dma{};
-	GBAMem mem{};
+	GBAMem mem;
 };
 
 extern GBASys gGba;

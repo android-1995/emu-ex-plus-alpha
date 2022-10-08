@@ -21,11 +21,6 @@
 #include <memory>
 #include <atomic>
 
-namespace IG::Audio
-{
-class Manager;
-}
-
 namespace EmuEx
 {
 
@@ -41,8 +36,7 @@ public:
 	};
 
 	constexpr EmuAudio(const IG::Audio::Manager &audioManager):
-		audioManagerPtr{&audioManager}
-	{}
+		audioManagerPtr{&audioManager} {}
 	void open(IG::Audio::Api);
 	void start(IG::Microseconds targetBufferFillUSecs, IG::Microseconds bufferIncrementUSecs);
 	void stop();
@@ -51,24 +45,25 @@ public:
 	void writeFrames(const void *samples, size_t framesToWrite);
 	void setRate(int rate);
 	void setStereo(bool on);
-	void setSpeedMultiplier(uint8_t speed);
+	void setSpeedMultiplier(double speed);
 	void setAddSoundBuffersOnUnderrun(bool on);
-	void setVolume(uint8_t vol);
+	void setVolume(int8_t vol);
 	IG::Audio::Format format() const;
 	explicit operator bool() const;
 
 protected:
-	std::unique_ptr<IG::Audio::OutputStream> audioStream{};
+	IG::Audio::OutputStream audioStream{};
 	const IG::Audio::Manager *audioManagerPtr{};
 	IG::RingBuffer rBuff{};
 	IG::Time lastUnderrunTime{};
+	double speedMultiplier = 1.;
 	size_t targetBufferFillBytes{};
 	size_t bufferIncrementBytes{};
 	int rate{};
 	float volume = 1.0;
+	float requestedVolume = 1.0;
 	std::atomic<AudioWriteState> audioWriteState = AudioWriteState::BUFFER;
 	bool addSoundBuffersOnUnderrun = false;
-	uint8_t speedMultiplier = 1;
 	int8_t channels = 2;
 
 	size_t framesFree() const;

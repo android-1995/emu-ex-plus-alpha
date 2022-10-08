@@ -18,6 +18,7 @@
 #include <imagine/config/defs.hh>
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/base/WindowConfig.hh>
+#include <imagine/base/Viewport.hh>
 #include <imagine/util/rectangle2.h>
 #include <imagine/util/DelegateFunc.hh>
 #include <imagine/util/utility.h>
@@ -47,15 +48,14 @@ public:
 	void setAcceptDnd(bool on);
 	void setTitle(const char *name);
 	bool setNeedsDraw(bool needsDraw);
-	void setNeedsCustomViewportResize(bool needsResize);
 	bool needsDraw() const;
-	void postDraw(uint8_t priority = 0);
+	void postDraw(int8_t priority = 0);
 	void unpostDraw();
 	void postFrameReady();
-	void postDrawToMainThread(uint8_t priority = 0);
+	void postDrawToMainThread(int8_t priority = 0);
 	void postFrameReadyToMainThread();
-	uint8_t setDrawEventPriority(uint8_t = 0);
-	uint8_t drawEventPriority() const;
+	int8_t setDrawEventPriority(int8_t = 0);
+	int8_t drawEventPriority() const;
 	void drawNow(bool needsSync = false);
 	Screen *screen() const;
 	NativeWindow nativeObject() const;
@@ -66,6 +66,7 @@ public:
 	bool operator ==(Window const &rhs) const;
 	bool addOnFrame(OnFrameDelegate del, FrameTimeSource src = {}, int priority = 0);
 	bool removeOnFrame(OnFrameDelegate del, FrameTimeSource src = {});
+	bool moveOnFrame(Window &srcWin, OnFrameDelegate, FrameTimeSource src = {});
 	void resetAppData();
 	void resetRendererData();
 	bool isMainWindow() const;
@@ -135,14 +136,15 @@ public:
 	int heightScaledMMInPixels(float mm) const;
 	IG::WindowRect bounds() const;
 	IG::Point2D<int> transformInputPos(IG::Point2D<int> srcPos) const;
+	Viewport viewport(WindowRect rect) const;
+	Viewport viewport() const;
 
 	// content in these bounds isn't blocked by system overlays and receives pointer input
 	IG::WindowRect contentBounds() const;
 
-	Orientation softOrientation() const;
-	Orientation validSoftOrientations() const;
-	bool requestOrientationChange(Orientation o);
-	bool setValidOrientations(Orientation oMask);
+	Rotation softOrientation() const;
+	bool requestOrientationChange(Rotation o);
+	bool setValidOrientations(OrientationMask);
 
 	bool updateSize(IG::Point2D<int> surfaceSize);
 	bool updatePhysicalSize(IG::Point2D<float> surfaceSizeMM);
@@ -159,6 +161,7 @@ public:
 	void dispatchSurfaceCreated();
 	void dispatchSurfaceChanged();
 	void dispatchSurfaceDestroyed();
+	void signalSurfaceChanged(uint8_t surfaceChangeFlags);
 
 private:
 	IG::Point2D<float> pixelSizeAsMM(IG::Point2D<int> size);

@@ -21,6 +21,7 @@
 #include <imagine/base/Window.hh>
 #include "xdnd.hh"
 #include "xlibutils.h"
+#include <imagine/util/ranges.hh>
 
 static constexpr char ASCII_LF = 0xA;
 static constexpr char ASCII_CR = 0xD;
@@ -81,16 +82,6 @@ XApplication::~XApplication()
 	deinitInputSystem();
 	logMsg("closing X display");
 	XCloseDisplay(dpy);
-}
-
-void XApplicationContext::setApplicationPtr(Application *appPtr_)
-{
-	appPtr = appPtr_;
-}
-
-Application &XApplicationContext::application() const
-{
-	return *static_cast<Application*>(appPtr);
 }
 
 static std::array<char, 2> charToStringArr(char c)
@@ -284,7 +275,7 @@ void initXScreens(ApplicationContext ctx, Display *dpy)
 	ctx.application().addScreen(ctx, std::make_unique<Screen>(ctx, Screen::InitParams{ScreenOfDisplay(dpy, defaultScreenIdx)}), false);
 	if constexpr(Config::BASE_MULTI_SCREEN)
 	{
-		iterateTimes(ScreenCount(dpy), i)
+		for(auto i : iotaCount(ScreenCount(dpy)))
 		{
 			if((int)i == defaultScreenIdx)
 				continue;
@@ -303,7 +294,7 @@ FDEventSource XApplication::makeXDisplayConnection(EventLoop loop)
 		return {};
 	}
 	dpy = xDisplay;
-	ApplicationContext appCtx{*this};
+	ApplicationContext appCtx{static_cast<Application&>(*this)};
 	initXScreens(appCtx, xDisplay);
 	initInputSystem();
 	FDEventSource x11Src{"XServer", ConnectionNumber(xDisplay)};

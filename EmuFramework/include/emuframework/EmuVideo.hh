@@ -22,11 +22,6 @@
 #include <imagine/gfx/SyncFence.hh>
 #include <optional>
 
-namespace IG
-{
-class ApplicationContext;
-}
-
 namespace EmuEx
 {
 
@@ -37,9 +32,9 @@ class EmuSystem;
 class [[nodiscard]] EmuVideoImage
 {
 public:
-	constexpr EmuVideoImage() {}
+	constexpr EmuVideoImage() = default;
 	EmuVideoImage(EmuSystemTaskContext taskCtx, EmuVideo &vid, Gfx::LockedTextureBuffer texBuff);
-	IG::Pixmap pixmap() const;
+	IG::MutablePixmapView pixmap() const;
 	explicit operator bool() const;
 	void endFrame();
 
@@ -55,7 +50,7 @@ public:
 	using FrameFinishedDelegate = DelegateFunc<void (EmuVideo &)>;
 	using FormatChangedDelegate = DelegateFunc<void (EmuVideo &)>;
 
-	constexpr EmuVideo() {}
+	constexpr EmuVideo() = default;
 	void setRendererTask(Gfx::RendererTask &);
 	bool hasRendererTask() const;
 	bool setFormat(IG::PixmapDesc desc, EmuSystemTaskContext task = {});
@@ -63,13 +58,13 @@ public:
 	void resetImage(IG::PixelFormat newFmt = {});
 	IG::PixmapDesc deleteImage();
 	EmuVideoImage startFrame(EmuSystemTaskContext);
-	void startFrame(EmuSystemTaskContext, IG::Pixmap pix);
+	void startFrame(EmuSystemTaskContext, IG::PixmapView pix);
 	EmuVideoImage startFrameWithFormat(EmuSystemTaskContext, IG::PixmapDesc desc);
-	void startFrameWithFormat(EmuSystemTaskContext, IG::Pixmap pix);
-	void startFrameWithAltFormat(EmuSystemTaskContext, IG::Pixmap pix);
+	void startFrameWithFormat(EmuSystemTaskContext, IG::PixmapView pix);
+	void startFrameWithAltFormat(EmuSystemTaskContext, IG::PixmapView pix);
 	void startUnchangedFrame(EmuSystemTaskContext);
 	void finishFrame(EmuSystemTaskContext, Gfx::LockedTextureBuffer texBuff);
-	void finishFrame(EmuSystemTaskContext, IG::Pixmap pix);
+	void finishFrame(EmuSystemTaskContext, IG::PixmapView pix);
 	void dispatchFrameFinished();
 	bool addFence(Gfx::RendererCommands &cmds);
 	void clear();
@@ -88,15 +83,15 @@ public:
 	void setTextureBufferMode(EmuSystem &, Gfx::TextureBufferMode mode);
 	void setImageBuffers(int num);
 	int imageBuffers() const;
-	void setCompatTextureSampler(const Gfx::TextureSampler &);
+	void setSampler(Gfx::TextureSamplerConfig);
 	constexpr auto colorSpace() const { return colSpace; }
 	bool setRenderPixelFormat(EmuSystem &, IG::PixelFormat, Gfx::ColorSpace);
 	IG::PixelFormat renderPixelFormat() const;
 	IG::PixelFormat internalRenderPixelFormat() const;
+	static Gfx::TextureSamplerConfig samplerConfigForLinearFilter(bool useLinearFilter);
 
 protected:
 	Gfx::RendererTask *rTask{};
-	const Gfx::TextureSampler *texSampler{};
 	Gfx::SyncFence fence{};
 	Gfx::PixmapBufferTexture vidImg{};
 	FrameFinishedDelegate onFrameFinished{};
@@ -107,14 +102,16 @@ protected:
 	bool singleBuffer{};
 	bool needsFence{};
 	Gfx::ColorSpace colSpace{};
+	bool useLinearFilter{true};
     //region 爱吾：增加截图路径
     const char *screenshotPathAiWu{};
     //endregion
 
-	void doScreenshot(EmuSystemTaskContext, IG::Pixmap pix);
+	void doScreenshot(EmuSystemTaskContext, IG::PixmapView pix);
 	void postFrameFinished(EmuSystemTaskContext);
 	void syncImageAccess();
 	void updateNeedsFence();
+	Gfx::TextureSamplerConfig samplerConfig() const { return samplerConfigForLinearFilter(useLinearFilter); }
 };
 
 }

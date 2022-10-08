@@ -14,11 +14,13 @@
 	along with NES.emu.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <emuframework/EmuApp.hh>
+#include <emuframework/AudioOptionView.hh>
+#include <emuframework/VideoOptionView.hh>
 #include <emuframework/OptionView.hh>
 #include <emuframework/EmuSystemActionsView.hh>
 #include <emuframework/FilePicker.hh>
 #include "EmuCheatViews.hh"
-#include "internal.hh"
+#include "MainApp.hh"
 #include <imagine/gui/AlertView.hh>
 #include <imagine/fs/FS.hh>
 #include <imagine/util/format.hh>
@@ -32,17 +34,20 @@ extern int pal_emulation;
 namespace EmuEx
 {
 
-class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionView>
+template <class T>
+using MainAppHelper = EmuAppHelper<T, MainApp>;
+
+class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionView>
 {
 	BoolMenuItem fourScore
 	{
-		"4-人适配器", &defaultFace(),
-		(bool)optionFourScore,
+		"4玩家 适配器", &defaultFace(),
+		(bool)system().optionFourScore,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
 			system().sessionOptionSet();
-			optionFourScore = item.flipBoolValue(*this);
-			setupNESFourScore();
+			system().optionFourScore = item.flipBoolValue(*this);
+			system().setupNESFourScore();
 		}
 	};
 
@@ -67,7 +72,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 	MultiChoiceMenuItem inputPorts
 	{
 		"Input Ports", &defaultFace(),
-		(MenuItem::Id)packInputEnums(nesInputPortDev[0], nesInputPortDev[1]),
+		(MenuItem::Id)packInputEnums(system().nesInputPortDev[0], system().nesInputPortDev[1]),
 		inputPortsItem
 	};
 
@@ -77,11 +82,11 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 		{
 			system().sessionOptionSet();
 			auto [port1, port2] = unpackInputEnums(item.id());
-			optionInputPort1 = (int)port1;
-			optionInputPort2 = (int)port2;
-			nesInputPortDev[0] = port1;
-			nesInputPortDev[1] = port2;
-			setupNESInputPorts();
+			system().optionInputPort1 = (int)port1;
+			system().optionInputPort2 = (int)port2;
+			system().nesInputPortDev[0] = port1;
+			system().nesInputPortDev[1] = port2;
+			system().setupNESInputPorts();
 		};
 	}
 
@@ -100,27 +105,27 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 		{
 			if(idx == 0)
 			{
-				t.setString(dendy ? "Dendy" : pal_emulation ? "PAL" : "NTSC");
+				t.resetString(dendy ? "Dendy" : pal_emulation ? "PAL" : "NTSC");
 				return true;
 			}
 			return false;
 		},
-		optionVideoSystem.val,
+		system().optionVideoSystem.val,
 		videoSystemItem
 	};
 
 	void setVideoSystem(int val, Input::Event e)
 	{
 		system().sessionOptionSet();
-		optionVideoSystem = val;
-		setRegion(val, optionDefaultVideoSystem.val, autoDetectedRegion);
+		system().optionVideoSystem = val;
+		setRegion(val, system().optionDefaultVideoSystem.val, system().autoDetectedRegion);
 		app().promptSystemReloadDueToSetOption(attachParams(), e);
 	}
 
 	BoolMenuItem compatibleFrameskip
 	{
 		"跳帧模式", &defaultFace(),
-		(bool)optionCompatibleFrameskip,
+		(bool)system().optionCompatibleFrameskip,
 		"快速", "兼容",
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
@@ -132,13 +137,13 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 					[this, &item]()
 					{
 						system().sessionOptionSet();
-						optionCompatibleFrameskip = item.flipBoolValue(*this);
+						system().optionCompatibleFrameskip = item.flipBoolValue(*this);
 					});
 				app().pushAndShowModalView(std::move(ynAlertView), e);
 			}
 			else
 			{
-				optionCompatibleFrameskip = item.flipBoolValue(*this);
+				system().optionCompatibleFrameskip = item.flipBoolValue(*this);
 			}
 		}
 	};
@@ -155,13 +160,13 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 
 	MultiChoiceMenuItem visibleVideoLines
 	{
-		"可见线条", &defaultFace(),
-		[]()
+		"可见视频线", &defaultFace(),
+		[this]()
 		{
-			switch(optionVisibleVideoLines.val)
+			switch(system().optionVisibleVideoLines.val)
 			{
 				default: return 0;
-				case 232: return optionStartVideoLine == 8 ? 1 : 2;
+				case 232: return system().optionStartVideoLine == 8 ? 1 : 2;
 				case 240: return 3;
 			}
 		}(),
@@ -173,24 +178,25 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 		return [this, startLine, lines]()
 		{
 			system().sessionOptionSet();
-			optionStartVideoLine = startLine;
-			optionVisibleVideoLines = lines;
-			updateVideoPixmap(app().video(), optionHorizontalVideoCrop, optionVisibleVideoLines);
+			system().optionStartVideoLine = startLine;
+			system().optionVisibleVideoLines = lines;
+			system().updateVideoPixmap(app().video(), system().optionHorizontalVideoCrop, system().optionVisibleVideoLines);
 			system().renderFramebuffer(app().video());
+			app().viewController().placeEmuViews();
 		};
 	}
 
 	BoolMenuItem horizontalVideoCrop
 	{
 		"在侧面裁剪8个像素", &defaultFace(),
-		(bool)optionHorizontalVideoCrop,
+		(bool)system().optionHorizontalVideoCrop,
 		[this](BoolMenuItem &item)
 		{
 			system().sessionOptionSet();
-			optionHorizontalVideoCrop = item.flipBoolValue(*this);
-			updateVideoPixmap(app().video(), optionHorizontalVideoCrop, optionVisibleVideoLines);
-			app().viewController().placeEmuViews();
+			system().optionHorizontalVideoCrop = item.flipBoolValue(*this);
+			system().updateVideoPixmap(app().video(), system().optionHorizontalVideoCrop, system().optionVisibleVideoLines);
 			system().renderFramebuffer(app().video());
+			app().viewController().placeEmuViews();
 		}
 	};
 
@@ -216,31 +222,34 @@ public:
 	{}
 };
 
-class CustomVideoOptionView : public VideoOptionView
+class CustomVideoOptionView : public VideoOptionView, public MainAppHelper<CustomVideoOptionView>
 {
+	using  MainAppHelper<CustomVideoOptionView>::app;
+	using  MainAppHelper<CustomVideoOptionView>::system;
+
 	BoolMenuItem spriteLimit
 	{
 		"限制精灵", &defaultFace(),
-		(bool)optionSpriteLimit,
+		(bool)system().optionSpriteLimit,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
-			optionSpriteLimit = item.flipBoolValue(*this);
-			FCEUI_DisableSpriteLimitation(!optionSpriteLimit);
+			system().optionSpriteLimit = item.flipBoolValue(*this);
+			FCEUI_DisableSpriteLimitation(!system().optionSpriteLimit);
 		}
 	};
 
 	TextMenuItem videoSystemItem[4]
 	{
-		{"自动", &defaultFace(), [this](){ optionDefaultVideoSystem = 0; }},
-		{"NTSC", &defaultFace(), [this](){ optionDefaultVideoSystem = 1; }},
-		{"PAL", &defaultFace(), [this](){ optionDefaultVideoSystem = 2; }},
-		{"Dendy", &defaultFace(), [this](){ optionDefaultVideoSystem = 3; }},
+		{"自动", &defaultFace(), [this](){ system().optionDefaultVideoSystem = 0; }},
+		{"NTSC", &defaultFace(), [this](){ system().optionDefaultVideoSystem = 1; }},
+		{"PAL", &defaultFace(), [this](){ system().optionDefaultVideoSystem = 2; }},
+		{"Dendy", &defaultFace(), [this](){ system().optionDefaultVideoSystem = 3; }},
 	};
 
 	MultiChoiceMenuItem videoSystem
 	{
 		"默认视频制式", &defaultFace(),
-		optionDefaultVideoSystem.val,
+		system().optionDefaultVideoSystem.val,
 		videoSystemItem
 	};
 
@@ -248,13 +257,13 @@ class CustomVideoOptionView : public VideoOptionView
 	static constexpr const char *wavebeamPalPath = "Wavebeam.pal";
 	static constexpr const char *classicPalPath = "Classic (FBX).pal";
 
-	static void setPalette(IG::ApplicationContext ctx, IG::CStringView palPath)
+	void setPalette(IG::ApplicationContext ctx, IG::CStringView palPath)
 	{
 		if(palPath.size())
-			defaultPalettePath = palPath;
+			system().defaultPalettePath = palPath;
 		else
-			defaultPalettePath = {};
-		setDefaultPalette(ctx, palPath);
+			system().defaultPalettePath = {};
+		system().setDefaultPalette(ctx, palPath);
 		auto &app = EmuApp::get(ctx);
 		app.renderSystemFramebuffer(app.video());
 	}
@@ -298,25 +307,70 @@ class CustomVideoOptionView : public VideoOptionView
 		{
 			if(idx == defaultPaletteCustomFileIdx())
 			{
-				t.setString(IG::stringWithoutDotExtension(appContext().fileUriDisplayName(defaultPalettePath)));
+				t.resetString(IG::stringWithoutDotExtension(appContext().fileUriDisplayName(system().defaultPalettePath)));
 				return true;
 			}
 			return false;
 		},
 		[this]()
 		{
-			if(defaultPalettePath.empty())
+			if(system().defaultPalettePath.empty())
 				return 0;
-			if(defaultPalettePath == firebrandXPalPath)
+			if(system().defaultPalettePath == firebrandXPalPath)
 				return 1;
-			else if(defaultPalettePath == wavebeamPalPath)
+			else if(system().defaultPalettePath == wavebeamPalPath)
 				return 2;
-			else if(defaultPalettePath == classicPalPath)
+			else if(system().defaultPalettePath == classicPalPath)
 				return 3;
 			else
 				return (int)defaultPaletteCustomFileIdx();
 		}(),
 		defaultPalItem
+	};
+
+	TextMenuItem visibleVideoLinesItem[4]
+	{
+		{"8+224", &defaultFace(), setVisibleVideoLinesDel(8, 224)},
+		{"8+232", &defaultFace(), setVisibleVideoLinesDel(8, 232)},
+		{"0+232", &defaultFace(), setVisibleVideoLinesDel(0, 232)},
+		{"0+240", &defaultFace(), setVisibleVideoLinesDel(0, 240)},
+	};
+
+	MultiChoiceMenuItem visibleVideoLines
+	{
+		"默认可见视频线", &defaultFace(),
+		[this]()
+		{
+			switch(system().optionDefaultVisibleVideoLines.val)
+			{
+				default: return 0;
+				case 232: return system().optionDefaultStartVideoLine == 8 ? 1 : 2;
+				case 240: return 3;
+			}
+		}(),
+		visibleVideoLinesItem
+	};
+
+	TextMenuItem::SelectDelegate setVisibleVideoLinesDel(uint8_t startLine, uint8_t lines)
+	{
+		return [this, startLine, lines]()
+		{
+			system().optionDefaultStartVideoLine = startLine;
+			system().optionDefaultVisibleVideoLines = lines;
+			system().optionStartVideoLine.defaultVal = startLine;
+			system().optionVisibleVideoLines.defaultVal = lines;
+		};
+	}
+
+	BoolMenuItem correctLineAspect
+	{
+		"正确的线条比例", &defaultFace(),
+		(bool)system().optionCorrectLineAspect,
+		[this](BoolMenuItem &item)
+		{
+			system().optionCorrectLineAspect = item.flipBoolValue(*this);
+			app().viewController().placeEmuViews();
+		}
 	};
 
 public:
@@ -327,28 +381,32 @@ public:
 		item.emplace_back(&defaultPal);
 		item.emplace_back(&videoSystem);
 		item.emplace_back(&spriteLimit);
+		item.emplace_back(&visibleVideoLines);
+		item.emplace_back(&correctLineAspect);
 	}
 };
 
-class CustomAudioOptionView : public AudioOptionView
+class CustomAudioOptionView : public AudioOptionView, public MainAppHelper<CustomAudioOptionView>
 {
-	static void setQuality(int quaility)
+	using MainAppHelper<CustomAudioOptionView>::system;
+
+	void setQuality(int quaility)
 	{
-		optionSoundQuality = quaility;
+		system().optionSoundQuality = quaility;
 		FCEUI_SetSoundQuality(quaility);
 	}
 
 	TextMenuItem qualityItem[3]
 	{
-		{"正常", &defaultFace(), [](){ setQuality(0); }},
-		{"高", &defaultFace(), []() { setQuality(1); }},
-		{"最高", &defaultFace(), []() { setQuality(2); }}
+		{"正常", &defaultFace(), [this](){ setQuality(0); }},
+		{"高", &defaultFace(), [this]() { setQuality(1); }},
+		{"最高", &defaultFace(), [this]() { setQuality(2); }}
 	};
 
 	MultiChoiceMenuItem quality
 	{
 		"模拟质量", &defaultFace(),
-		optionSoundQuality.val,
+		system().optionSoundQuality.val,
 		qualityItem
 	};
 
@@ -471,7 +529,7 @@ public:
 	}
 };
 
-class FDSControlView : public TableView
+class FDSControlView : public TableView, public MainAppHelper<FDSControlView>
 {
 private:
 	static constexpr unsigned DISK_SIDES = 4;
@@ -479,33 +537,33 @@ private:
 	{
 		{
 			"Set Disk 1 Side A", &defaultFace(),
-			[](View &view, Input::Event e)
+			[this](View &view, Input::Event e)
 			{
-				FCEU_FDSSetDisk(0);
+				FCEU_FDSSetDisk(0, system());
 				view.dismiss();
 			}
 		},
 		{
 			"Set Disk 1 Side B", &defaultFace(),
-			[](View &view, Input::Event e)
+			[this](View &view, Input::Event e)
 			{
-				FCEU_FDSSetDisk(1);
+				FCEU_FDSSetDisk(1, system());
 				view.dismiss();
 			}
 		},
 		{
 			"Set Disk 2 Side A", &defaultFace(),
-			[](View &view, Input::Event e)
+			[this](View &view, Input::Event e)
 			{
-				FCEU_FDSSetDisk(2);
+				FCEU_FDSSetDisk(2, system());
 				view.dismiss();
 			}
 		},
 		{
 			"Set Disk 2 Side B", &defaultFace(),
-			[](View &view, Input::Event e)
+			[this](View &view, Input::Event e)
 			{
-				FCEU_FDSSetDisk(3);
+				FCEU_FDSSetDisk(3, system());
 				view.dismiss();
 			}
 		}
@@ -560,7 +618,7 @@ class CustomSystemActionsView : public EmuSystemActionsView
 private:
 	TextMenuItem fdsControl
 	{
-		{}, &defaultFace(),
+		u"", &defaultFace(),
 		[this](TextMenuItem &item, View &, Input::Event e)
 		{
 			if(system().hasContent() && isFDS)
@@ -575,14 +633,13 @@ private:
 	void refreshFDSItem()
 	{
 		fdsControl.setActive(isFDS);
-		char diskLabel[sizeof("FDS控制(磁碟 1:A)")+2]{};
 		if(!isFDS)
-			strcpy(diskLabel, "FDS控制");
+			fdsControl.compile("FDS控制", renderer(), projP);
 		else if(!FCEU_FDSInserted())
-			strcpy(diskLabel, "FDS控制(无磁碟)");
+			fdsControl.compile("FDS控制(无磁碟)", renderer(), projP);
 		else
-			sprintf(diskLabel, "FDS控制(磁碟 %d:%c)", (FCEU_FDSCurrentSide()>>1)+1, (FCEU_FDSCurrentSide() & 1)? 'B' : 'A');
-		fdsControl.compile(diskLabel, renderer(), projP);
+			fdsControl.compile(fmt::format("FDS控制(磁碟 {}:{})", (FCEU_FDSCurrentSide() >> 1) + 1, (FCEU_FDSCurrentSide() & 1) ? 'B' : 'A'),
+				renderer(), projP);
 	}
 
 	TextMenuItem options
@@ -612,6 +669,28 @@ public:
 	}
 };
 
+class CustomSystemOptionView : public SystemOptionView, public MainAppHelper<CustomSystemOptionView>
+{
+	using MainAppHelper<CustomSystemOptionView>::system;
+
+	BoolMenuItem skipFdcAccess
+	{
+		"快进磁碟读写", &defaultFace(),
+		(bool)system().fastForwardDuringFdsAccess,
+		[this](BoolMenuItem &item)
+		{
+			system().fastForwardDuringFdsAccess = item.flipBoolValue(*this);
+		}
+	};
+
+public:
+	CustomSystemOptionView(ViewAttachParams attach): SystemOptionView{attach, true}
+	{
+		loadStockItems();
+		item.emplace_back(&skipFdcAccess);
+	}
+};
+
 std::unique_ptr<View> EmuApp::makeCustomView(ViewAttachParams attach, ViewID id)
 {
 	switch(id)
@@ -619,6 +698,7 @@ std::unique_ptr<View> EmuApp::makeCustomView(ViewAttachParams attach, ViewID id)
 		case ViewID::SYSTEM_ACTIONS: return std::make_unique<CustomSystemActionsView>(attach);
 		case ViewID::VIDEO_OPTIONS: return std::make_unique<CustomVideoOptionView>(attach);
 		case ViewID::AUDIO_OPTIONS: return std::make_unique<CustomAudioOptionView>(attach);
+		case ViewID::SYSTEM_OPTIONS: return std::make_unique<CustomSystemOptionView>(attach);
 		case ViewID::FILE_PATH_OPTIONS: return std::make_unique<CustomFilePathOptionView>(attach);
 		case ViewID::EDIT_CHEATS: return std::make_unique<EmuEditCheatListView>(attach);
 		case ViewID::LIST_CHEATS: return std::make_unique<EmuCheatsView>(attach);

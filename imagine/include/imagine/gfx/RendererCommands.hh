@@ -17,11 +17,18 @@
 
 #include <imagine/config/defs.hh>
 #include <imagine/gfx/defs.hh>
-#include <imagine/gfx/SyncFence.hh>
 
 #ifdef CONFIG_GFX_OPENGL
 #include <imagine/gfx/opengl/GLRendererCommands.hh>
 #endif
+
+#include <imagine/gfx/SyncFence.hh>
+#include <span>
+
+namespace IG
+{
+class Viewport;
+}
 
 namespace IG::Gfx
 {
@@ -30,6 +37,7 @@ class Renderer;
 class Program;
 class Texture;
 class Mat4;
+class BasicEffect;
 
 enum class Primitive
 {
@@ -70,51 +78,47 @@ public:
 
 	void setBlend(bool on);
 	void setBlendFunc(BlendFunc s, BlendFunc d);
-	void setBlendMode(uint32_t mode);
-	void setBlendEquation(uint32_t mode);
-	void setImgBlendColor(ColorComp r, ColorComp g, ColorComp b, ColorComp a);
+	void setBlendMode(BlendMode);
+	void set(BlendMode mode) { setBlendMode(mode); }
+	void setBlendEquation(BlendEquation);
+	void set(BlendEquation mode) { setBlendEquation(mode); }
 	void setZTest(bool on);
-	void setZBlend(bool on);
-	void setZBlendColor(ColorComp r, ColorComp g, ColorComp b);
-	void setClearColor(ColorComp r, ColorComp g, ColorComp b, ColorComp a = 1.);
-	void setColor(Color);
-	void setColor(ColorComp r, ColorComp g, ColorComp b, ColorComp a = 1.);
-	void setColor(ColorComp i) { setColor(i, i, i, 1.); }
+	void setClearColor(float r, float g, float b, float a = 1.);
+	void setColor(Color4F);
+	void setColor(float r, float g, float b, float a = 1.);
+	void setColor(float i) { setColor(i, i, i, 1.); }
 	void set(ColorName c) { setColor(::IG::Gfx::color(c)); }
-	Color color() const;
-	void setImgMode(uint32_t mode);
+	Color4F color() const;
+	void setImgMode(EnvMode);
 	void setDither(bool on);
 	bool dither();
 	void setSrgbFramebufferWrite(bool on);
-	void setVisibleGeomFace(uint32_t sides);
+	void setVisibleGeomFace(Faces);
 	void setClipTest(bool on);
 	void setClipRect(ClipRect b);
 	void setTexture(const Texture &t);
+	void set(TextureBinding);
 	void setTextureSampler(const TextureSampler &sampler);
-	void setCommonTextureSampler(CommonTextureSampler sampler);
-	void set(CommonTextureSampler sampler) { setCommonTextureSampler(sampler); }
 	void setViewport(Viewport v);
-	Viewport viewport() const;
+	void restoreViewport();
 	void vertexBufferData(const void *v, size_t size);
 	void bindTempVertexBuffer();
 	void flush();
 
-	// transforms
-
-	void setTransformTarget(TransformTargetEnum target);
-	void loadTransform(Mat4 mat);
-	void loadTranslate(float x, float y, float z);
-	void loadIdentTransform();
-	void setProjectionMatrix(Mat4 mat);
-
 	// shaders
 
+	void setProgram(NativeProgram);
 	void setProgram(const Program &program);
-	void setProgram(const Program &program, Mat4 modelMat);
-	void setProgram(const Program &program, const Mat4 *modelMat);
-	void setCommonProgram(CommonProgram program);
-	void setCommonProgram(CommonProgram program, Mat4 modelMat);
-	void uniformF(int uniformLocation, float v1, float v2);
+	void uniform(int location, float v1);
+	void uniform(int location, float v1, float v2);
+	void uniform(int location, float v1, float v2, float v3);
+	void uniform(int location, float v1, float v2, float v3, float v4);
+	void uniform(int location, int v1);
+	void uniform(int location, int v1, int v2);
+	void uniform(int location, int v1, int v2, int v3);
+	void uniform(int location, int v1, int v2, int v3, int v4);
+	void uniform(int location, Mat4);
+	BasicEffect &basicEffect();
 
 	// synchronization
 	SyncFence addSyncFence();
@@ -125,12 +129,10 @@ public:
 
 	// rendering
 
+	void setVertexAttribs(VertexLayout auto *v) { RendererCommandsImpl::setVertexAttribs(v); }
 	void clear();
 	void drawPrimitives(Primitive mode, int start, int count);
-	void drawPrimitiveElements(Primitive mode, const VertexIndex *idx, int count);
-
-private:
-	void setCommonProgram(CommonProgram program, const Mat4 *modelMat);
+	void drawPrimitiveElements(Primitive, std::span<const VertexIndex>);
 };
 
 }

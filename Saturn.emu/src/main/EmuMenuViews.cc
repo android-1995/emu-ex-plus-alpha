@@ -13,15 +13,17 @@
 	You should have received a copy of the GNU General Public License
 	along with Saturn.emu.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <emuframework/EmuApp.hh>
 #include <emuframework/OptionView.hh>
 #include <emuframework/EmuMainMenuView.hh>
-#include "internal.hh"
+#include "MainApp.hh"
 #include <imagine/fs/FS.hh>
 #include <imagine/util/format.hh>
 
 namespace EmuEx
 {
+
+template <class T>
+using MainAppHelper = EmuAppHelper<T, MainApp>;
 
 static constexpr unsigned MAX_SH2_CORES = 4;
 
@@ -29,7 +31,7 @@ class CustomSystemOptionView : public SystemOptionView
 {
 	TextMenuItem biosPath
 	{
-		{}, &defaultFace(),
+		u"", &defaultFace(),
 		[this](TextMenuItem &, View &, Input::Event e)
 		{
 			pushAndShow(
@@ -48,14 +50,14 @@ class CustomSystemOptionView : public SystemOptionView
 		return fmt::format("BIOS: {}", displayName.size() ? displayName : "None set");
 	}
 
-	StaticArrayList<TextMenuItem, MAX_SH2_CORES> sh2CoreItem{};
+	StaticArrayList<TextMenuItem, MAX_SH2_CORES> sh2CoreItem;
 
 	MultiChoiceMenuItem sh2Core
 	{
 		"SH2", &defaultFace(),
 		[]() -> int
 		{
-			iterateTimes(std::min(SH2Cores, MAX_SH2_CORES), i)
+			for(auto i : iotaCount(std::min(SH2Cores, MAX_SH2_CORES)))
 			{
 				if(SH2CoreList[i]->id == yinit.sh2coretype)
 					return i;
@@ -71,7 +73,7 @@ public:
 		loadStockItems();
 		if(SH2Cores > 1)
 		{
-			iterateTimes(std::min(SH2Cores, MAX_SH2_CORES), i)
+			for(auto i : iotaCount(std::min(SH2Cores, MAX_SH2_CORES)))
 			{
 				int id = SH2CoreList[i]->id;
 				sh2CoreItem.emplace_back(SH2CoreList[i]->Name, &defaultFace(),

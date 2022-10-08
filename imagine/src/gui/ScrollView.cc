@@ -18,11 +18,12 @@
 #include <imagine/gui/ScrollView.hh>
 #include <imagine/logger/logger.h>
 #include <imagine/input/DragTracker.hh>
-#include <imagine/gfx/GeomRect.hh>
+#include <imagine/gfx/GeomQuad.hh>
 #include <imagine/gfx/RendererCommands.hh>
+#include <imagine/gfx/BasicEffect.hh>
 #include <imagine/base/Window.hh>
 #include <imagine/base/Screen.hh>
-#include <imagine/util/math/space.hh>
+#include <imagine/util/math/math.hh>
 #include <imagine/util/math/int.hh>
 #include <algorithm>
 #include <cmath>
@@ -68,7 +69,7 @@ ScrollView::ScrollView(ViewAttachParams attach):
 				//logMsg("animating over-scroll");
 				int clip = offset < 0 ? 0 : offsetMax;
 				int sign = offset < 0 ? 1 : -1;
-				iterateTimes(frames, i)
+				for(auto i : iotaCount(frames))
 				{
 					int vel = std::abs((clip - offset) * overScrollVelScale);
 					offset += sign * std::max(1, vel);
@@ -152,8 +153,8 @@ void ScrollView::drawScrollContent(Gfx::RendererCommands &cmds)
 	using namespace IG::Gfx;
 	if(contentIsBiggerThanView && (allowScrollWholeArea_ || dragTracker.isDragging()))
 	{
-		cmds.setCommonProgram(CommonProgram::NO_TEX, projP.makeTranslate());
-		cmds.setBlendMode(0);
+		cmds.basicEffect().disableTexture(cmds);
+		cmds.set(BlendMode::OFF);
 		if(scrollWholeArea_)
 		{
 			if(dragTracker.isDragging())

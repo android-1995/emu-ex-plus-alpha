@@ -3,7 +3,7 @@
 #include <imagine/config/defs.hh>
 #include <imagine/util/bitset.hh>
 #include <imagine/util/math/math.hh>
-#include <imagine/util/concepts.hh>
+#include <concepts>
 #include <bit>
 #include <array>
 
@@ -29,17 +29,23 @@ public:
 		bytesPerPixel_{bytesPerPixel}
 	{}
 
-	constexpr uint32_t build(IG::floating_point auto r_, IG::floating_point auto g_, IG::floating_point auto b_,
-		IG::floating_point auto a_) const
+	constexpr uint32_t build(std::floating_point auto r_, std::floating_point auto g_, std::floating_point auto b_,
+		std::floating_point auto a_) const
 	{
-		return build(IG::clampFromFloat<uint32_t>(r_, rBits),
-			IG::clampFromFloat<uint32_t>(g_, gBits),
-			IG::clampFromFloat<uint32_t>(b_, bBits),
-			IG::clampFromFloat<uint32_t>(a_, aBits));
+		assumeExpr(r_ >= 0. && r_ <= 1.);
+		assumeExpr(g_ >= 0. && g_ <= 1.);
+		assumeExpr(b_ >= 0. && b_ <= 1.);
+		assumeExpr(a_ >= 0. && a_ <= 1.);
+		using Float = decltype(r_);
+		return build(
+			static_cast<uint32_t>(remap(r_, Float{0}, Float{1}, 0, bits(rBits))),
+			static_cast<uint32_t>(remap(g_, Float{0}, Float{1}, 0, bits(gBits))),
+			static_cast<uint32_t>(remap(b_, Float{0}, Float{1}, 0, bits(bBits))),
+			static_cast<uint32_t>(remap(a_, Float{0}, Float{1}, 0, bits(aBits))));
 	}
 
-	constexpr uint32_t build(IG::integral auto r_, IG::integral auto g_, IG::integral auto b_,
-		IG::integral auto a_) const
+	constexpr uint32_t build(std::integral auto r_, std::integral auto g_, std::integral auto b_,
+		std::integral auto a_) const
 	{
 		auto r = (uint32_t)r_;
 		auto g = (uint32_t)g_;
@@ -64,6 +70,16 @@ public:
 	constexpr std::array<uint8_t, 4> rgba(uint32_t pixel) const
 	{
 		return {(uint8_t)r(pixel), (uint8_t)g(pixel), (uint8_t)b(pixel), (uint8_t)a(pixel)};
+	}
+
+	constexpr float aNorm(uint32_t pixel) const { return a(pixel) / float(1 << aBits); }
+	constexpr float rNorm(uint32_t pixel) const { return r(pixel) / float(1 << rBits); }
+	constexpr float gNorm(uint32_t pixel) const { return g(pixel) / float(1 << gBits); }
+	constexpr float bNorm(uint32_t pixel) const { return b(pixel) / float(1 << bBits); }
+
+	constexpr std::array<float, 4> rgbaNorm(uint32_t pixel) const
+	{
+		return {rNorm(pixel), gNorm(pixel), bNorm(pixel), aNorm(pixel)};
 	}
 
 	constexpr int offsetBytes(int x, int y, int pitch) const

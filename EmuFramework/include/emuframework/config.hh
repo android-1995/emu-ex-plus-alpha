@@ -47,16 +47,11 @@ constexpr bool VCONTROLS_GAMEPAD = true;
 #else
 constexpr bool VCONTROLS_GAMEPAD = false;
 #endif
+constexpr int MAX_CENTER_BTNS = 2;
+constexpr int MAX_FACE_BTNS = 8;
 
 constexpr bool HAS_MULTIPLE_WINDOW_PIXEL_FORMATS = Config::envIsLinux || Config::envIsAndroid || Config::envIsIOS;
-
-#ifdef __ANDROID__
-#define CONFIG_INPUT_ANDROID_MOGA
-constexpr bool MOGA_INPUT = false;
-#else
-constexpr bool MOGA_INPUT = false;
-#endif
-
+constexpr bool MOGA_INPUT = Config::envIsAndroid;
 constexpr bool CAN_HIDE_TITLE_BAR = !Config::envIsIOS;
 
 }

@@ -72,13 +72,7 @@ bool ViewController::moveFocusToNextView(const Input::Event &, _2DOrigin)
 	return false;
 };
 
-ViewManager::ViewManager(Gfx::Renderer &r)
-{
-	r.make(ViewDefs::imageCommonTextureSampler);
-	r.makeCommonProgram(Gfx::CommonProgram::NO_TEX);
-	// for text
-	r.makeCommonProgram(Gfx::CommonProgram::TEX_ALPHA);
-}
+ViewManager::ViewManager(Gfx::Renderer &r) {}
 
 void ViewManager::setDefaultFace(Gfx::GlyphTextureSet face)
 {
@@ -119,14 +113,13 @@ float ViewManager::tableXIndent() const
 	return tableXIndent_;
 }
 
-void ViewManager::setTableXIndentMM(float indentMM, Gfx::ProjectionPlane projP)
+void ViewManager::setTableXIndentMM(float indentMM, const Window &win, Gfx::ProjectionPlane projP)
 {
-	auto indentGC = projP.xMMSize(indentMM);
-	if(!IG::valIsWithinStretch(indentGC, tableXIndent(), 0.001f))
+	auto oldIndent = std::exchange(tableXIndent_, projP.unprojectXSize(win.widthMMInPixels(indentMM)));
+	if(!IG::valIsWithinStretch(tableXIndent_, oldIndent, 0.001f))
 	{
-		logDMsg("setting X indent:%.2fmm (%f as coordinate)", indentMM, indentGC);
+		logDMsg("setting X indent:%.2fmm (%f as coordinate)", indentMM, tableXIndent_);
 	}
-	tableXIndent_ = projP.xMMSize(indentMM);
 }
 
 float ViewManager::defaultTableXIndentMM(const Window &win)
@@ -140,7 +133,7 @@ float ViewManager::defaultTableXIndentMM(const Window &win)
 
 void ViewManager::setTableXIndentToDefault(const Window &win, Gfx::ProjectionPlane projP)
 {
-	setTableXIndentMM(defaultTableXIndentMM(win), projP);
+	setTableXIndentMM(defaultTableXIndentMM(win), win, projP);
 }
 
 void View::pushAndShow(std::unique_ptr<View> v, const Input::Event &e, bool needsNavView, bool isModal)
@@ -211,15 +204,21 @@ void View::prepareDraw() {}
 
 void View::setFocus(bool) {}
 
-void View::setViewRect(IG::WindowRect rect, Gfx::ProjectionPlane projP)
+void View::setViewRect(WindowRect viewRect, WindowRect displayRect, Gfx::ProjectionPlane projP)
 {
-	this->viewRect_ = rect;
+	this->viewRect_ = viewRect;
+	this->displayRect_ = displayRect;
 	this->projP = projP;
 }
 
-void View::setViewRect( Gfx::ProjectionPlane projP)
+void View::setViewRect(WindowRect viewRect, Gfx::ProjectionPlane projP)
 {
-	setViewRect(projP.viewport().bounds(), projP);
+	setViewRect(viewRect, viewRect, projP);
+}
+
+void View::setViewRect(Gfx::ProjectionPlane projP)
+{
+	setViewRect(projP.windowBounds(), projP);
 }
 
 void View::postDraw()
@@ -271,7 +270,7 @@ std::u16string_view View::name() const
 	return u"";
 }
 
-std::u16string View::nameString(const BaseTextMenuItem &item)
+std::u16string View::nameString(const MenuItem &item)
 {
 	return item.text().string();
 }
@@ -325,14 +324,21 @@ ViewController *View::controller() const
 	return controller_;
 }
 
-IG::WindowRect View::viewRect() const
+WindowRect View::displayInsetRect(Direction d) const
 {
-	return viewRect_;
+	return displayInsetRect(d, viewRect(), displayRect());
 }
 
-Gfx::ProjectionPlane View::projection() const
+WindowRect View::displayInsetRect(Direction d, WindowRect viewRect, WindowRect displayRect)
 {
-	return projP;
+	switch(d)
+	{
+		case Direction::TOP: return {displayRect.pos(LT2DO), {displayRect.x2, viewRect.y}};
+		case Direction::RIGHT: return {{viewRect.x2, displayRect.y}, displayRect.pos(RB2DO)};
+		case Direction::BOTTOM: return {{displayRect.x, viewRect.y2}, displayRect.pos(RB2DO)};
+		case Direction::LEFT: return {displayRect.pos(LT2DO), {viewRect.x, displayRect.y2}};
+	}
+	bug_unreachable("Direction == %d", (int)d);
 }
 
 bool View::pointIsInView(IG::WP pos)

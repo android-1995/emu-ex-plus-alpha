@@ -19,7 +19,6 @@
 #include <emuframework/EmuAppHelper.hh>
 #include <imagine/gui/TableView.hh>
 #include <imagine/gui/MenuItem.hh>
-#include <imagine/audio/Manager.hh>
 #include <imagine/util/container/ArrayList.hh>
 #include <memory>
 
@@ -28,123 +27,10 @@ namespace IG
 class TextTableView;
 }
 
-namespace IG::Gfx
-{
-struct DrawableConfig;
-}
-
 namespace EmuEx
 {
 
 using namespace IG;
-class EmuVideoLayer;
-class EmuAudio;
-enum class ImageEffectId : uint8_t;
-
-class OptionCategoryView : public TableView, public EmuAppHelper<OptionCategoryView>
-{
-public:
-	OptionCategoryView(ViewAttachParams attach, EmuAudio &audio, EmuVideoLayer &videoLayer);
-
-protected:
-	TextMenuItem subConfig[6];
-};
-
-class VideoOptionView : public TableView, public EmuAppHelper<VideoOptionView>
-{
-public:
-	VideoOptionView(ViewAttachParams attach, bool customMenu = false);
-	void loadStockItems();
-	void setEmuVideoLayer(EmuVideoLayer &videoLayer);
-
-protected:
-	static constexpr unsigned MAX_ASPECT_RATIO_ITEMS = 5;
-	EmuVideoLayer *videoLayer{};
-
-	StaticArrayList<TextMenuItem, 5> textureBufferModeItem{};
-	MultiChoiceMenuItem textureBufferMode;
-	IG_UseMemberIf(Config::SCREEN_FRAME_INTERVAL, TextMenuItem, frameIntervalItem[4]);
-	IG_UseMemberIf(Config::SCREEN_FRAME_INTERVAL, MultiChoiceMenuItem, frameInterval);
-	BoolMenuItem dropLateFrames;
-	TextMenuItem frameRate;
-	TextMenuItem frameRatePAL;
-	StaticArrayList<TextMenuItem, MAX_ASPECT_RATIO_ITEMS> aspectRatioItem;
-	MultiChoiceMenuItem aspectRatio;
-	TextMenuItem zoomItem[6];
-	MultiChoiceMenuItem zoom;
-	TextMenuItem viewportZoomItem[4];
-	MultiChoiceMenuItem viewportZoom;
-	BoolMenuItem imgFilter;
-	TextMenuItem imgEffectItem[4];
-	MultiChoiceMenuItem imgEffect;
-	TextMenuItem overlayEffectItem[6];
-	MultiChoiceMenuItem overlayEffect;
-	TextMenuItem overlayEffectLevelItem[5];
-	MultiChoiceMenuItem overlayEffectLevel;
-	TextMenuItem imgEffectPixelFormatItem[3];
-	MultiChoiceMenuItem imgEffectPixelFormat;
-	StaticArrayList<TextMenuItem, 4> windowPixelFormatItem{};
-	MultiChoiceMenuItem windowPixelFormat;
-	#if defined CONFIG_BASE_MULTI_WINDOW && defined CONFIG_BASE_X11
-	BoolMenuItem secondDisplay;
-	#endif
-	#if defined CONFIG_BASE_MULTI_WINDOW && defined CONFIG_BASE_MULTI_SCREEN
-	BoolMenuItem showOnSecondScreen;
-	#endif
-	TextMenuItem imageBuffersItem[3];
-	MultiChoiceMenuItem imageBuffers;
-	TextMenuItem renderPixelFormatItem[3];
-	MultiChoiceMenuItem renderPixelFormat;
-	IG_UseMemberIf(Config::envIsAndroid, BoolMenuItem, presentationTime);
-	TextHeadingMenuItem visualsHeading;
-	TextHeadingMenuItem screenShapeHeading;
-	TextHeadingMenuItem advancedHeading;
-	TextHeadingMenuItem systemSpecificHeading;
-	StaticArrayList<MenuItem*, 31> item{};
-
-	void pushAndShowFrameRateSelectMenu(EmuSystem::VideoSystem, const Input::Event &);
-	bool onFrameTimeChange(EmuSystem::VideoSystem vidSys, IG::FloatSeconds time);
-	TextMenuItem::SelectDelegate setZoomDel();
-	TextMenuItem::SelectDelegate setViewportZoomDel();
-	TextMenuItem::SelectDelegate setFrameIntervalDel();
-	TextMenuItem::SelectDelegate setImgEffectDel();
-	TextMenuItem::SelectDelegate setOverlayEffectDel();
-	TextMenuItem::SelectDelegate setOverlayEffectLevelDel();
-	TextMenuItem::SelectDelegate setRenderPixelFormatDel();
-	TextMenuItem::SelectDelegate setImgEffectPixelFormatDel();
-	TextMenuItem::SelectDelegate setWindowDrawableConfigDel(Gfx::DrawableConfig);
-	TextMenuItem::SelectDelegate setImageBuffersDel();
-	EmuVideo &emuVideo() const;
-};
-
-class AudioOptionView : public TableView, public EmuAppHelper<AudioOptionView>
-{
-public:
-	AudioOptionView(ViewAttachParams attach, bool customMenu = false);
-	void loadStockItems();
-
-protected:
-	static constexpr unsigned MAX_APIS = 2;
-
-	BoolMenuItem snd;
-	BoolMenuItem soundDuringFastForward;
-	TextMenuItem soundVolumeItem[4];
-	MultiChoiceMenuItem soundVolume;
-	TextMenuItem soundBuffersItem[7];
-	MultiChoiceMenuItem soundBuffers;
-	BoolMenuItem addSoundBuffersOnUnderrun;
-	StaticArrayList<TextMenuItem, 5> audioRateItem{};
-	MultiChoiceMenuItem audioRate;
-	IG_UseMemberIf(IG::Audio::Manager::HAS_SOLO_MIX, BoolMenuItem, audioSoloMix);
-	using ApiItemContainer = StaticArrayList<TextMenuItem, MAX_APIS + 1>;
-	IG_UseMemberIf(IG::Audio::Config::MULTIPLE_SYSTEM_APIS, ApiItemContainer, apiItem);
-	IG_UseMemberIf(IG::Audio::Config::MULTIPLE_SYSTEM_APIS, MultiChoiceMenuItem, api);
-	StaticArrayList<MenuItem*, 17> item{};
-
-	TextMenuItem::SelectDelegate setRateDel();
-	TextMenuItem::SelectDelegate setBuffersDel();
-	TextMenuItem::SelectDelegate setVolumeDel();
-};
 
 class SystemOptionView : public TableView, public EmuAppHelper<SystemOptionView>
 {
@@ -157,17 +43,16 @@ protected:
 	MultiChoiceMenuItem autoSaveState;
 	BoolMenuItem confirmAutoLoadState;
 	BoolMenuItem confirmOverwriteState;
-	static constexpr unsigned MIN_FAST_FORWARD_SPEED = 2;
-	TextMenuItem fastForwardSpeedItem[6];
-	MultiChoiceMenuItem fastForwardSpeed;
+	TextMenuItem fastSlowModeSpeedItem[8];
+	MultiChoiceMenuItem fastSlowModeSpeed;
 	IG_UseMemberIf(Config::envIsAndroid, BoolMenuItem, performanceMode);
-	StaticArrayList<MenuItem*, 24> item{};
+	StaticArrayList<MenuItem*, 24> item;
 
 	TextMenuItem::SelectDelegate setAutoSaveStateDel();
-	TextMenuItem::SelectDelegate setFastForwardSpeedDel();
+	TextMenuItem::SelectDelegate setFastSlowModeSpeedDel();
 };
 
-class FilePathOptionView : public TableView, public EmuAppHelper<SystemOptionView>
+class FilePathOptionView : public TableView, public EmuAppHelper<FilePathOptionView>
 {
 public:
 	FilePathOptionView(ViewAttachParams attach, bool customMenu = false);
@@ -175,13 +60,21 @@ public:
 
 protected:
 	TextMenuItem savePath;
-	StaticArrayList<MenuItem*, 6> item{};
+	StaticArrayList<MenuItem*, 6> item;
 
 	void onSavePathChange(std::string_view path);
 	virtual bool onFirmwarePathChange(IG::CStringView path, bool isDir);
-	std::unique_ptr<TextTableView> makeFirmwarePathMenu(IG::utf16String name, bool allowFiles = false, unsigned extraItemsHint = 0);
-	void pushAndShowFirmwarePathMenu(IG::utf16String name, const Input::Event &, bool allowFiles = false);
-	void pushAndShowFirmwareFilePathMenu(IG::utf16String name, const Input::Event &);
+	std::unique_ptr<TextTableView> makeFirmwarePathMenu(UTF16String name, bool allowFiles = false, int extraItemsHint = 0);
+
+	void pushAndShowFirmwarePathMenu(UTF16Convertible auto &&name, const Input::Event &e, bool allowFiles = false)
+	{
+		pushAndShow(makeFirmwarePathMenu(IG_forward(name), allowFiles), e);
+	}
+
+	void pushAndShowFirmwareFilePathMenu(UTF16Convertible auto &&name, const Input::Event &e)
+	{
+		pushAndShowFirmwarePathMenu(IG_forward(name), e, true);
+	}
 };
 
 class GUIOptionView : public TableView, public EmuAppHelper<GUIOptionView>
@@ -209,11 +102,12 @@ protected:
 	BoolMenuItem showBluetoothScan;
 	BoolMenuItem showHiddenFiles;
 	TextHeadingMenuItem orientationHeading;
-	TextMenuItem menuOrientationItem[Config::BASE_SUPPORTS_ORIENTATION_SENSOR ? 5 : 4];
+	TextMenuItem menuOrientationItem[5];
 	MultiChoiceMenuItem menuOrientation;
-	TextMenuItem emuOrientationItem[Config::BASE_SUPPORTS_ORIENTATION_SENSOR ? 5 : 4];
+	TextMenuItem emuOrientationItem[5];
 	MultiChoiceMenuItem emuOrientation;
-	StaticArrayList<MenuItem*, 21> item{};
+	IG_UseMemberIf(Config::TRANSLUCENT_SYSTEM_UI, BoolMenuItem, layoutBehindSystemUI);
+	StaticArrayList<MenuItem*, 22> item;
 
 	TextMenuItem::SelectDelegate setFontSizeDel();
 	TextMenuItem::SelectDelegate setMenuOrientationDel();
@@ -228,7 +122,7 @@ class BiosSelectMenu : public TableView, public EmuAppHelper<BiosSelectMenu>
 public:
 	using BiosChangeDelegate = DelegateFunc<void (std::string_view displayName)>;
 
-	BiosSelectMenu(IG::utf16String name, ViewAttachParams attach, FS::PathString *biosPathStr, BiosChangeDelegate onBiosChange,
+	BiosSelectMenu(UTF16String name, ViewAttachParams attach, FS::PathString *biosPathStr, BiosChangeDelegate onBiosChange,
 		EmuSystem::NameFilterFunc fsFilter);
 
 protected:

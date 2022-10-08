@@ -20,6 +20,7 @@
 #include <imagine/util/DelegateFunc.hh>
 #include <imagine/util/bitset.hh>
 #include <imagine/util/string/CStringView.hh>
+#include <imagine/util/enum.hh>
 #include <vector>
 #include <memory>
 
@@ -99,6 +100,25 @@ static constexpr bool NAVIGATION_BAR = true;
 static constexpr bool NAVIGATION_BAR = false;
 #endif
 
+#if defined __ANDROID__
+constexpr bool TRANSLUCENT_SYSTEM_UI = true;
+#else
+constexpr bool TRANSLUCENT_SYSTEM_UI = false;
+#endif
+
+#if defined __ANDROID__
+constexpr bool DISPLAY_CUTOUT = true;
+#else
+constexpr bool DISPLAY_CUTOUT = false;
+#endif
+
+#if defined __ANDROID__
+#define IG_CONFIG_SENSORS
+constexpr bool SENSORS = true;
+#else
+constexpr bool SENSORS = false;
+#endif
+
 }
 
 namespace IG::Input
@@ -111,19 +131,33 @@ class DeviceChange;
 namespace IG
 {
 
-class GenericIO;
-
 using OnFrameDelegate = DelegateFunc<bool (FrameParams params)>;
 
-// orientation
-using Orientation = uint8_t;
-static constexpr Orientation VIEW_ROTATE_0 = bit(0), VIEW_ROTATE_90 = bit(1), VIEW_ROTATE_180 = bit(2), VIEW_ROTATE_270 = bit(3);
-static constexpr Orientation VIEW_ROTATE_AUTO = bit(5);
-static constexpr Orientation VIEW_ROTATE_ALL = VIEW_ROTATE_0 | VIEW_ROTATE_90 | VIEW_ROTATE_180 | VIEW_ROTATE_270;
-static constexpr Orientation VIEW_ROTATE_ALL_BUT_UPSIDE_DOWN = VIEW_ROTATE_0 | VIEW_ROTATE_90 | VIEW_ROTATE_270;
+enum class OrientationMask: uint8_t
+{
+	UNSET,
+	PORTRAIT = bit(0),
+	LANDSCAPE_RIGHT = bit(1),
+	PORTRAIT_UPSIDE_DOWN = bit(2),
+	LANDSCAPE_LEFT = bit(3),
+	ALL_LANDSCAPE = LANDSCAPE_RIGHT | LANDSCAPE_LEFT,
+	ALL_PORTRAIT = PORTRAIT | PORTRAIT_UPSIDE_DOWN,
+	ALL_BUT_UPSIDE_DOWN = PORTRAIT | LANDSCAPE_RIGHT | LANDSCAPE_LEFT,
+	ALL = PORTRAIT | LANDSCAPE_RIGHT | PORTRAIT_UPSIDE_DOWN | LANDSCAPE_LEFT,
+};
 
-const char *orientationToStr(Orientation o);
-bool orientationIsSideways(Orientation o);
+IG_DEFINE_ENUM_BIT_FLAG_FUNCTIONS(OrientationMask);
+
+std::string_view asString(OrientationMask);
+
+WISE_ENUM_CLASS((Rotation, uint8_t),
+	UP,
+	RIGHT,
+	DOWN,
+	LEFT,
+	ANY);
+
+constexpr bool isSideways(Rotation r) { return r == Rotation::LEFT || r == Rotation::RIGHT; }
 
 static constexpr int APP_ON_EXIT_PRIORITY = 0;
 static constexpr int RENDERER_TASK_ON_EXIT_PRIORITY = 200;
@@ -150,40 +184,22 @@ struct WindowSurfaceChange
 
 	static constexpr uint8_t SURFACE_RESIZED = IG::bit(0),
 		CONTENT_RECT_RESIZED = IG::bit(1),
-		CUSTOM_VIEWPORT_RESIZED = IG::bit(2);
-	static constexpr uint8_t RESIZE_BITS =
-		SURFACE_RESIZED | CONTENT_RECT_RESIZED | CUSTOM_VIEWPORT_RESIZED;
+		RESIZE_BITS = SURFACE_RESIZED | CONTENT_RECT_RESIZED;
+
+	Action action{};
+	uint8_t flags{};
 
 	constexpr WindowSurfaceChange(Action action, uint8_t flags = 0):
-		action_{action}, flags{flags}
-	{}
-
-	constexpr Action action() const
-	{
-		return action_;
-	}
-
-	constexpr bool resized() const
-	{
-		return action() == Action::CHANGED;
-	}
-
+		action{action}, flags{flags} {}
+	constexpr bool resized() const { return action == Action::CHANGED; }
 	constexpr bool surfaceResized() const { return flags & SURFACE_RESIZED; }
 	constexpr bool contentRectResized() const { return flags & CONTENT_RECT_RESIZED; }
-	constexpr bool customViewportResized() const { return flags & CUSTOM_VIEWPORT_RESIZED; }
-
-protected:
-	Action action_{};
-	uint8_t flags{};
 };
 
 struct WindowDrawParams
 {
-	bool wasResized_ = false;
-	bool needsSync_ = false;
-
-	bool wasResized() const { return wasResized_; }
-	bool needsSync() const { return needsSync_; }
+	bool wasResized{};
+	bool needsSync{};
 };
 
 enum class WindowFrameTimeSource : uint8_t
@@ -208,10 +224,20 @@ struct ScreenChange
 	constexpr bool removed() const { return action == Action::REMOVED; }
 };
 
+WISE_ENUM_CLASS((SensorType, uint8_t),
+	(Accelerometer, 1),
+	(Gyroscope, 4),
+	(Light, 5)
+);
+
+using SensorValues = std::array<float, 3>;
+
 class Screen;
 class Window;
-class WindowConfig;
+struct WindowConfig;
 class ApplicationContext;
+class Application;
+struct ApplicationInitParams;
 
 using WindowContainer = std::vector<std::unique_ptr<Window>>;
 using ScreenContainer = std::vector<std::unique_ptr<Screen>>;
@@ -222,11 +248,12 @@ using InterProcessMessageDelegate = DelegateFunc<void (ApplicationContext, IG::C
 using ResumeDelegate = DelegateFunc<bool (ApplicationContext, bool focused)>;
 using FreeCachesDelegate = DelegateFunc<void (ApplicationContext, bool running)>;
 using ExitDelegate = DelegateFunc<bool (ApplicationContext, bool backgrounded)>;
-using DeviceOrientationChangedDelegate = DelegateFunc<void (ApplicationContext, Orientation newOrientation)>;
-using SystemOrientationChangedDelegate = DelegateFunc<void (ApplicationContext, Orientation oldOrientation, Orientation newOrientation)>;
+using DeviceOrientationChangedDelegate = DelegateFunc<void (ApplicationContext, Rotation newRotation)>;
+using SystemOrientationChangedDelegate = DelegateFunc<void (ApplicationContext, Rotation oldRotation, Rotation newRotation)>;
 using ScreenChangeDelegate = DelegateFunc<void (ApplicationContext, Screen &s, ScreenChange)>;
 using SystemDocumentPickerDelegate = DelegateFunc<void(IG::CStringView uri, IG::CStringView displayName)>;
 using TextFieldDelegate = DelegateFunc<void (const char *str)>;
+using SensorChangedDelegate = DelegateFunc<void (SensorValues)>;
 
 using InputDeviceChangeDelegate = DelegateFunc<void (const Input::Device &dev, Input::DeviceChange)>;
 using InputDevicesEnumeratedDelegate = DelegateFunc<void ()>;

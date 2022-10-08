@@ -17,41 +17,38 @@
 
 #include <imagine/gfx/GfxSprite.hh>
 #include <imagine/gfx/Texture.hh>
-
-namespace IG::Gfx
-{
-class Renderer;
-}
+#include <imagine/util/enum.hh>
+#include <array>
 
 namespace EmuEx
 {
 
 using namespace IG;
 
+WISE_ENUM_CLASS((ImageOverlayId, uint8_t),
+	(SCANLINES, 1),
+	(SCANLINES_2, 2),
+	(LCD, 10),
+	(CRT_MASK, 20),
+	(CRT_MASK_2, 21),
+	(CRT_GRILLE, 30),
+	(CRT_GRILLE_2, 31));
+
 class VideoImageOverlay
 {
 public:
-	enum
-	{
-		NO_EFFECT = 0,
-		SCANLINES = 1, SCANLINES_2 = 2,
-		CRT = 10,
-		CRT_RGB = 20, CRT_RGB_2,
-
-		MAX_EFFECT_VAL = CRT_RGB_2
-	};
-
-	constexpr	VideoImageOverlay() {}
-	void setEffect(Gfx::Renderer &r, unsigned effect);
+	constexpr	VideoImageOverlay() = default;
+	void setEffect(Gfx::Renderer &, ImageOverlayId, Gfx::ColorSpace);
 	void setIntensity(float intensity);
-	void place(const Gfx::Sprite &disp, unsigned lines);
-	void draw(Gfx::RendererCommands &cmds);
+	void place(const Gfx::Sprite &, IG::WRect contentRect, WP videoPixels, IG::Rotation);
+	void draw(Gfx::RendererCommands &cmds, Gfx::Vec3 brightness);
 
 private:
 	Gfx::Texture img{};
 	Gfx::Sprite spr{};
-	float intensity = 0.25;
-	unsigned effect = NO_EFFECT;
+	float intensity = 0.75f;
+	ImageOverlayId overlayId{};
+	bool multiplyBlend{};
 };
 
 }

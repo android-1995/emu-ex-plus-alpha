@@ -8,7 +8,7 @@
 //  SS  SS   tt   ee      ll   ll  aa  aa
 //   SSSS     ttt  eeeee llll llll  aaaaa
 //
-// Copyright (c) 1995-2021 by Bradford W. Mott, Stephen Anthony
+// Copyright (c) 1995-2022 by Bradford W. Mott, Stephen Anthony
 // and the Stella Team
 //
 // See the file "License.txt" for information on usage and redistribution of
@@ -33,7 +33,7 @@ Serializer::Serializer(const string& filename, Mode m)
     FilesystemNode node(filename);
     if(node.isFile() && node.isReadable())
     {
-    	auto str = make_unique<IG::FStream>(EmuEx::gAppContext().openFileUri(filename, IG::IO::AccessHint::ALL), ios::in | ios::binary);
+      auto str = make_unique<IG::FStream>(EmuEx::gAppContext().openFileUri(filename, IG::IOAccessHint::ALL), ios::in | ios::binary);
       if(str && str->is_open())
       {
         myStream = std::move(str);
@@ -45,20 +45,10 @@ Serializer::Serializer(const string& filename, Mode m)
   }
   else
   {
-    // When using fstreams, we need to manually create the file first
-    // if we want to use it in read/write mode, since it won't be created
-    // if it doesn't already exist
-    // However, if it *does* exist, we don't want to overwrite it
-    // So we open in write and append mode - the write creates the file
-    // when necessary, and the append doesn't delete any data if it
-    // already exists
-    fstream temp(filename, ios::out | ios::app);
-    temp.close();
-
     ios_base::openmode stream_mode = ios::in | ios::out | ios::binary;
     if(m == Mode::ReadWriteTrunc)
       stream_mode |= ios::trunc;
-    auto str = make_unique<IG::FStream>(EmuEx::gAppContext().openFileUri(filename, IG::IO::OPEN_NEW), stream_mode);
+    auto str = make_unique<IG::FStream>(EmuEx::gAppContext().openFileUri(filename, IG::OpenFlagsMask::NEW), stream_mode);
     if(str && str->is_open())
     {
       myStream = std::move(str);
@@ -102,10 +92,10 @@ void Serializer::rewind()
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 size_t Serializer::size()
 {
-  std::streampos oldPos = myStream->tellp();
+  const std::streampos oldPos = myStream->tellp();
 
   myStream->seekp(0, std::ios::end);
-  size_t s = myStream->tellp();
+  const size_t s = myStream->tellp();
   myStream->seekp(oldPos);
 
   return s;
@@ -177,7 +167,7 @@ double Serializer::getDouble() const
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 string Serializer::getString() const
 {
-  int len = getInt();
+  const int len = getInt();
   string str;
   str.resize(len);
   myStream->read(&str[0], len);
@@ -242,7 +232,7 @@ void Serializer::putDouble(double value)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 void Serializer::putString(const string& str)
 {
-  uInt32 len = uInt32(str.length());
+  const uInt32 len = static_cast<uInt32>(str.length());
   putInt(len);
   myStream->write(str.data(), len);
 }

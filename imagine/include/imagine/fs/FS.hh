@@ -19,7 +19,7 @@
 #include <imagine/fs/PosixFS.hh>
 #include <imagine/util/string/CStringView.hh>
 #include <imagine/util/string/uri.hh>
-#include <imagine/util/concepts.hh>
+#include <concepts>
 #include <cstddef>
 #include <compare>
 #include <memory>
@@ -29,9 +29,15 @@
 namespace IG::FS
 {
 
-class directory_iterator : public std::iterator<std::input_iterator_tag, directory_entry>
+class directory_iterator
 {
 public:
+	using iterator_category = std::input_iterator_tag;
+	using value_type = directory_entry;
+	using difference_type = ptrdiff_t;
+	using pointer = value_type*;
+	using reference = value_type&;
+
 	constexpr directory_iterator() = default;
 	directory_iterator(IG::CStringView path);
 	directory_iterator(const directory_iterator&) = default;
@@ -72,8 +78,6 @@ FileString basename(IG::CStringView path);
 PathString dirname(IG::CStringView path);
 FileString displayName(IG::CStringView path);
 std::string formatLastWriteTimeLocal(IG::CStringView path);
-size_t directoryItems(IG::CStringView path);
-void forEachInDirectory(IG::CStringView path, DirectoryEntryDelegate del);
 
 // URI path functions
 static constexpr std::string_view uriPathSegmentTreeName{"/tree/"};
@@ -82,7 +86,7 @@ PathString dirnameUri(IG::CStringView pathOrUri);
 std::pair<std::string_view, size_t> uriPathSegment(std::string_view uri, std::string_view segmentName);
 
 template <class T>
-concept ConvertibleToPathString = IG::convertible_to<T, PathStringImpl> || IG::convertible_to<T, std::string_view>;
+concept ConvertibleToPathString = std::convertible_to<T, PathStringImpl> || std::convertible_to<T, std::string_view>;
 
 static constexpr PathString pathString(ConvertibleToPathString auto &&base, auto &&...components)
 {

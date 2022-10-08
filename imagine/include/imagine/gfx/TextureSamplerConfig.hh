@@ -25,94 +25,61 @@ namespace IG::Gfx
 class TextureSamplerConfig
 {
 public:
-	constexpr TextureSamplerConfig() = default;
+	bool minLinearFilter = true;
+	bool magLinearFilter = true;
+	MipFilter mipFilter = MipFilter::LINEAR;
+	WrapMode xWrapMode = WrapMode::CLAMP;
+	WrapMode yWrapMode = WrapMode::CLAMP;
+	IG_UseMemberIf(Config::DEBUG_BUILD, const char *, debugLabel){};
 
-	void setLinearFilter(bool on)
-	{
-		minLinearFiltering = magLinearFiltering = on;
-	}
-
-	void setMinLinearFilter(bool on)
-	{
-		minLinearFiltering = on;
-	}
-
-	void setMagLinearFilter(bool on)
-	{
-		magLinearFiltering = on;
-	}
-
-	bool minLinearFilter() const
-	{
-		return minLinearFiltering;
-	}
-
-	bool magLinearFilter() const
-	{
-		return magLinearFiltering;
-	}
-
-	void setMipFilter(MipFilterMode filter)
-	{
-		mipFiltering = filter;
-	}
-
-	MipFilterMode mipFilter() const
-	{
-		return mipFiltering;
-	}
-
-	void setWrapMode(WrapMode mode)
-	{
-		xWrapMode_ = yWrapMode_ = mode;
-	}
-
-	void setXWrapMode(WrapMode mode)
-	{
-		xWrapMode_ = mode;
-	}
-
-	void setYWrapMode(WrapMode mode)
-	{
-		yWrapMode_ = mode;
-	}
-
-	WrapMode xWrapMode() const
-	{
-		return xWrapMode_;
-	}
-
-	WrapMode yWrapMode() const
-	{
-		return yWrapMode_;
-	}
-
-	void setDebugLabel(const char *str)
-	{
-		label = str;
-	}
-
-	const char *debugLabel()
-	{
-		return label;
-	}
-
-	static TextureSamplerConfig makeWithVideoUseConfig()
-	{
-		TextureSamplerConfig config;
-		config.setLinearFilter(true);
-		config.setMipFilter(MIP_FILTER_NONE);
-		config.setWrapMode(WRAP_CLAMP);
-		return config;
-	}
-
-private:
-	bool minLinearFiltering = true;
-	bool magLinearFiltering = true;
-	MipFilterMode mipFiltering = MIP_FILTER_LINEAR;
-	WrapMode xWrapMode_ = WRAP_CLAMP;
-	WrapMode yWrapMode_ = WRAP_CLAMP;
-	IG_UseMemberIf(Config::DEBUG_BUILD, const char *, label){};
+	constexpr void setLinearFilter(bool on) { minLinearFilter = magLinearFilter = on; }
+	constexpr void setWrapMode(WrapMode mode) { xWrapMode = yWrapMode = mode; }
+	constexpr bool canMipmap() const { return mipFilter != MipFilter::NONE; }
 };
+
+	namespace SamplerConfigs
+	{
+
+	constexpr TextureSamplerConfig clamp
+	{
+		.debugLabel = "Clamp"
+	};
+
+	constexpr TextureSamplerConfig nearestMipClamp
+	{
+		.mipFilter = MipFilter::NEAREST,
+		.debugLabel = "NearestMipClamp"
+	};
+
+	constexpr TextureSamplerConfig noMipClamp
+	{
+		.mipFilter = MipFilter::NONE,
+		.debugLabel = "NoMipClamp"
+	};
+
+	constexpr TextureSamplerConfig noLinearNoMipClamp
+	{
+		.minLinearFilter = false,
+		.magLinearFilter = false,
+		.mipFilter = MipFilter::NONE,
+		.debugLabel = "NoLinearNoMipClamp"
+	};
+
+	constexpr TextureSamplerConfig repeat
+	{
+		.xWrapMode = WrapMode::REPEAT,
+		.yWrapMode = WrapMode::REPEAT,
+		.debugLabel = "Repeat"
+	};
+
+	constexpr TextureSamplerConfig nearestMipRepeat
+	{
+		.mipFilter = MipFilter::NEAREST,
+		.xWrapMode = WrapMode::REPEAT,
+		.yWrapMode = WrapMode::REPEAT,
+		.debugLabel = "NearestMipRepeat"
+	};
+
+	}
 
 }

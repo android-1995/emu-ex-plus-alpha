@@ -14,68 +14,34 @@
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
 #define LOGTAG "GfxProjectionPlane"
-#include <imagine/gfx/RendererCommands.hh>
 #include <imagine/gfx/ProjectionPlane.hh>
+#include <imagine/gfx/Mat4.hh>
+#include <imagine/base/Viewport.hh>
 #include <imagine/logger/logger.h>
 
 namespace IG::Gfx
 {
 
-float ProjectionPlane::width() const
+ProjectionPlane::ProjectionPlane(Viewport viewport, Mat4 mat)
 {
-	return w;
-}
-
-float ProjectionPlane::height() const
-{
-	return h;
-}
-
-GP ProjectionPlane::size() const
-{
-	return {w, h};
-}
-
-float ProjectionPlane::focalZ() const
-{
-	return focal;
-}
-
-Viewport ProjectionPlane::viewport() const
-{
-	return viewport_;
-}
-
-void ProjectionPlane::updateMMSize(Viewport v)
-{
-	mmToXScale = w/(float)v.widthMM();
-	mmToYScale = h/(float)v.heightMM();
-	//logMsg("projector to mm %fx%f", (double)mmToXScale, (double)mmToYScale);
-}
-
-ProjectionPlane ProjectionPlane::makeWithMatrix(Viewport viewport, Mat4 mat)
-{
-	ProjectionPlane p;
 	auto matInv = mat.invert();
-	p.viewport_ = viewport;
-	auto lowerLeft = mat.unproject(viewport.inGLFormat(), {(float)viewport.bounds().x, (float)viewport.bounds().y, .5}, matInv);
+	winBounds = viewport.bounds();
+	auto lowerLeft = mat.unproject(asYUpRelRect(viewport), {(float)viewport.bounds().x, (float)viewport.bounds().y, .5}, matInv);
 	//logMsg("Lower-left projection point %d,%d -> %f %f %f", viewport.bounds().x, viewport.bounds().y, (double)lowerLeft.v.x, (double)lowerLeft.v.y, (double)lowerLeft.v.z);
-	auto upperRight = mat.unproject(viewport.inGLFormat(), {(float)viewport.bounds().x2, (float)viewport.bounds().y2, .5}, matInv);
+	auto upperRight = mat.unproject(asYUpRelRect(viewport), {(float)viewport.bounds().x2, (float)viewport.bounds().y2, .5}, matInv);
 	//logMsg("Upper-right projection point %d,%d -> %f %f %f", viewport.bounds().x2, viewport.bounds().y2, (double)upperRight.v.x, (double)upperRight.v.y, (double)upperRight.v.z);
-	p.w = upperRight.x() - lowerLeft.x(), p.h = upperRight.y() - lowerLeft.y();
-	p.focal = upperRight.z();
-	p.rect.x = -p.w/2.f;
-	p.rect.y = -p.h/2.f;
-	p.rect.x2 = p.w/2.f;
-	p.rect.y2 = p.h/2.f;
-	p.pixToXScale = p.w / (float)viewport.width();
-	p.pixToYScale = p.h / (float)viewport.height();
-	p.xToPixScale = (float)viewport.width() / p.w;
-	p.yToPixScale = (float)viewport.height() / p.h;
-	p.updateMMSize(viewport);
+	w = upperRight.x - lowerLeft.x, h = upperRight.y - lowerLeft.y;
+	focal = upperRight.z;
+	rect.x = -w/2.f;
+	rect.y = -h/2.f;
+	rect.x2 = w/2.f;
+	rect.y2 = h/2.f;
+	pixToXScale = w / (float)viewport.width();
+	pixToYScale = h / (float)viewport.height();
+	xToPixScale = (float)viewport.width() / w;
+	yToPixScale = (float)viewport.height() / h;
 	logMsg("made with size %fx%f, to pix %fx%f, to view %fx%f",
-		(double)p.w, (double)p.h, (double)p.xToPixScale, (double)p.yToPixScale, (double)p.pixToXScale, (double)p.pixToYScale);
-	return p;
+		(double)w, (double)h, (double)xToPixScale, (double)yToPixScale, (double)pixToXScale, (double)pixToYScale);
 }
 
 Mat4 ProjectionPlane::makeTranslate(IG::Point2D<float> p) const
@@ -86,21 +52,6 @@ Mat4 ProjectionPlane::makeTranslate(IG::Point2D<float> p) const
 Mat4 ProjectionPlane::makeTranslate() const
 {
 	return Mat4::makeTranslate({0.f, 0.f, focal});
-}
-
-void ProjectionPlane::loadTranslate(Gfx::RendererCommands &cmds, float x, float y) const
-{
-	cmds.loadTranslate(x, y, focal);
-}
-
-void ProjectionPlane::loadTranslate(Gfx::RendererCommands &cmds, GP p) const
-{
-	loadTranslate(cmds, p.x, p.y);
-}
-
-void ProjectionPlane::resetTransforms(Gfx::RendererCommands &cmds) const
-{
-	loadTranslate(cmds, 0., 0.);
 }
 
 float ProjectionPlane::unprojectXSize(float x) const
@@ -119,12 +70,12 @@ float ProjectionPlane::unprojectYSize(float y) const
 
 float ProjectionPlane::unprojectX(float x) const
 {
-	return unprojectXSize(x - viewport().bounds().x) - wHalf();
+	return unprojectXSize(x - windowBounds().x) - wHalf();
 }
 
 float ProjectionPlane::unprojectY(float y) const
 {
-	return -unprojectYSize(y - viewport().bounds().y) + hHalf();
+	return -unprojectYSize(y - windowBounds().y) + hHalf();
 }
 
 float ProjectionPlane::projectXSize(float x) const
@@ -144,13 +95,13 @@ float ProjectionPlane::projectYSize(float y) const
 float ProjectionPlane::projectX(float x) const
 {
 	//logMsg("unproject x %f", x);
-	return projectXSize(x + wHalf()) + viewport().bounds().x;
+	return projectXSize(x + wHalf()) + windowBounds().x;
 }
 
 float ProjectionPlane::projectY(float y) const
 {
 	//logMsg("unproject y %f", y);
-	return projectYSize(-(y - hHalf())) + viewport().bounds().y;
+	return projectYSize(-(y - hHalf())) + windowBounds().y;
 }
 
 GCRect ProjectionPlane::unProjectRect(int x, int y, int x2, int y2) const
@@ -192,8 +143,5 @@ IG::Point2D<float> ProjectionPlane::alignToPixel(IG::Point2D<float> p) const
 {
 	return {alignXToPixel(p.x), alignYToPixel(p.y)};
 }
-
-float ProjectionPlane::xMMSize(float mm) const { return mm * mmToXScale; }
-float ProjectionPlane::yMMSize(float mm) const { return mm * mmToYScale; }
 
 }

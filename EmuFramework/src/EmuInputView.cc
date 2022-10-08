@@ -20,7 +20,6 @@
 #include <emuframework/EmuVideoLayer.hh>
 #include <emuframework/FilePicker.hh>
 #include "EmuOptions.hh"
-#include "private.hh"
 #include "privateInput.hh"
 #include <imagine/gui/AlertView.hh>
 #include <imagine/gfx/RendererCommands.hh>
@@ -37,10 +36,9 @@ EmuInputView::EmuInputView(ViewAttachParams attach, VController &vCtrl, EmuVideo
 		videoLayer{&videoLayer}
 {}
 
-void EmuInputView::draw(Gfx::RendererCommands &cmds)
+void EmuInputView::draw(Gfx::RendererCommands &__restrict__ cmds)
 {
 	#ifdef CONFIG_EMUFRAMEWORK_VCONTROLS
-	cmds.loadTransform(projP.makeTranslate());
 	vController->draw(cmds, ffToggleActive);
 	#endif
 }
@@ -60,9 +58,9 @@ void EmuInputView::resetInput()
 	ffToggleActive = false;
 }
 
-void EmuInputView::updateFastforward()
+void EmuInputView::updateRunSpeed()
 {
-	app().viewController().setFastForwardSpeed(ffToggleActive ? app().fastForwardSpeedOption().val : 0);
+	app().setRunSpeed(ffToggleActive ? app().fastSlowModeSpeedAsDouble() : 1.);
 }
 
 bool EmuInputView::inputEvent(const Input::Event &e)
@@ -81,12 +79,12 @@ bool EmuInputView::inputEvent(const Input::Event &e)
 			else if(motionEv.pushed() && vController->fastForwardHitTest(motionEv.pos()))
 			{
 				ffToggleActive ^= true;
-				updateFastforward();
+				updateRunSpeed();
 			}
 			else
 			{
 			//屏蔽虚拟按键事件
-//				vController->pointerInputEvent(motionEv, videoLayer->gameRect());
+//				vController->pointerInputEvent(motionEv, videoLayer->contentRect());
 			}
 			return false;
 		},
@@ -112,7 +110,7 @@ bool EmuInputView::inputEvent(const Input::Event &e)
 					isPushed ? "pushed" : "released", keyEv.device()->keyName(keyEv.key()),
 					keyEv.device()->name()));
 			}
-			iterateTimes(InputDeviceData::maxKeyActions, i)
+			for(auto i : iotaCount(InputDeviceData::maxKeyActions))
 			{
 				auto action = actionGroup[i];
 				if(action != 0)
@@ -128,7 +126,7 @@ bool EmuInputView::inputEvent(const Input::Event &e)
 							if(isRepeated)
 								continue;
 							ffToggleActive = keyEv.pushed();
-							updateFastforward();
+							updateRunSpeed();
 							logMsg("fast-forward state:%d", ffToggleActive);
 						}
 
@@ -173,12 +171,12 @@ bool EmuInputView::inputEvent(const Input::Event &e)
 									[this]()
 									{
 										doSaveState(app(), false);
-										app().viewController().showEmulation();
+										app().showEmulation();
 									});
 								ynAlertView->setOnNo(
 									[this]()
 									{
-										app().viewController().showEmulation();
+										app().showEmulation();
 									});
 								pushAndShowModal(std::move(ynAlertView), e);
 							}
@@ -220,7 +218,7 @@ bool EmuInputView::inputEvent(const Input::Event &e)
 							if(keyEv.repeated())
 								continue;
 							ffToggleActive = !ffToggleActive;
-							updateFastforward();
+							updateRunSpeed();
 							logMsg("fast-forward state:%d", ffToggleActive);
 						}
 
@@ -253,7 +251,7 @@ bool EmuInputView::inputEvent(const Input::Event &e)
 									emuApp.removeTurboInputEvent(sysAction);
 								}
 							}
-							sys.handleInputAction(&emuApp, keyEv.state(), sysAction, keyEv.metaKeyBits());
+							sys.handleInputAction(&emuApp, {sysAction, keyEv.state(), keyEv.metaKeyBits()});
 						}
 					}
 				}
@@ -264,7 +262,7 @@ bool EmuInputView::inputEvent(const Input::Event &e)
 				|| keyEv.isGamepad() // consume all gamepad events
 				|| devData.devConf.shouldConsumeUnboundKeys();
 		}
-	}, e.asVariant());
+	}, e);
 }
 
 }
