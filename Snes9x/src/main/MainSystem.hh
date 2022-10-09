@@ -12,6 +12,7 @@
 #else
 #include <apu.h>
 #endif
+#include <list>
 
 namespace EmuEx::Controls
 {
@@ -128,7 +129,9 @@ public:
 	bool onPointerInputUpdate(const Input::MotionEvent &, Input::DragTrackerState,
 		Input::DragTrackerState prevDragState, IG::WindowRect gameRect);
 	bool onPointerInputEnd(const Input::MotionEvent &, Input::DragTrackerState, IG::WindowRect gameRect);
-
+	//region爱吾
+    void setCheatListAiWu(std::list<std::string> cheats);
+    //endregion
 protected:
 	void applyInputPortOption(int portVal, VController &vCtrl);
 	WP updateAbsolutePointerPosition(IG::WindowRect gameRect, WP pos);
