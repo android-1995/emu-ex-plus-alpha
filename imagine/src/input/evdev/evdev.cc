@@ -19,7 +19,6 @@
 #include <imagine/util/bitset.hh>
 #include <imagine/util/math/int.hh>
 #include <imagine/util/fd-utils.h>
-#include <imagine/util/string.h>
 #include <imagine/fs/FS.hh>
 #include <imagine/input/Input.hh>
 #include <imagine/input/AxisKeyEmu.hh>
@@ -111,10 +110,12 @@ static constexpr bool isBitSetInArray(const T (&arr)[S], unsigned int bit)
 
 EvdevInputDevice::EvdevInputDevice() {}
 
-EvdevInputDevice::EvdevInputDevice(int id, int fd, TypeBits typeBits, std::string name):
-	Device{id, Map::SYSTEM, typeBits, std::move(name)},
+EvdevInputDevice::EvdevInputDevice(int id, int fd, TypeBits typeBits, std::string name_, uint32_t vendorProductId):
+	Device{id, Map::SYSTEM, typeBits, std::move(name_)},
 	fd{fd}
 {
+	subtype_ = Device::Subtype::GENERIC_GAMEPAD;
+	updateGamepadSubtype(name(), vendorProductId);
 	if(setupJoystickBits())
 		typeBits_ |= Device::TYPE_BIT_JOYSTICK;
 }
@@ -125,11 +126,10 @@ EvdevInputDevice::~EvdevInputDevice()
 	::close(fd);
 }
 
-void EvdevInputDevice::processInputEvents(LinuxApplication &app, input_event *event, uint32_t events)
+void EvdevInputDevice::processInputEvents(LinuxApplication &app, std::span<const input_event> events)
 {
-	iterateTimes(events, i)
+	for(auto &ev : events)
 	{
-		auto &ev = event[i];
 		//logMsg("got event type %d, code %d, value %d", ev.type, ev.code, ev.value);
 		Time time = IG::Seconds{ev.time.tv_sec} + IG::Microseconds{ev.time.tv_usec};
 		switch(ev.type)
@@ -226,7 +226,7 @@ void EvdevInputDevice::addPollEvent(LinuxApplication &app)
 				{
 					uint32_t events = len / sizeof(struct input_event);
 					//logMsg("read %d bytes from input fd %d, %d events", len, this->fd, events);
-					processInputEvents(app, event, events);
+					processInputEvents(app, {event, events});
 				}
 				if(len == -1 && errno != EAGAIN)
 				{
@@ -309,7 +309,13 @@ static bool processDevNode(LinuxApplication &app, IG::CStringView path, int id, 
 	{
 		logWarn("unable to get device name");
 	}
-	auto evDev = std::make_unique<EvdevInputDevice>(id, fd, Device::TYPE_BIT_GAMEPAD, nameStr.data());
+	struct input_id devInfo{};
+	if(ioctl(fd, EVIOCGID, &devInfo) < 0)
+	{
+		logWarn("unable to get device info");
+	}
+	auto vendorProductId = ((devInfo.vendor & 0xFFFF) << 16) | (devInfo.product & 0xFFFF);
+	auto evDev = std::make_unique<EvdevInputDevice>(id, fd, Device::TYPE_BIT_GAMEPAD, nameStr.data(), vendorProductId);
 	fd_setNonblock(fd, 1);
 	evDev->addPollEvent(app);
 	app.addInputDevice(std::move(evDev), notify);
@@ -387,7 +393,7 @@ void LinuxApplication::initEvdev(EventLoop loop)
 		for(auto &entry : FS::directory_iterator{DEV_NODE_PATH})
 		{
 			auto filename = entry.name();
-			if(entry.type() != FS::file_type::character || !IG::stringContains(filename, "event"))
+			if(entry.type() != FS::file_type::character || !filename.contains("event"))
 				continue;
 			uint32_t id;
 			if(!Input::processDevNodeName(filename, id))

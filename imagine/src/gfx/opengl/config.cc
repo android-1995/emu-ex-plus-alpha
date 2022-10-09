@@ -18,31 +18,34 @@
 #include <imagine/gfx/RendererTask.hh>
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/base/Window.hh>
-#include <imagine/util/string.h>
 #include <imagine/util/format.hh>
-#include <imagine/fs/FS.hh>
+#include <imagine/util/ranges.hh>
 #include "internalDefs.hh"
 #include "utils.hh"
 #ifdef __ANDROID__
 #include "../../base/android/android.hh"
-#include "android/egl.hh"
+#include <imagine/gfx/opengl/android/egl.hh>
 #endif
 #include <string>
 #include <cassert>
+#include <cctype>
 
 namespace IG::Gfx
 {
 
-float orientationRadians(Orientation o)
+[[gnu::weak]] const bool Renderer::enableSamplerObjects = false;
+
+float rotationRadians(Rotation r)
 {
-	switch(o)
+	switch(r)
 	{
-		case VIEW_ROTATE_0: return Gfx::angleFromDegree(0.);
-		case VIEW_ROTATE_90: return Gfx::angleFromDegree(-90.);
-		case VIEW_ROTATE_180: return Gfx::angleFromDegree(-180.);
-		case VIEW_ROTATE_270: return Gfx::angleFromDegree(90.);
-		default: bug_unreachable("o == %d", o); return 0.;
+		case Rotation::ANY:
+		case Rotation::UP: return radians(0.);
+		case Rotation::RIGHT: return radians(-90.);
+		case Rotation::DOWN: return radians(-180.);
+		case Rotation::LEFT: return radians(90.);
 	}
+	bug_unreachable("Rotation == %d", std::to_underlying(r));
 }
 
 static void printFeatures(DrawContextSupport support)
@@ -99,7 +102,7 @@ static void printFeatures(DrawContextSupport support)
 	{
 		featuresStr.append(" [PBOs]");
 	}
-	if(support.glMapBufferRange)
+	if(!Config::Gfx::OPENGL_ES || (Config::Gfx::OPENGL_ES && support.glMapBufferRange))
 	{
 		featuresStr.append(" [Map Buffer Range]");
 	}
@@ -127,14 +130,12 @@ static void printFeatures(DrawContextSupport support)
 		featuresStr.append(" [Presentation Time]");
 	}
 	#endif
-	#ifdef CONFIG_GFX_OPENGL_SHADER_PIPELINE
 	if(!support.useFixedFunctionPipeline)
 	{
 		featuresStr.append(" [GLSL:");
 		featuresStr.append((const char*)glGetString(GL_SHADING_LANGUAGE_VERSION));
 		featuresStr.append("]");
 	}
-	#endif
 
 	logMsg("features:%s", featuresStr.c_str());
 }
@@ -216,7 +217,7 @@ void GLRenderer::setupRGFormats()
 
 void GLRenderer::setupSamplerObjects()
 {
-	if(support.hasSamplerObjects)
+	if(!Renderer::enableSamplerObjects || support.hasSamplerObjects)
 		return;
 	support.hasSamplerObjects = true;
 	#ifdef CONFIG_GFX_OPENGL_ES
@@ -324,7 +325,7 @@ void GLRenderer::setupMemoryBarrier()
 void GLRenderer::setupPresentationTime(std::string_view eglExtenstionStr)
 {
 	#ifdef __ANDROID__
-	if(IG::stringContains(eglExtenstionStr, "EGL_ANDROID_presentation_time"))
+	if(eglExtenstionStr.contains("EGL_ANDROID_presentation_time"))
 	{
 		glManager.loadSymbol(support.eglPresentationTimeANDROID, "eglPresentationTimeANDROID");
 	}
@@ -582,13 +583,13 @@ void Renderer::configureRenderer()
 				if(Config::DEBUG_BUILD)
 				{
 					logMsgNoBreak("extensions: ");
-					iterateTimes(numExtensions, i)
+					for(auto i : iotaCount(numExtensions))
 					{
 						logger_printf(LOG_M, "%s ", (const char*)glGetStringi(GL_EXTENSIONS, i));
 					}
 					logger_printf(LOG_M, "\n");
 				}
-				iterateTimes(numExtensions, i)
+				for(auto i : iotaCount(numExtensions))
 				{
 					checkExtensionString((const char*)glGetStringi(GL_EXTENSIONS, i), useFBOFuncs);
 				}
@@ -669,16 +670,7 @@ RendererTask &Renderer::task()
 	return mainTask;
 }
 
-static void updateSensorStateForWindowOrientations(Window &win)
-{
-	// activate orientation sensor if doing rotation in software and the main window
-	// has multiple valid orientations
-	if(Config::SYSTEM_ROTATES_WINDOWS || !win.isMainWindow())
-		return;
-	win.appContext().setDeviceOrientationChangeSensor(std::popcount(win.validSoftOrientations()) > 1);
-}
-
-void Renderer::setWindowValidOrientations(Window &win, Orientation validO)
+void Renderer::setWindowValidOrientations(Window &win, OrientationMask validO)
 {
 //去掉设置屏幕方向，方向由JAVA层控制
 //	if(!win.isMainWindow())
@@ -686,23 +678,22 @@ void Renderer::setWindowValidOrientations(Window &win, Orientation validO)
 //	auto oldWinO = win.softOrientation();
 //	if(win.setValidOrientations(validO) && !Config::SYSTEM_ROTATES_WINDOWS)
 //	{
-//		animateProjectionMatrixRotation(win, orientationRadians(oldWinO), orientationRadians(win.softOrientation()));
+//		animateWindowRotation(win, rotationRadians(oldWinO), rotationRadians(win.softOrientation()));
 //	}
-//	updateSensorStateForWindowOrientations(win);
 }
 
 void GLRenderer::addEventHandlers(ApplicationContext ctx, RendererTask &task)
 {
-	#ifdef CONFIG_GFX_OPENGL_SHADER_PIPELINE
-	releaseShaderCompilerEvent.attach(
-		[&task, ctx]()
+	if(!support.useFixedFunctionPipeline)
+	{
+		releaseShaderCompilerEvent.attach([&task, ctx]()
 		{
 			if(!ctx.isRunning())
 				return;
 			logMsg("automatically releasing shader compiler");
 			task.releaseShaderCompiler();
 		});
-	#endif
+	}
 	if constexpr(Config::envIsIOS)
 		task.setIOSDrawableDelegates();
 }

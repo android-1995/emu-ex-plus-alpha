@@ -18,6 +18,7 @@
 #include <emuframework/VideoImageOverlay.hh>
 #include <emuframework/VideoImageEffect.hh>
 #include <imagine/gfx/GfxSprite.hh>
+#include <imagine/gfx/Vec3.hh>
 #include <imagine/pixmap/PixelFormat.hh>
 #include <imagine/util/container/ArrayList.hh>
 
@@ -33,15 +34,15 @@ class EmuVideoLayer
 {
 public:
 	EmuVideoLayer(EmuVideo &video);
-	void place(const IG::WindowRect &viewportRect, const Gfx::ProjectionPlane &projP, EmuInputView *inputView, EmuSystem &sys);
+	void place(IG::WindowRect viewRect, IG::WindowRect displayRect, Gfx::ProjectionPlane projP, EmuInputView *inputView, EmuSystem &sys);
 	void draw(Gfx::RendererCommands &cmds, const Gfx::ProjectionPlane &projP);
 	void setFormat(EmuSystem &, IG::PixelFormat videoFmt, IG::PixelFormat effectFmt, Gfx::ColorSpace);
-	void setOverlay(int effect);
+	void setOverlay(ImageOverlayId id);
 	void setOverlayIntensity(float intensity);
 	void setEffect(EmuSystem &, ImageEffectId, IG::PixelFormat);
 	void setEffectFormat(IG::PixelFormat);
 	void setLinearFilter(bool on);
-	void setBrightness(float b);
+	void setBrightness(Gfx::Vec3);
 	void setAspectRatio(double ratio) { aspectRatio_ = ratio; }
 	auto aspectRatio() { return aspectRatio_; }
 	void onVideoFormatChanged(IG::PixelFormat effectFmt);
@@ -50,28 +51,29 @@ public:
 	bool srgbColorSpace() const { return colSpace == Gfx::ColorSpace::SRGB; }
 	void setZoom(uint8_t val) { zoom_ = val; }
 	auto zoom() const { return zoom_; }
+	void setRotation(IG::Rotation);
 
-	const IG::WindowRect &gameRect() const
+	const IG::WindowRect &contentRect() const
 	{
-		return gameRect_;
+		return contentRect_;
 	}
 
 private:
 	VideoImageOverlay vidImgOverlay{};
-	IG::StaticArrayList<VideoImageEffect*, 1> effects{};
+	IG::StaticArrayList<VideoImageEffect*, 1> effects;
 	EmuVideo &video;
-	const Gfx::TextureSampler *texSampler{};
 	VideoImageEffect userEffect{};
 	Gfx::Sprite disp{};
-	IG::WindowRect gameRect_{};
-	Gfx::GCRect gameRectG{};
+	IG::WindowRect contentRect_{};
 	double aspectRatio_ = 1.;
-	float brightness = 1.f;
-	float brightnessSrgb = 1.f;
+	Gfx::Vec3 brightness{1.f, 1.f, 1.f};
+	Gfx::Vec3 brightnessSrgb{1.f, 1.f, 1.f};
 	ImageEffectId userEffectId{};
-	int userOverlayEffectId{};
+	ImageOverlayId userOverlayEffectId{};
 	Gfx::ColorSpace colSpace{};
 	uint8_t zoom_{100};
+	IG::Rotation rotation{};
+	bool useLinearFilter{true};
 
 	void placeOverlay();
 	void updateEffectImageSize();
@@ -81,6 +83,7 @@ private:
 	void logOutputFormat();
 	Gfx::Renderer &renderer();
 	Gfx::ColorSpace videoColorSpace(IG::PixelFormat videoFmt) const;
+	Gfx::TextureSamplerConfig samplerConfig() const;
 };
 
 }

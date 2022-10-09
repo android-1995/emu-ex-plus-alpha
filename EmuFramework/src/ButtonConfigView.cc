@@ -41,8 +41,8 @@ public:
 
 	Context ctx;
 
-	KeyConflictAlertView(ViewAttachParams attach, IG::utf16String label):
-		AlertView(attach, std::move(label), 3)
+	KeyConflictAlertView(ViewAttachParams attach, UTF16Convertible auto &&label):
+		AlertView(attach, IG_forward(label), 3)
 	{
 		setItem(2, "Cancel", [](){});
 	}
@@ -68,7 +68,7 @@ void ButtonConfigSetView::initPointerUI()
 #endif
 
 ButtonConfigSetView::ButtonConfigSetView(ViewAttachParams attach,
-	InputManagerView &rootIMView, Input::Device &dev, const char *actionName,
+	InputManagerView &rootIMView, Input::Device &dev, std::string_view actionName,
 	SetDelegate onSet):
 		View{attach},
 		text{&defaultFace()},
@@ -163,14 +163,15 @@ bool ButtonConfigSetView::inputEvent(const Input::Event &e)
 			}
 			return false;
 		}
-	}, e.asVariant());
+	}, e);
 }
 
-void ButtonConfigSetView::draw(Gfx::RendererCommands &cmds)
+void ButtonConfigSetView::draw(Gfx::RendererCommands &__restrict__ cmds)
 {
 	using namespace IG::Gfx;
-	cmds.setBlendMode(0);
-	cmds.setCommonProgram(CommonProgram::NO_TEX, projP.makeTranslate());
+	auto &basicEffect = cmds.basicEffect();
+	cmds.set(BlendMode::OFF);
+	basicEffect.disableTexture(cmds);
 	cmds.setColor(.4, .4, .4, 1.);
 	GeomRect::draw(cmds, viewRect(), projP);
 	#ifdef CONFIG_INPUT_POINTING_DEVICES
@@ -183,7 +184,7 @@ void ButtonConfigSetView::draw(Gfx::RendererCommands &cmds)
 	#endif
 
 	cmds.set(ColorName::WHITE);
-	cmds.setCommonProgram(CommonProgram::TEX_ALPHA);
+	basicEffect.enableAlphaTexture(cmds);
 	#ifdef CONFIG_INPUT_POINTING_DEVICES
 	if(pointerUIIsInit())
 	{
@@ -191,15 +192,15 @@ void ButtonConfigSetView::draw(Gfx::RendererCommands &cmds)
 		cancel.draw(cmds, projP.unProjectRect(cancelB).pos(C2DO), C2DO, projP);
 	}
 	#endif
-	text.draw(cmds, 0, 0, C2DO, projP);
+	text.draw(cmds, {}, C2DO, projP);
 }
 
 void ButtonConfigSetView::onAddedToController(ViewController *, const Input::Event &e)
 {
 	if(e.motionEvent())
-		text.setString(fmt::format("Push key to set:\n{}", actionStr));
+		text.resetString(fmt::format("Push key to set:\n{}", actionStr));
 	else
-		text.setString(fmt::format("Push key to set:\n{}\n\nTo unbind:\nQuickly push [Left] key twice in previous menu", actionStr));
+		text.resetString(fmt::format("Push key to set:\n{}\n\nTo unbind:\nQuickly push [Left] key twice in previous menu", actionStr));
 	#ifdef CONFIG_INPUT_POINTING_DEVICES
 	if(e.motionEvent())
 	{
@@ -208,10 +209,10 @@ void ButtonConfigSetView::onAddedToController(ViewController *, const Input::Eve
 	#endif
 }
 
-void ButtonConfigView::BtnConfigMenuItem::draw(Gfx::RendererCommands &cmds, float xPos, float yPos, float xSize, float ySize,
+void ButtonConfigView::BtnConfigMenuItem::draw(Gfx::RendererCommands &__restrict__ cmds, float xPos, float yPos, float xSize, float ySize,
 	float xIndent, _2DOrigin align, const Gfx::ProjectionPlane &projP, Gfx::Color color) const
 {
-	BaseTextMenuItem::draw(cmds, xPos, yPos, xSize, ySize, xIndent, align, projP, color);
+	MenuItem::draw(cmds, xPos, yPos, xSize, ySize, xIndent, align, projP, color);
 	DualTextMenuItem::draw2ndText(cmds, xPos, yPos, xSize, ySize, xIndent, align, projP, Gfx::color(Gfx::ColorName::YELLOW));
 }
 
@@ -226,7 +227,7 @@ static std::pair<const KeyCategory *, int> findCategoryAndKeyInConfig(EmuApp &ap
 		{
 			skipIdx = skipIdx_;
 		}
-		iterateTimes(cat.keys, k)
+		for(auto k : iotaCount(cat.keys()))
 		{
 			if((int)k != skipIdx && keyPtr[k] == key)
 			{
@@ -281,14 +282,14 @@ bool ButtonConfigView::inputEvent(const Input::Event &e)
 	}
 }
 
-ButtonConfigView::ButtonConfigView(ViewAttachParams attach, InputManagerView &rootIMView_, const KeyCategory *cat_, InputDeviceConfig &devConf_):
+ButtonConfigView::ButtonConfigView(ViewAttachParams attach, InputManagerView &rootIMView_, const KeyCategory &cat_, InputDeviceConfig &devConf_):
 	TableView
 	{
-		cat_->name,
+		cat_.name,
 		attach,
 		[this](const TableView &)
 		{
-			return 1 + cat->keys;
+			return 1 + cat->keys();
 		},
 		[this](const TableView &, size_t idx) -> MenuItem&
 		{
@@ -312,7 +313,7 @@ ButtonConfigView::ButtonConfigView(ViewAttachParams attach, InputManagerView &ro
 					if(!conf)
 						return;
 					conf->unbindCategory(*cat);
-					iterateTimes(cat->keys, i)
+					for(auto i : iotaCount(cat->keys()))
 					{
 						btn[i].set2ndName(devConf->device().keyName(devConf->keyConf().key(*cat)[i]));
 						btn[i].compile2nd(renderer(), projP);
@@ -324,16 +325,16 @@ ButtonConfigView::ButtonConfigView(ViewAttachParams attach, InputManagerView &ro
 	}
 {
 	logMsg("init button config view for %s", Input::KeyEvent::mapName(devConf_.device().map()).data());
-	cat = cat_;
+	cat = &cat_;
 	devConf = &devConf_;
 	auto keyConfig = devConf_.keyConf();
-	btn = std::make_unique<BtnConfigMenuItem[]>(cat->keys);
-	iterateTimes(cat->keys, i)
+	btn = std::make_unique<BtnConfigMenuItem[]>(cat_.keys());
+	for(int i : iotaCount(cat_.keys()))
 	{
-		auto key = keyConfig.key(*cat)[i];
+		auto key = keyConfig.key(cat_)[i];
 		btn[i] =
 		{
-			cat->keyName[i],
+			cat_.keyName[i],
 			makeKeyNameStr(key, devConf_.device().keyName(key)),
 			&defaultFace(),
 			[this, keyToSet = i](const Input::Event &e)

@@ -19,6 +19,7 @@
 #include <imagine/gui/TableView.hh>
 #include <utility>
 #include <vector>
+#include <cassert>
 
 namespace IG
 {
@@ -26,19 +27,29 @@ namespace IG
 class TextTableView : public TableView
 {
 public:
-	TextTableView(IG::utf16String name, ViewAttachParams attach, size_t itemsHint):
-		TableView{std::move(name), attach, textItem}
+	TextTableView(UTF16Convertible auto &&name, ViewAttachParams attach, size_t itemsHint):
+		TableView{IG_forward(name), attach, textItem}
 	{
 		textItem.reserve(itemsHint);
 	}
 
-	TextTableView(ViewAttachParams attach, size_t itemsHint);
-	void appendItem(IG::utf16String name, TextMenuItem::SelectDelegate del);
-	void setItem(size_t idx, IG::utf16String name, TextMenuItem::SelectDelegate del);
+	TextTableView(ViewAttachParams attach, size_t itemsHint): TextTableView{UTF16String{}, attach, itemsHint} {}
+
+	void appendItem(UTF16Convertible auto &&name, TextMenuItem::SelectDelegate del)
+	{
+		textItem.emplace_back(IG_forward(name), &defaultFace(), del);
+	}
+
+	void setItem(size_t idx, UTF16Convertible auto &&name, TextMenuItem::SelectDelegate del)
+	{
+		assert(idx < textItem.size());
+		textItem[idx] = {IG_forward(name), &defaultFace(), del};
+	}
+
 	TextMenuItem &item(size_t idx);
 	void setItems(size_t items);
 	void onAddedToController(ViewController *, const Input::Event &) override;
-	void drawElement(Gfx::RendererCommands &cmds, size_t i, MenuItem &item, Gfx::GCRect rect, float xIndent) const override;
+	void drawElement(Gfx::RendererCommands &__restrict__ cmds, size_t i, MenuItem &item, Gfx::GCRect rect, float xIndent) const override;
 
 protected:
 	std::vector<TextMenuItem> textItem{};

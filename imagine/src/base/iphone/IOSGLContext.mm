@@ -21,6 +21,7 @@ static_assert(__has_feature(objc_arc), "This file requires ARC");
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/base/Window.hh>
 #include <imagine/base/Screen.hh>
+#include <imagine/base/Error.hh>
 #include <imagine/logger/logger.h>
 
 namespace IG
@@ -73,19 +74,18 @@ static EAGLRenderingAPI majorVersionToAPI(int version)
 	}
 }
 
-IOSGLContext::IOSGLContext(GLContextAttributes attr, NativeGLContext shareContext_, IG::ErrorCode &ec)
+IOSGLContext::IOSGLContext(GLContextAttributes attr, NativeGLContext shareContext_)
 {
-	assert(attr.openGLESAPI());
-	EAGLRenderingAPI api = majorVersionToAPI(attr.majorVersion());
+	assert(attr.glesApi);
+	EAGLRenderingAPI api = majorVersionToAPI(attr.majorVersion);
 	auto shareContext = (__bridge EAGLContext*)shareContext_;
 	EAGLSharegroup *sharegroup = [shareContext sharegroup];
-	logMsg("making context with version: %d.%d sharegroup:%p", attr.majorVersion(), attr.minorVersion(), sharegroup);
+	logMsg("making context with version: %d.%d sharegroup:%p", attr.majorVersion, attr.minorVersion, sharegroup);
 	EAGLContext *newContext = [[EAGLContext alloc] initWithAPI:api sharegroup:sharegroup];
 	if(!newContext)
 	{
 		logErr("error creating context");
-		ec = {EINVAL};
-		return;
+		throw Error{EINVAL};
 	}
 	context_.reset((NativeGLContext)CFBridgingRetain(newContext));
 }
@@ -126,9 +126,9 @@ GLManager::GLManager(NativeDisplayConnection ctx, GL::API api)
 	}
 }
 
-GLContext GLManager::makeContext(GLContextAttributes attr, GLBufferConfig, NativeGLContext shareContext, IG::ErrorCode &ec)
+GLContext GLManager::makeContext(GLContextAttributes attr, GLBufferConfig, NativeGLContext shareContext)
 {
-	return GLContext{attr, shareContext, ec};
+	return GLContext{attr, shareContext};
 }
 
 GLDisplay GLManager::getDefaultDisplay(NativeDisplayConnection) const
@@ -143,12 +143,12 @@ bool GLManager::bindAPI(GL::API api)
 	return api == GL::API::OPENGL_ES;
 }
 
-GLDrawable GLManager::makeDrawable(Window &win, GLDrawableAttributes config, IG::ErrorCode &) const
+GLDrawable GLManager::makeDrawable(Window &win, GLDrawableAttributes config) const
 {
 	CGRect rect = win.screen()->uiScreen().bounds;
 	// Create the OpenGL ES view and add it to the Window
 	auto glView = [[EAGLView alloc] initWithFrame:rect];
-	if(config.bufferConfig().useRGB565)
+	if(config.bufferConfig.useRGB565)
 	{
 		[glView setDrawableColorFormat:kEAGLColorFormatRGB565];
 	}
@@ -201,12 +201,10 @@ bool GLManager::hasBufferConfig(GLBufferConfigAttributes attrs) const
 {
 	switch(attrs.pixelFormat.id())
 	{
-		default:
-			bug_unreachable("format id == %d", attrs.pixelFormat.id());
-			return false;
 		case PIXEL_NONE:
 		case PIXEL_RGB565:
 		case PIXEL_RGBA8888: return true;
+		default: bug_unreachable("format id == %d", attrs.pixelFormat.id());
 	}
 }
 

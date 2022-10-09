@@ -18,6 +18,7 @@
 #include <imagine/data-type/image/PixmapReader.hh>
 #include <imagine/data-type/image/PixmapWriter.hh>
 #include <imagine/data-type/image/PixmapSource.hh>
+#include <imagine/io/IO.hh>
 #include <imagine/io/FileIO.hh>
 #include <imagine/fs/FS.hh>
 #include <imagine/base/ApplicationContext.hh>
@@ -124,7 +125,7 @@ static void png_memFree(png_structp png_ptr, png_voidp ptr)
 	delete[] (uint8_t*)ptr;
 }
 
-PngImage::PngImage(GenericIO io)
+PngImage::PngImage(IO io)
 {
 	//logMsg("reading header from file handle @ %p",stream);
 	
@@ -171,7 +172,7 @@ PngImage::PngImage(GenericIO io)
 	}
 	
 	//init custom libpng io
-	png_set_read_fn(png, io.release(), png_ioReader);
+	png_set_read_fn(png, std::make_unique<IO>(std::move(io)).release(), png_ioReader);
 	//log_mPrintf(LOG_MSG,"set custom png read function %p", png_ioReader);
 	
 	png_set_sig_bytes(png, INITIAL_HEADER_READ_BYTES);
@@ -202,7 +203,7 @@ bool PngImage::hasAlphaChannel()
 				( png_get_valid(png, info, PNG_INFO_tRNS) ) ) ? 1 : 0;
 }
 
-void PngImage::setTransforms(IG::PixelFormat outFormat, png_infop transInfo)
+void PngImage::setTransforms(PixelFormat outFormat, png_infop transInfo)
 {
 	int addingAlphaChannel = 0;
 	
@@ -275,7 +276,7 @@ void PngImage::setTransforms(IG::PixelFormat outFormat, png_infop transInfo)
 	png_read_update_info(png, info);
 }
 
-std::errc PngImage::readImage(IG::Pixmap dest)
+std::errc PngImage::readImage(PixmapView dest)
 {
 	int height = this->height();
 	int width = this->width();
@@ -286,7 +287,7 @@ std::errc PngImage::readImage(IG::Pixmap dest)
 		logErr("error allocating png transform info");
 		return std::errc::not_enough_memory;
 	}
-	IG::scopeGuard(
+	scopeGuard(
 		[&]()
 		{
 			png_infopp pngInfopAddr = &transInfo;
@@ -360,22 +361,22 @@ PngImage::~PngImage()
 	freeImageData();
 }
 
-void PixmapImage::write(IG::Pixmap dest)
+void PixmapImage::write(MutablePixmapView dest)
 {
 	readImage(dest);
 }
 
-IG::Pixmap PixmapImage::pixmapView()
+PixmapView PixmapImage::pixmapView()
 {
-	return {{{(int)width(), (int)height()}, pixelFormat()}, {}};
+	return PixmapView{{{width(), height()}, pixelFormat()}};
 }
 
 PixmapImage::operator PixmapSource()
 {
-	return {[this](IG::Pixmap dest){ return write(dest); }, pixmapView()};
+	return {[this](MutablePixmapView dest){ return write(dest); }, pixmapView()};
 }
 
-PixmapImage PixmapReader::load(GenericIO io) const
+PixmapImage PixmapReader::load(IO io) const
 {
 	return PixmapImage{std::move(io)};
 }
@@ -387,17 +388,17 @@ PixmapImage PixmapReader::load(const char *name) const
 		logErr("suffix doesn't match PNG image");
 		return {};
 	}
-	return load(FileIO{name, IO::AccessHint::ALL, IO::TEST_BIT});
+	return load(FileIO{name, IOAccessHint::ALL, OpenFlagsMask::TEST});
 }
 
 PixmapImage PixmapReader::loadAsset(const char *name, const char *appName) const
 {
-	return load(appContext().openAsset(name, IO::AccessHint::ALL, 0, appName));
+	return load(appContext().openAsset(name, IOAccessHint::ALL, {}, appName));
 }
 
-bool PixmapWriter::writeToFile(IG::Pixmap pix, const char *path) const
+bool PixmapWriter::writeToFile(PixmapView pix, const char *path) const
 {
-	auto fp = FileIO{path, IO::OPEN_NEW | IO::TEST_BIT};
+	FileIO fp{path, OpenFlagsMask::NEW | OpenFlagsMask::TEST};
 	if(!fp)
 	{
 		return false;
@@ -424,7 +425,7 @@ bool PixmapWriter::writeToFile(IG::Pixmap pix, const char *path) const
 	png_set_write_fn(pngPtr, &fp,
 		[](png_structp pngPtr, png_bytep data, png_size_t length)
 		{
-			auto &io = *(IO*)png_get_io_ptr(pngPtr);
+			auto &io = *(FileIO*)png_get_io_ptr(pngPtr);
 			if(io.write(data, length) != (ssize_t)length)
 			{
 				logErr("error writing png file");
@@ -441,13 +442,13 @@ bool PixmapWriter::writeToFile(IG::Pixmap pix, const char *path) const
 		PNG_FILTER_TYPE_DEFAULT);
 	png_write_info(pngPtr, infoPtr);
 	{
-		IG::MemPixmap tempMemPix{{pix.size(), IG::PIXEL_FMT_RGB888}};
+		MemPixmap tempMemPix{{pix.size(), PIXEL_FMT_RGB888}};
 		auto tempPix = tempMemPix.view();
 		tempPix.writeConverted(pix);
 		int rowBytes = png_get_rowbytes(pngPtr, infoPtr);
 		assert(rowBytes == tempPix.pitchBytes());
 		auto rowData = (png_const_bytep)tempPix.data();
-		iterateTimes(tempPix.h(), i)
+		for(auto i : iotaCount(tempPix.h()))
 		{
 			png_write_row(pngPtr, rowData);
 			rowData += tempPix.pitchBytes();

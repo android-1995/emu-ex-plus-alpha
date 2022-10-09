@@ -19,72 +19,6 @@
 
 bool GLStateCache::verifyState = false;
 
-static GLenum textureTargetToGet(GLenum target)
-{
-	switch(target)
-	{
-		case GL_TEXTURE_2D: return GL_TEXTURE_BINDING_2D;
-		default: bug_unreachable("target == %d", target); return 0;
-	}
-}
-
-#ifdef CONFIG_GFX_OPENGL_FIXED_FUNCTION_PIPELINE
-void GLStateCache::matrixMode(GLenum mode)
-{
-	if(mode != matrixModeState)
-	{
-		runGLCheckedVerbose([&]()
-		{
-			glMatrixMode(mode);
-		}, "glMatrixMode()");
-		matrixModeState = mode;
-	}
-}
-#endif
-
-GLuint *GLStateCache::getBindTextureState(GLenum target)
-{
-	#define GLTARGET_CASE(target) case target: return &bindTextureState.target ## _state
-	switch(target)
-	{
-		GLTARGET_CASE(GL_TEXTURE_2D);
-	}
-	return nullptr;
-	#undef GLTARGET_CASE
-}
-
-void GLStateCache::bindTexture(GLenum target, GLuint texture)
-{
-	GLuint *state = getBindTextureState(target);
-	if(!state) [[unlikely]]
-	{
-		runGLCheckedVerbose([&]()
-		{
-			glBindTexture(target, texture);
-		}, "glBindTexture()");
-		return;
-	}
-	if(texture != *state)
-	{
-		//logMsg("binding texture %d to target %d", texture, target);
-		runGLCheckedVerbose([&]()
-		{
-			glBindTexture(target, texture);
-		}, "glBindTexture()");
-		*state = texture;
-	}
-
-	if(verifyState)
-	{
-		GLint realTexture = 0;
-		if(runGLCheckedVerbose([&]() { glGetIntegerv(textureTargetToGet(target), &realTexture); })
-			&& texture != (GLuint)realTexture)
-		{
-			bug_unreachable("out of sync, expected %u but got %u, target %d", texture, realTexture, target);
-		}
-	}
-}
-
 void GLStateCache::blendFunc(GLenum sfactor, GLenum dfactor)
 {
 	if(!(sfactor == blendFuncSfactor && dfactor == blendFuncDfactor))
@@ -123,7 +57,6 @@ int8_t *GLStateCache::getCap(GLenum cap)
 		GLCAP_CASE(GL_DEPTH_TEST);
 		GLCAP_CASE(GL_BLEND);
 		GLCAP_CASE(GL_SCISSOR_TEST);
-		GLCAP_CASE(GL_CULL_FACE);
 		GLCAP_CASE(GL_DITHER);
 		#ifndef CONFIG_GFX_OPENGL_ES
 		GLCAP_CASE(GL_MULTISAMPLE);
@@ -224,6 +157,7 @@ int8_t *GLStateCache::getClientCap(GLenum cap)
 	#define GLCAP_CASE(cap) case cap: return &clientStateCap.cap ## _state
 	switch(cap)
 	{
+		GLCAP_CASE(GL_VERTEX_ARRAY);
 		GLCAP_CASE(GL_TEXTURE_COORD_ARRAY);
 		GLCAP_CASE(GL_COLOR_ARRAY);
 	default: return {};
@@ -298,50 +232,6 @@ void GLStateCache::disableClientState(GLenum cap)
 		{
 			bug_unreachable("state %d out of sync", cap);
 		}
-	}
-}
-
-void GLStateCache::texEnvi(GLenum target, GLenum pname, GLint param)
-{
-	if(target == GL_TEXTURE_ENV && pname == GL_TEXTURE_ENV_MODE)
-	{
-		if(param != GL_TEXTURE_ENV_GL_TEXTURE_ENV_MODE_state)
-		{
-			GL_TEXTURE_ENV_GL_TEXTURE_ENV_MODE_state = param;
-			runGLCheckedVerbose([&]()
-			{
-				glTexEnvi(target, pname, param);
-			}, "glTexEnvi()");
-		}
-	}
-	else // cases we don't handle
-	{
-		runGLCheckedVerbose([&]()
-		{
-			glTexEnvi(target, pname, param);
-		}, "glTexEnvi()");
-	}
-}
-
-void GLStateCache::texEnvfv(GLenum target, GLenum pname, const GLfloat *params)
-{
-	if(target == GL_TEXTURE_ENV && pname == GL_TEXTURE_ENV_COLOR)
-	{
-		if(std::memcmp(params, GL_TEXTURE_ENV_GL_TEXTURE_ENV_COLOR_state, sizeof(GLfloat)*4))
-		{
-			std::memcpy(GL_TEXTURE_ENV_GL_TEXTURE_ENV_COLOR_state, params, sizeof(GLfloat)*4);
-			runGLCheckedVerbose([&]()
-			{
-				glTexEnvfv(target, pname, params);
-			}, "glTexEnvfv()");
-		}
-	}
-	else // cases we don't handle
-	{
-		runGLCheckedVerbose([&]()
-		{
-			glTexEnvfv(target, pname, params);
-		}, "glTexEnvfv()");
 	}
 }
 

@@ -13,9 +13,8 @@
 	You should have received a copy of the GNU General Public License
 	along with MSX.emu.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <emuframework/EmuApp.hh>
 #include <emuframework/EmuInput.hh>
-#include "internal.hh"
+#include "MainApp.hh"
 
 extern "C"
 {
@@ -88,10 +87,10 @@ enum
 
 const char *EmuSystem::inputFaceBtnName = "A/B";
 const char *EmuSystem::inputCenterBtnName = "Space/KB";
-const unsigned EmuSystem::inputFaceBtns = 2;
-const unsigned EmuSystem::inputCenterBtns = 2;
+const int EmuSystem::inputFaceBtns = 2;
+const int EmuSystem::inputCenterBtns = 2;
 bool EmuSystem::inputHasKeyboard = true;
-const unsigned EmuSystem::maxPlayers = 2;
+const int EmuSystem::maxPlayers = 2;
 std::array<int, EmuSystem::MAX_FACE_BTNS> EmuSystem::vControllerImageMap{1, 0};
 
 static VController::KbMap kbToEventMap
@@ -114,24 +113,26 @@ void setupVKeyboardMap(EmuApp &app, unsigned boardType)
 {
 	if(boardType != BOARD_COLECO)
 	{
-		iterateTimes(10, i) // 1 - 0
+		for(auto i : iotaCount(10)) // 1 - 0
 			kbToEventMap2[10 + i] = EC_1 + i;
 		kbToEventMap2[23] = EC_3 | (EC_LSHIFT << 8);
 	}
 	app.updateKeyboardMapping();
+	app.updateVControllerMapping();
 }
 
-VController::KbMap updateVControllerKeyboardMapping(unsigned mode)
+VController::KbMap MsxSystem::vControllerKeyboardMap(VControllerKbMode mode)
 {
-	return mode ? kbToEventMap2 : kbToEventMap;
+	return mode == VControllerKbMode::LAYOUT_2 ? kbToEventMap2 : kbToEventMap;
 }
 
-void updateVControllerMapping(unsigned player, VController::Map &map)
+VController::Map MsxSystem::vControllerMap(int player)
 {
+	VController::Map map{};
 	if(machine && machine->board.type == BOARD_COLECO)
 	{
 		unsigned playerShift = player ? 12 : 0;
-		iterateTimes(9, i) // 1 - 9
+		for(auto i : iotaCount(9)) // 1 - 9
 			kbToEventMap2[10 + i] = EC_COLECO1_1 + i + playerShift;
 		kbToEventMap2[19] = EC_COLECO1_0 + playerShift;
 		kbToEventMap2[23] = EC_COLECO1_HASH + playerShift;
@@ -155,9 +156,10 @@ void updateVControllerMapping(unsigned player, VController::Map &map)
 	map[VController::D_ELEM+6] = down | (left << 8);
 	map[VController::D_ELEM+7] = down;
 	map[VController::D_ELEM+8] = down | (right << 8);
+	return map;
 }
 
-unsigned EmuSystem::translateInputAction(unsigned input, bool &turbo)
+unsigned MsxSystem::translateInputAction(unsigned input, bool &turbo)
 {
 	turbo = 0;
 	switch(input)
@@ -201,27 +203,28 @@ unsigned EmuSystem::translateInputAction(unsigned input, bool &turbo)
 	return 0;
 }
 
-void EmuSystem::handleInputAction(EmuApp *appPtr, Input::Action action, unsigned emuKey)
+void MsxSystem::handleInputAction(EmuApp *appPtr, InputAction a)
 {
-	auto event1 = emuKey & 0xFF;
+	auto event1 = a.key & 0xFF;
+	bool isPushed = a.state == Input::Action::PUSHED;
 	if(event1 == EC_KEYCOUNT)
 	{
-		if(appPtr && action == Input::Action::PUSHED)
+		if(appPtr && isPushed)
 			appPtr->toggleKeyboard();
 	}
 	else
 	{
 		assert(event1 < EC_KEYCOUNT);
-		eventMap[event1] = action == Input::Action::PUSHED;
-		auto event2 = emuKey >> 8;
+		eventMap[event1] = isPushed;
+		auto event2 = a.key >> 8;
 		if(event2) // extra event for diagonals
 		{
-			eventMap[event2] = action == Input::Action::PUSHED;
+			eventMap[event2] = isPushed;
 		}
 	}
 }
 
-void EmuSystem::clearInputBuffers(EmuInputView &)
+void MsxSystem::clearInputBuffers(EmuInputView &)
 {
 	IG::fill(eventMap);
 }

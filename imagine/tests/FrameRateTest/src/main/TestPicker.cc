@@ -24,13 +24,13 @@ namespace FrameRateTest
 {
 
 TestTableEntry::TestTableEntry(Gfx::GlyphTextureSet *face, SelectDelegate selectDel):
-	DualTextMenuItem{{}, {}, face, selectDel}
+	DualTextMenuItem{u"", u"", face, selectDel}
 {}
 
 void TestTableEntry::draw(Gfx::RendererCommands &cmds, float xPos, float yPos, float xSize, float ySize,
 	float xIndent, IG::_2DOrigin align, const Gfx::ProjectionPlane &projP, Gfx::Color color) const
 {
-	BaseTextMenuItem::draw(cmds, xPos, yPos, xSize, ySize, xIndent, align, projP, color);
+	MenuItem::draw(cmds, xPos, yPos, xSize, ySize, xIndent, align, projP, color);
 	if(t2.isVisible())
 	{
 		Gfx::Color color2;
@@ -56,7 +56,7 @@ void TestPicker::setTests(const TestDesc *testDesc, unsigned tests)
 	testEntry.reserve(tests);
 	testParam.clear();
 	testParam.reserve(tests);
-	iterateTimes(tests, i)
+	for(auto i : iotaCount(tests))
 	{
 		testEntry.emplace_back(&defaultFace(),
 			[this, i](IG::DualTextMenuItem &, IG::View &, IG::Input::Event e)

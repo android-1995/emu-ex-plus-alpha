@@ -901,7 +901,7 @@ $(libresid_a_SOURCES) \
 main/iecbusStubs.c \
 main/cbm5x0Stubs.c
 
-pluginLDFlags = $(CFLAGS_TARGET) $(LDFLAGS_SYSTEM) $(LDLIBS_SYSTEM) -lz
+pluginLDFlags = $(CFLAGS_TARGET) $(LDFLAGS_SYSTEM) -lz -lm
 
 ifeq ($(ENV),android)
  # must link to the app's main shared object so Android resolves runtime symbols correctly
@@ -910,6 +910,10 @@ endif
 
 # needed to prevent miscompile when building with -Ofast
 %/resid/dac.o : CFLAGS_OPTIMIZE += -fno-finite-math-only
+
+# allow linking with minimal c++ support
+%/sid/resid-dtv.o : CXXFLAGS_LANG += -fno-exceptions
+%/sid/resid.o : CXXFLAGS_LANG += -fno-exceptions
 
 c64_obj := $(addprefix $(objDir)/,$(c64_src:.c=.o))
 c64_obj := $(c64_obj:.cc=.o)
@@ -990,7 +994,7 @@ cbm2_module := $(targetDir)/libcbm2$(loadableModuleExt)
 $(cbm2_module) : $(cbm2_obj) $(linkerLibsDep)
 	@echo "Linking $@"
 	@mkdir -p `dirname $@`
-	$(PRINT_CMD) $(CC) -o $@ $(linkLoadableModuleAction) $(cbm2_obj) $(pluginLDFlags) -s
+	$(PRINT_CMD) $(CC) -o $@ $(linkLoadableModuleAction) $(cbm2_obj) $(pluginLDFlags)
 
 cbm5x0_obj := $(addprefix $(objDir)/,$(cbm5x0_src:.c=.o))
 cbm5x0_obj := $(cbm5x0_obj:.cc=.o)

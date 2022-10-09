@@ -13,6 +13,7 @@ struct video_canvas_s
 	struct geometry_s *geometry;
 	struct palette_s *palette;
 	struct video_draw_buffer_callback_s *video_draw_buffer_callback;
+	void *systemPtr;
 	uint8_t *pixmapData;
 	int w;
 	int h;
@@ -21,6 +22,5 @@ struct video_canvas_s
 	bool created;
 	bool skipFrame;
 	uint8_t pixelFormat;
-	int8_t bpp;
 };
 typedef struct video_canvas_s video_canvas_t;

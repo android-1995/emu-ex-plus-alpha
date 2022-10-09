@@ -19,6 +19,8 @@
 #include <imagine/base/Window.hh>
 #include <imagine/input/Input.hh>
 #include <imagine/gfx/GlyphTextureSet.hh>
+#include <imagine/gfx/RendererCommands.hh>
+#include <imagine/gfx/BasicEffect.hh>
 #include <imagine/logger/logger.h>
 #include <imagine/util/math/int.hh>
 #include <imagine/util/ScopeGuard.hh>
@@ -113,9 +115,10 @@ NavView *ViewStack::navView() const
 	return nav.get();
 }
 
-void ViewStack::place(const IG::WindowRect &rect, const Gfx::ProjectionPlane &projP)
+void ViewStack::place(WindowRect viewRect, WindowRect displayRect, Gfx::ProjectionPlane projP)
 {
-	viewRect = rect;
+	this->viewRect = viewRect;
+	this->displayRect = displayRect;
 	this->projP = projP;
 	place();
 }
@@ -127,20 +130,29 @@ void ViewStack::place()
 	top().waitForDrawFinished();
 	assert(viewRect.xSize() && viewRect.ySize());
 	customViewRect = viewRect;
+	customDisplayRect = displayRect;
 	if(navViewIsActive())
 	{
 		nav->setTitle(std::u16string{top().name()});
-		auto navRect = IG::makeWindowRectRel(viewRect.pos(LT2DO), {viewRect.xSize(), IG::makeEvenRoundedUp(int(nav->titleFace()->nominalHeight()*(double)1.75))});
-		nav->setViewRect(navRect, projP);
+		auto navRect = makeWindowRectRel(viewRect.pos(LT2DO), {viewRect.xSize(), IG::makeEvenRoundedUp(int(nav->titleFace()->nominalHeight()*(double)1.75))});
+		WindowRect navDisplayRect{displayRect.pos(LT2DO), {displayRect.xPos(RC2DO), navRect.yPos(CB2DO)}};
+		nav->setViewRect(navRect, navDisplayRect, projP);
 		nav->place();
 		customViewRect.y += nav->viewRect().ySize();
+		customDisplayRect.y += nav->displayRect().ySize();
 	}
 	else
 	{
 		navViewHasFocus = false;
 	}
-	top().setViewRect(customViewRect, projP);
+	top().setViewRect(customViewRect, customDisplayRect, projP);
 	top().place();
+	if(customDisplayRect.y2 > customViewRect.y2) // add a basic gradient in the OS navigation bar area
+	{
+		bottomGradient.setPos(View::displayInsetRect(View::Direction::BOTTOM, customViewRect, customDisplayRect), projP);
+		bottomGradient.tl().color = bottomGradient.tr().color = Gfx::VertexColorPixelFormat.build(0., 0., 0., 0.);
+		bottomGradient.bl().color = bottomGradient.br().color = Gfx::VertexColorPixelFormat.build(0., 0., 0., 1.);
+	}
 }
 
 bool ViewStack::inputEvent(const Input::Event &e)
@@ -220,6 +232,14 @@ void ViewStack::draw(Gfx::RendererCommands &cmds)
 	top().draw(cmds);
 	if(navViewIsActive())
 		nav->draw(cmds);
+	if(customDisplayRect.y2 > customViewRect.y2)
+	{
+		using namespace Gfx;
+		cmds.set(BlendMode::ALPHA);
+		cmds.set(ColorName::WHITE);
+		cmds.basicEffect().disableTexture(cmds);
+		bottomGradient.draw(cmds);
+	}
 }
 
 void ViewStack::push(std::unique_ptr<View> v, const Input::Event &e)
@@ -280,7 +300,7 @@ void ViewStack::pop()
 void ViewStack::popViews(size_t num)
 {
 	auto win = view.size() ? &top().window() : nullptr;
-	iterateTimes(num, i)
+	for(auto i : iotaCount(num))
 	{
 		pop();
 	}
@@ -367,7 +387,7 @@ int ViewStack::viewIdx(std::u16string_view name) const
 
 int ViewStack::viewIdx(std::string_view name) const
 {
-	return viewIdx(IG::makeUTF16String(name));
+	return viewIdx(toUTF16String(name));
 }
 
 bool ViewStack::contains(View &v) const
@@ -382,7 +402,7 @@ bool ViewStack::contains(std::u16string_view name) const
 
 bool ViewStack::contains(std::string_view name) const
 {
-	return contains(IG::makeUTF16String(name));
+	return contains(toUTF16String(name));
 }
 
 void ViewStack::dismissView(View &v, bool refreshLayout)

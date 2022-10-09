@@ -22,16 +22,27 @@
 #include <compare>
 #include <memory>
 
+namespace IG
+{
+class IO;
+}
+
 namespace IG::FS
 {
 
-class ArchiveIterator : public std::iterator<std::input_iterator_tag, IG::ArchiveEntry>
+class ArchiveIterator
 {
 public:
+	using iterator_category = std::input_iterator_tag;
+	using value_type = ArchiveEntry;
+	using difference_type = ptrdiff_t;
+	using pointer = value_type*;
+	using reference = value_type&;
+
 	constexpr ArchiveIterator() = default;
-	ArchiveIterator(IG::CStringView path);
-	ArchiveIterator(IG::GenericIO io);
-	ArchiveIterator(IG::ArchiveEntry entry);
+	ArchiveIterator(CStringView path);
+	ArchiveIterator(IO);
+	ArchiveIterator(ArchiveEntry);
 	ArchiveIterator(const ArchiveIterator&) = default;
 	ArchiveIterator(ArchiveIterator&&) = default;
 	ArchiveIterator &operator=(ArchiveIterator &&o) = default;
@@ -56,8 +67,8 @@ static ArchiveIterator end(const ArchiveIterator &)
 	return {};
 }
 
-IG::ArchiveIO fileFromArchive(IG::CStringView archivePath, std::string_view filePath);
-IG::ArchiveIO fileFromArchive(IG::GenericIO io, std::string_view filePath);
+IG::ArchiveIO fileFromArchive(CStringView archivePath, std::string_view filePath);
+IG::ArchiveIO fileFromArchive(IO archiveIO, std::string_view filePath);
 bool hasArchiveExtension(std::string_view name);
 
 };

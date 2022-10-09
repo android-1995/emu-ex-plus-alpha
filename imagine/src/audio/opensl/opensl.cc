@@ -15,6 +15,7 @@
 
 #define LOGTAG "OpenSL"
 #include <imagine/audio/opensl/OpenSLESOutputStream.hh>
+#include <imagine/audio/OutputStream.hh>
 #include <imagine/audio/Manager.hh>
 #include <imagine/logger/logger.h>
 
@@ -76,13 +77,13 @@ IG::ErrorCode OpenSLESOutputStream::open(OutputStreamConfig config)
 	{
 		return {EINVAL};
 	}
-	auto format = config.format();
+	auto format = config.format;
 	logMsg("creating stream %dHz, %d channels, %d frames/buffer", format.rate, format.channels, bufferFrames);
 	SLDataLocator_AndroidSimpleBufferQueue buffQLoc{SL_DATALOCATOR_ANDROIDSIMPLEBUFFERQUEUE, outputBuffers};
 	SLDataFormat_PCM slFormat
 	{
 		SL_DATAFORMAT_PCM, (SLuint32)format.channels, (SLuint32)format.rate * 1000, // as milliHz
-		format.sample.bits(), format.sample.bits(),
+		(SLuint32)format.sample.bits(), (SLuint32)format.sample.bits(),
 		format.channels == 1 ? SL_SPEAKER_FRONT_CENTER : SL_SPEAKER_FRONT_LEFT | SL_SPEAKER_FRONT_RIGHT,
 		SL_BYTEORDER_LITTLEENDIAN
 	};
@@ -123,7 +124,7 @@ IG::ErrorCode OpenSLESOutputStream::open(OutputStreamConfig config)
 	assert(result == SL_RESULT_SUCCESS);
 	result = (*player)->GetInterface(player, SL_IID_ANDROIDSIMPLEBUFFERQUEUE, &slBuffQI);
 	assert(result == SL_RESULT_SUCCESS);
-	onSamplesNeeded = config.onSamplesNeeded();
+	onSamplesNeeded = config.onSamplesNeeded;
 	bufferBytes = format.framesToBytes(bufferFrames);
 	buffer = std::make_unique<uint8_t[]>(bufferBytes);
 	result = (*slBuffQI)->RegisterCallback(slBuffQI,
@@ -133,7 +134,7 @@ IG::ErrorCode OpenSLESOutputStream::open(OutputStreamConfig config)
 			thisPtr->doBufferCallback(queue);
 		}, this);
 	assert(result == SL_RESULT_SUCCESS);
-	if(config.startPlaying())
+	if(config.startPlaying)
 		play();
 	return {};
 }

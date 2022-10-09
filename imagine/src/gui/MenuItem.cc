@@ -17,67 +17,53 @@
 #include <imagine/gui/TextTableView.hh>
 #include <imagine/gfx/RendererCommands.hh>
 #include <imagine/gfx/GlyphTextureSet.hh>
+#include <imagine/gfx/BasicEffect.hh>
 #include <imagine/logger/logger.h>
 
 namespace IG
 {
 
-void BaseTextMenuItem::prepareDraw(Gfx::Renderer &r)
+void MenuItem::prepareDraw(Gfx::Renderer &r)
 {
 	t.makeGlyphs(r);
 }
 
-void BaseTextMenuItem::draw(Gfx::RendererCommands &cmds, float xPos, float yPos, float xSize, float ySize,
+void MenuItem::draw(Gfx::RendererCommands &__restrict__ cmds, float xPos, float yPos, float xSize, float ySize,
 	float xIndent, _2DOrigin align, const Gfx::ProjectionPlane &projP, Gfx::Color color) const
 {
 	if(!active())
 	{
 		// half-bright color
-		cmds.setColor(color[0]/2.f, color[1]/2.f, color[2]/2.f, color[3]);
+		cmds.setColor(color.r/2.f, color.g/2.f, color.b/2.f, color.a);
 	}
 	else
 	{
 		cmds.setColor(color);
 	}
-	cmds.setCommonProgram(Gfx::CommonProgram::TEX_ALPHA);
+	cmds.basicEffect().enableAlphaTexture(cmds);
 	if(align.isXCentered())
 		xPos += xSize/2;
 	else
 		xPos += xIndent;
-	t.draw(cmds, xPos, yPos, align, projP);
+	t.draw(cmds, {xPos, yPos}, align, projP);
 }
 
-void BaseTextMenuItem::compile(Gfx::Renderer &r, const Gfx::ProjectionPlane &projP)
+void MenuItem::compile(Gfx::Renderer &r, const Gfx::ProjectionPlane &projP)
 {
 	t.compile(r, projP);
 }
 
-void BaseTextMenuItem::compile(IG::utf16String name, Gfx::Renderer &r, const Gfx::ProjectionPlane &projP)
-{
-	t.setString(std::move(name));
-	compile(r, projP);
-}
-
-void BaseTextMenuItem::setName(IG::utf16String name, Gfx::GlyphTextureSet *face)
-{
-	t.setString(std::move(name));
-	if(face)
-	{
-		t.setFace(face);
-	}
-}
-
-int BaseTextMenuItem::ySize()
+int MenuItem::ySize() const
 {
 	return t.face()->nominalHeight();
 }
 
-float BaseTextMenuItem::xSize()
+float MenuItem::xSize() const
 {
 	return t.width();
 }
 
-const Gfx::Text &BaseTextMenuItem::text() const
+const Gfx::Text &MenuItem::text() const
 {
 	return t;
 }
@@ -102,7 +88,7 @@ bool TextHeadingMenuItem::select(View &parent, const Input::Event &e) { return t
 
 void BaseDualTextMenuItem::compile(Gfx::Renderer &r, const Gfx::ProjectionPlane &projP)
 {
-	BaseTextMenuItem::compile(r, projP);
+	MenuItem::compile(r, projP);
 	compile2nd(r, projP);
 }
 
@@ -113,22 +99,22 @@ void BaseDualTextMenuItem::compile2nd(Gfx::Renderer &r, const Gfx::ProjectionPla
 
 void BaseDualTextMenuItem::prepareDraw(Gfx::Renderer &r)
 {
-	BaseTextMenuItem::prepareDraw(r);
+	MenuItem::prepareDraw(r);
 	t2.makeGlyphs(r);
 }
 
 void BaseDualTextMenuItem::draw2ndText(Gfx::RendererCommands &cmds, float xPos, float yPos, float xSize, float ySize,
 	float xIndent, _2DOrigin align, const Gfx::ProjectionPlane &projP, Gfx::Color color) const
 {
-	cmds.setCommonProgram(Gfx::CommonProgram::TEX_ALPHA);
+	cmds.basicEffect().enableAlphaTexture(cmds);
 	cmds.setColor(color);
-	t2.draw(cmds, (xPos + xSize) - xIndent, yPos, RC2DO, projP);
+	t2.draw(cmds, {(xPos + xSize) - xIndent, yPos}, RC2DO, projP);
 }
 
-void BaseDualTextMenuItem::draw(Gfx::RendererCommands &cmds, float xPos, float yPos, float xSize, float ySize,
+void BaseDualTextMenuItem::draw(Gfx::RendererCommands &__restrict__ cmds, float xPos, float yPos, float xSize, float ySize,
 	float xIndent, _2DOrigin align, const Gfx::ProjectionPlane &projP, Gfx::Color color) const
 {
-	BaseTextMenuItem::draw(cmds, xPos, yPos, xSize, ySize, xIndent, align, projP, color);
+	MenuItem::draw(cmds, xPos, yPos, xSize, ySize, xIndent, align, projP, color);
 	BaseDualTextMenuItem::draw2ndText(cmds, xPos, yPos, xSize, ySize, xIndent, align, projP, color);
 }
 
@@ -168,7 +154,7 @@ bool BoolMenuItem::setBoolValue(bool val)
 	{
 		//logMsg("setting bool: %d", val);
 		flags_ = setOrClearBits(flags_, ON_FLAG, val);
-		t2.setString(val ? onStr : offStr);
+		t2.resetString(val ? onStr : offStr);
 		return true;
 	}
 	return false;
@@ -191,10 +177,10 @@ bool BoolMenuItem::flipBoolValue()
 	return boolValue();
 }
 
-void BoolMenuItem::draw(Gfx::RendererCommands &cmds, float xPos, float yPos, float xSize, float ySize,
+void BoolMenuItem::draw(Gfx::RendererCommands &__restrict__ cmds, float xPos, float yPos, float xSize, float ySize,
 	float xIndent, _2DOrigin align, const Gfx::ProjectionPlane &projP, Gfx::Color color) const
 {
-	BaseTextMenuItem::draw(cmds, xPos, yPos, xSize, ySize, xIndent, align, projP, color);
+	MenuItem::draw(cmds, xPos, yPos, xSize, ySize, xIndent, align, projP, color);
 	Gfx::Color color2;
 	if(!(flags_ & ON_OFF_STYLE_FLAG)) // custom strings
 		color2 = Gfx::color(0.f, .8f, 1.f);
@@ -216,8 +202,8 @@ public:
 	int activeItem;
 	MultiChoiceMenuItem &src;
 
-	MenuItemTableView(IG::utf16String name, ViewAttachParams attach, int active, ItemsDelegate items, ItemDelegate item, MultiChoiceMenuItem &src):
-		TableView{std::move(name), attach, items, item},
+	MenuItemTableView(UTF16Convertible auto &&name, ViewAttachParams attach, int active, ItemsDelegate items, ItemDelegate item, MultiChoiceMenuItem &src):
+		TableView{IG_forward(name), attach, items, item},
 		activeItem{active},
 		src{src}
 	{
@@ -238,16 +224,16 @@ public:
 			selected = activeItem;
 	}
 
-	void drawElement(Gfx::RendererCommands &cmds, size_t i, MenuItem &item, Gfx::GCRect rect, float xIndent) const final
+	void drawElement(Gfx::RendererCommands &__restrict__ cmds, size_t i, MenuItem &item, Gfx::GCRect rect, float xIndent) const final
 	{
 		item.draw(cmds, rect.x, rect.pos(C2DO).y, rect.xSize(), rect.ySize(), xIndent, TableView::align, projP, menuTextColor((int)i == activeItem));
 	}
 };
 
-void MultiChoiceMenuItem::draw(Gfx::RendererCommands &cmds, float xPos, float yPos, float xSize, float ySize,
+void MultiChoiceMenuItem::draw(Gfx::RendererCommands &__restrict__ cmds, float xPos, float yPos, float xSize, float ySize,
 	float xIndent, _2DOrigin align, const Gfx::ProjectionPlane &projP, Gfx::Color color) const
 {
-	BaseTextMenuItem::draw(cmds, xPos, yPos, xSize, ySize, xIndent, align, projP, color);
+	MenuItem::draw(cmds, xPos, yPos, xSize, ySize, xIndent, align, projP, color);
 	//auto color2 = Gfx::color(0.f, 1.f, 1.f); // aqua
 	auto color2 = Gfx::color(0.f, .8f, 1.f);
 	BaseDualTextMenuItem::draw2ndText(cmds, xPos, yPos, xSize, ySize, xIndent, align, projP, color2);
@@ -303,11 +289,11 @@ void MultiChoiceMenuItem::setDisplayString(size_t idx)
 	}
 	else if(idx < items_(*this))
 	{
-		t2.setString(std::u16string{item_(*this, idx).text().stringView()});
+		t2.resetString(std::u16string{item_(*this, idx).text().stringView()});
 	}
 	else
 	{
-		t2.setString({});
+		t2.resetString();
 	}
 }
 
@@ -366,12 +352,19 @@ void MultiChoiceMenuItem::updateDisplayString()
 
 int MultiChoiceMenuItem::idxOfId(IdInt id)
 {
-	iterateTimes(items_(*this), i)
+	auto items = items_(*this);
+	auto item = item_;
+	Id lastId{};
+	for(auto i : iotaCount(items))
 	{
-		if(item_(*this, i).id() == id)
+		lastId = item(*this, i).id();
+		if(lastId == id)
 			return (int)i;
 	}
-	return -1;
+	if(lastId == DEFAULT_ID) // special case to simplify uses where the last menu item represents a custom value
+		return items - 1;
+	else
+		return -1;
 }
 
 }

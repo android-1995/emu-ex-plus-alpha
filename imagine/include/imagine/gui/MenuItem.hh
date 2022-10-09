@@ -52,37 +52,37 @@ public:
 			[=](Item &i, View &v, const Input::Event &e) { return callAndReturnBool(f, i, v, e); }
 		} {}
 
-	constexpr MenuItemSelectDelegate(IG::invocable<Item &, const Input::Event &> auto &&f):
+	constexpr MenuItemSelectDelegate(std::invocable<Item &, const Input::Event &> auto &&f):
 		DelegateFuncBase
 		{
 			[=](Item &i, View &v, const Input::Event &e) { return callAndReturnBool(f, i, e); }
 		} {}
 
-	constexpr MenuItemSelectDelegate(IG::invocable<View &, const Input::Event &> auto &&f):
+	constexpr MenuItemSelectDelegate(std::invocable<View &, const Input::Event &> auto &&f):
 		DelegateFuncBase
 		{
 			[=](Item &i, View &v, const Input::Event &e) { return callAndReturnBool(f, v, e); }
 		} {}
 
-	constexpr MenuItemSelectDelegate(IG::invocable<Item &> auto &&f):
+	constexpr MenuItemSelectDelegate(std::invocable<Item &> auto &&f):
 		DelegateFuncBase
 		{
 			[=](Item &i, View &v, const Input::Event &e) { return callAndReturnBool(f, i); }
 		} {}
 
-	constexpr MenuItemSelectDelegate(IG::invocable<View &> auto &&f):
+	constexpr MenuItemSelectDelegate(std::invocable<View &> auto &&f):
 		DelegateFuncBase
 		{
 			[=](Item &i, View &v, const Input::Event &e) { return callAndReturnBool(f, v); }
 		} {}
 
-	constexpr MenuItemSelectDelegate(IG::invocable<const Input::Event &> auto &&f):
+	constexpr MenuItemSelectDelegate(std::invocable<const Input::Event &> auto &&f):
 		DelegateFuncBase
 		{
 			[=](Item &i, View &v, const Input::Event &e) { return callAndReturnBool(f, e); }
 		} {}
 
-	constexpr MenuItemSelectDelegate(IG::invocable auto &&f):
+	constexpr MenuItemSelectDelegate(std::invocable auto &&f):
 		DelegateFuncBase
 		{
 			[=](Item &i, View &v, const Input::Event &e) { return callAndReturnBool(f); }
@@ -112,16 +112,19 @@ public:
 	static constexpr uint32_t IMPL_FLAG_START = bit(2);
 	static constexpr uint32_t USER_FLAG_START = bit(16);
 	static constexpr uint32_t DEFAULT_FLAGS = SELECTABLE_FLAG | ACTIVE_FLAG;
+	static constexpr Id DEFAULT_ID = static_cast<Id>(std::numeric_limits<IdInt>::min());
 
 	constexpr MenuItem() = default;
-	constexpr MenuItem(IdInt id): id_{id} {}
+	MenuItem(UTF16Convertible auto &&name, Gfx::GlyphTextureSet *face, IdInt id = {}):
+		id_{id},
+		t{IG_forward(name), face} {}
 	virtual ~MenuItem() = default;
-	virtual void prepareDraw(Gfx::Renderer &r) = 0;
-	virtual void draw(Gfx::RendererCommands &, float xPos, float yPos, float xSize, float ySize,
-		float xIndent, _2DOrigin align, const Gfx::ProjectionPlane &, Gfx::Color) const = 0;
-	virtual void compile(Gfx::Renderer &r, const Gfx::ProjectionPlane &projP) = 0;
-	virtual int ySize() = 0;
-	virtual float xSize() = 0;
+	virtual void prepareDraw(Gfx::Renderer &r);
+	virtual void draw(Gfx::RendererCommands &__restrict__, float xPos, float yPos, float xSize, float ySize,
+		float xIndent, _2DOrigin align, const Gfx::ProjectionPlane &, Gfx::Color) const;
+	virtual void compile(Gfx::Renderer &r, const Gfx::ProjectionPlane &projP);
+	int ySize() const;
+	float xSize() const;
 	virtual bool select(View &, const Input::Event &) = 0;
 	constexpr auto flags() const { return flags_; }
 	constexpr void setFlags(uint32_t flags) { flags_ = flags; }
@@ -132,43 +135,36 @@ public:
 	constexpr Id id() const { return (Id)id_; }
 	constexpr void setId(IdInt id) { id_ = id; }
 
-protected:
-	uint32_t flags_{DEFAULT_FLAGS};
-	IdInt id_{};
-};
+	void compile(UTF16Convertible auto &&name, Gfx::Renderer &r, const Gfx::ProjectionPlane &projP)
+	{
+		t.resetString(IG_forward(name));
+		compile(r, projP);
+	}
 
-class BaseTextMenuItem : public MenuItem
-{
-public:
-	BaseTextMenuItem() = default;
+	void setName(UTF16Convertible auto &&name, Gfx::GlyphTextureSet *face = nullptr)
+	{
+		t.resetString(IG_forward(name));
+		if(face)
+			t.setFace(face);
+	}
 
-	BaseTextMenuItem(IG::utf16String name, Gfx::GlyphTextureSet *face, IdInt id = {}):
-		MenuItem{id},
-		t{std::move(name), face} {}
-
-	void prepareDraw(Gfx::Renderer &r) override;
-	void draw(Gfx::RendererCommands &, float xPos, float yPos, float xSize, float ySize,
-		float xIndent, _2DOrigin align, const Gfx::ProjectionPlane &, Gfx::Color) const override;
-	void compile(Gfx::Renderer &r, const Gfx::ProjectionPlane &projP) override;
-	void compile(IG::utf16String name, Gfx::Renderer &r, const Gfx::ProjectionPlane &projP);
-	void setName(IG::utf16String name, Gfx::GlyphTextureSet *face = nullptr);
-	int ySize() override;
-	float xSize() override;
 	const Gfx::Text &text() const;
 
 protected:
+	uint32_t flags_{DEFAULT_FLAGS};
+	IdInt id_{};
 	Gfx::Text t{};
 };
 
-class TextMenuItem : public BaseTextMenuItem
+class TextMenuItem : public MenuItem
 {
 public:
 	using SelectDelegate = MenuItemSelectDelegate<TextMenuItem>;
 
-	TextMenuItem() = default;
+	constexpr TextMenuItem() = default;
 
-	TextMenuItem(IG::utf16String name, Gfx::GlyphTextureSet *face, SelectDelegate selectDel, IdInt id = {}):
-		BaseTextMenuItem{std::move(name), face, id},
+	TextMenuItem(UTF16Convertible auto &&name, Gfx::GlyphTextureSet *face, SelectDelegate selectDel, IdInt id = {}):
+		MenuItem{IG_forward(name), face, id},
 		selectD{selectDel} {}
 
 	bool select(View &, const Input::Event &) override;
@@ -179,13 +175,13 @@ protected:
 	SelectDelegate selectD{};
 };
 
-class TextHeadingMenuItem : public BaseTextMenuItem
+class TextHeadingMenuItem : public MenuItem
 {
 public:
-	TextHeadingMenuItem() = default;
+	constexpr TextHeadingMenuItem() = default;
 
-	TextHeadingMenuItem(IG::utf16String name, Gfx::GlyphTextureSet *face, IdInt id = {}):
-		BaseTextMenuItem{std::move(name), face, id}
+	TextHeadingMenuItem(UTF16Convertible auto &&name, Gfx::GlyphTextureSet *face, IdInt id = {}):
+		MenuItem{IG_forward(name), face, id}
 	{
 		setSelectable(false);
 	}
@@ -193,22 +189,23 @@ public:
 	bool select(View &, const Input::Event &) override;
 };
 
-class BaseDualTextMenuItem : public BaseTextMenuItem
+class BaseDualTextMenuItem : public MenuItem
 {
 public:
-	BaseDualTextMenuItem() = default;
+	constexpr BaseDualTextMenuItem() = default;
 
-	BaseDualTextMenuItem(IG::utf16String name, IG::utf16String name2, Gfx::GlyphTextureSet *face, IdInt id = {}):
-		BaseTextMenuItem{std::move(name), face, id},
-		t2{std::move(name2), face} {}
+	BaseDualTextMenuItem(UTF16Convertible auto &&name, UTF16Convertible auto &&name2, Gfx::GlyphTextureSet *face, IdInt id = {}):
+		MenuItem{IG_forward(name), face, id},
+		t2{IG_forward(name2), face} {}
 
-	void set2ndName(IG::utf16String name) { t2.setString(std::move(name)); }
+	void set2ndName(UTF16Convertible auto &&name) { t2.resetString(IG_forward(name)); }
+	void set2ndName() { t2.resetString(); }
 	void compile(Gfx::Renderer &r, const Gfx::ProjectionPlane &projP) override;
 	void compile2nd(Gfx::Renderer &r, const Gfx::ProjectionPlane &projP);
 	void prepareDraw(Gfx::Renderer &r) override;
 	void draw2ndText(Gfx::RendererCommands &, float xPos, float yPos, float xSize, float ySize,
 		float xIndent, _2DOrigin align, const Gfx::ProjectionPlane &, Gfx::Color) const;
-	void draw(Gfx::RendererCommands &, float xPos, float yPos, float xSize, float ySize,
+	void draw(Gfx::RendererCommands &__restrict__, float xPos, float yPos, float xSize, float ySize,
 		float xIndent, _2DOrigin align, const Gfx::ProjectionPlane &, Gfx::Color) const override;
 
 protected:
@@ -220,15 +217,15 @@ class DualTextMenuItem : public BaseDualTextMenuItem
 public:
 	using SelectDelegate = MenuItemSelectDelegate<DualTextMenuItem>;
 
-	DualTextMenuItem() = default;
+	constexpr DualTextMenuItem() = default;
 
-	DualTextMenuItem(IG::utf16String name, IG::utf16String name2,
-		Gfx::GlyphTextureSet *face, SelectDelegate selectDel, IdInt id = {}):
-		BaseDualTextMenuItem{std::move(name), std::move(name2), face, id},
+	DualTextMenuItem(UTF16Convertible auto &&name, UTF16Convertible auto &&name2, Gfx::GlyphTextureSet *face,
+		SelectDelegate selectDel, IdInt id = {}):
+		BaseDualTextMenuItem{IG_forward(name), IG_forward(name2), face, id},
 		selectD{selectDel} {}
 
-	DualTextMenuItem(IG::utf16String name, IG::utf16String name2, Gfx::GlyphTextureSet *face, IdInt id = {}):
-		BaseDualTextMenuItem{std::move(name), std::move(name2), face, id} {}
+	DualTextMenuItem(UTF16Convertible auto &&name, UTF16Convertible auto &&name2, Gfx::GlyphTextureSet *face, IdInt id = {}):
+		BaseDualTextMenuItem{IG_forward(name), IG_forward(name2), face, id} {}
 
 	bool select(View &, const Input::Event &) override;
 	void setOnSelect(SelectDelegate onSelect);
@@ -245,10 +242,10 @@ public:
 	static constexpr uint32_t ON_FLAG = IMPL_FLAG_START;
 	static constexpr uint32_t ON_OFF_STYLE_FLAG = IMPL_FLAG_START << 1;
 
-	BoolMenuItem() = default;
+	constexpr BoolMenuItem() = default;
 
-	BoolMenuItem(IG::utf16String name, Gfx::GlyphTextureSet *face, bool val, SelectDelegate selectDel, IdInt id = {}):
-		BaseDualTextMenuItem{std::move(name), val ? u"开" : u"关", face, id},
+	BoolMenuItem(UTF16Convertible auto &&name, Gfx::GlyphTextureSet *face, bool val, SelectDelegate selectDel, IdInt id = {}):
+		BaseDualTextMenuItem{IG_forward(name), val ? u"开" : u"关", face, id},
 		selectD{selectDel}
 	{
 		if(val)
@@ -256,12 +253,12 @@ public:
 		flags_ |= ON_OFF_STYLE_FLAG;
 	}
 
-	BoolMenuItem(IG::utf16String name, Gfx::GlyphTextureSet *face, bool val,
-		IG::utf16String offStr, IG::utf16String onStr, SelectDelegate selectDel, IdInt id = {}):
-		BaseDualTextMenuItem{std::move(name), val ? onStr : offStr, face, id},
+	BoolMenuItem(UTF16Convertible auto &&name, Gfx::GlyphTextureSet *face, bool val,
+		UTF16Convertible auto &&offStr, UTF16Convertible auto &&onStr, SelectDelegate selectDel, IdInt id = {}):
+		BaseDualTextMenuItem{IG_forward(name), val ? onStr : offStr, face, id},
 		selectD{selectDel},
-		offStr{std::move(offStr)},
-		onStr{std::move(onStr)}
+		offStr{IG_forward(offStr)},
+		onStr{IG_forward(onStr)}
 	{
 		if(val)
 			flags_ |= ON_FLAG;
@@ -272,14 +269,14 @@ public:
 	bool setBoolValue(bool val);
 	bool flipBoolValue(View &view);
 	bool flipBoolValue();
-	void draw(Gfx::RendererCommands &, float xPos, float yPos, float xSize, float ySize,
+	void draw(Gfx::RendererCommands &__restrict__, float xPos, float yPos, float xSize, float ySize,
 		float xIndent, _2DOrigin align, const Gfx::ProjectionPlane &, Gfx::Color) const override;
 	bool select(View &, const Input::Event &) override;
 	void setOnSelect(SelectDelegate onSelect);
 
 protected:
 	SelectDelegate selectD{};
-	std::u16string offStr{u"关"}, onStr{u"开"};
+	UTF16String offStr{u"关"}, onStr{u"开"};
 };
 
 class MultiChoiceMenuItem : public BaseDualTextMenuItem
@@ -299,11 +296,11 @@ public:
 		constexpr SelectedInit(Id i): val{i}, isId{true} {}
 	};
 
-	MultiChoiceMenuItem() = default;
+	constexpr MultiChoiceMenuItem() = default;
 
-	MultiChoiceMenuItem(IG::utf16String name, Gfx::GlyphTextureSet *face, SetDisplayStringDelegate onDisplayStr,
+	MultiChoiceMenuItem(UTF16Convertible auto &&name, Gfx::GlyphTextureSet *face, SetDisplayStringDelegate onDisplayStr,
 		SelectedInit selected, ItemsDelegate items, ItemDelegate item, SelectDelegate selectDel, IdInt id = {}):
-		BaseDualTextMenuItem{std::move(name), {}, face},
+		BaseDualTextMenuItem{IG_forward(name), UTF16String{}, face},
 		selectD
 		{
 			selectDel ? selectDel :
@@ -317,24 +314,24 @@ public:
 		onSetDisplayString{onDisplayStr},
 		selected_{selected.isId ? idxOfId((Id)selected.val) : selected.val} {}
 
-	MultiChoiceMenuItem(IG::utf16String name,
+	MultiChoiceMenuItem(UTF16Convertible auto &&name,
 		Gfx::GlyphTextureSet *face, SelectedInit selected,
 		ItemsDelegate items, ItemDelegate item, SelectDelegate selectDel, IdInt id = {}):
-		MultiChoiceMenuItem{std::move(name), face, SetDisplayStringDelegate{}, selected, items, item, selectDel, id} {}
+		MultiChoiceMenuItem{IG_forward(name), face, SetDisplayStringDelegate{}, selected, items, item, selectDel, id} {}
 
-	MultiChoiceMenuItem(IG::utf16String name,
+	MultiChoiceMenuItem(UTF16Convertible auto &&name,
 		Gfx::GlyphTextureSet *face, SetDisplayStringDelegate onDisplayStr,
 		SelectedInit selected, ItemsDelegate items, ItemDelegate item, IdInt id = {}):
-		MultiChoiceMenuItem{std::move(name), face, onDisplayStr, selected, items, item, {}, id} {}
+		MultiChoiceMenuItem{IG_forward(name), face, onDisplayStr, selected, items, item, {}, id} {}
 
-	MultiChoiceMenuItem(IG::utf16String name,
+	MultiChoiceMenuItem(UTF16Convertible auto &&name,
 		Gfx::GlyphTextureSet *face, SelectedInit selected,
 		ItemsDelegate items, ItemDelegate item, IdInt id = {}):
-		MultiChoiceMenuItem{std::move(name), face, SetDisplayStringDelegate{}, selected, items, item, {}, id} {}
+		MultiChoiceMenuItem{IG_forward(name), face, SetDisplayStringDelegate{}, selected, items, item, {}, id} {}
 
-	MultiChoiceMenuItem(IG::utf16String name, Gfx::GlyphTextureSet *face, SetDisplayStringDelegate onDisplayStr, SelectedInit selected,
+	MultiChoiceMenuItem(UTF16Convertible auto &&name, Gfx::GlyphTextureSet *face, SetDisplayStringDelegate onDisplayStr, SelectedInit selected,
 		IG::Container auto &item, SelectDelegate selectDel, IdInt id = {}):
-		MultiChoiceMenuItem{std::move(name), face, onDisplayStr, selected,
+		MultiChoiceMenuItem{IG_forward(name), face, onDisplayStr, selected,
 		[&item](const MultiChoiceMenuItem &)
 		{
 			return std::size(item);
@@ -345,16 +342,16 @@ public:
 		},
 		selectDel, id} {}
 
-	MultiChoiceMenuItem(IG::utf16String name, Gfx::GlyphTextureSet *face, SelectedInit selected, IG::Container auto &item, SelectDelegate selectDel, IdInt id = {}):
-		MultiChoiceMenuItem{std::move(name), face, SetDisplayStringDelegate{}, selected, item, selectDel, id} {}
+	MultiChoiceMenuItem(UTF16Convertible auto &&name, Gfx::GlyphTextureSet *face, SelectedInit selected, IG::Container auto &item, SelectDelegate selectDel, IdInt id = {}):
+		MultiChoiceMenuItem{IG_forward(name), face, SetDisplayStringDelegate{}, selected, item, selectDel, id} {}
 
-	MultiChoiceMenuItem(IG::utf16String name, Gfx::GlyphTextureSet *face, SetDisplayStringDelegate onDisplayStr, SelectedInit selected, IG::Container auto &item, IdInt id = {}):
-		MultiChoiceMenuItem{std::move(name), face, onDisplayStr, selected, item, {}, id} {}
+	MultiChoiceMenuItem(UTF16Convertible auto &&name, Gfx::GlyphTextureSet *face, SetDisplayStringDelegate onDisplayStr, SelectedInit selected, IG::Container auto &item, IdInt id = {}):
+		MultiChoiceMenuItem{IG_forward(name), face, onDisplayStr, selected, item, {}, id} {}
 
-	MultiChoiceMenuItem(IG::utf16String name, Gfx::GlyphTextureSet *face, SelectedInit selected, IG::Container auto &item, IdInt id = {}):
-		MultiChoiceMenuItem{std::move(name), face, SetDisplayStringDelegate{}, selected, item, {}, id} {}
+	MultiChoiceMenuItem(UTF16Convertible auto &&name, Gfx::GlyphTextureSet *face, SelectedInit selected, IG::Container auto &item, IdInt id = {}):
+		MultiChoiceMenuItem{IG_forward(name), face, SetDisplayStringDelegate{}, selected, item, {}, id} {}
 
-	void draw(Gfx::RendererCommands &, float xPos, float yPos, float xSize, float ySize,
+	void draw(Gfx::RendererCommands &__restrict__, float xPos, float yPos, float xSize, float ySize,
 		float xIndent, _2DOrigin align, const Gfx::ProjectionPlane &, Gfx::Color) const override;
 	void compile(Gfx::Renderer &r, const Gfx::ProjectionPlane &projP) override;
 	int selected() const;

@@ -22,8 +22,10 @@
 #include <imagine/audio/SampleFormat.hh>
 #include <imagine/util/rectangle2.h>
 #include <emuframework/EmuTiming.hh>
+#include <emuframework/VController.hh>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <list>
 
 namespace IG
@@ -31,7 +33,8 @@ namespace IG
 class ApplicationContext;
 class PixelFormat;
 class IO;
-class GenericIO;
+class FileIO;
+class MapIO;
 }
 
 namespace IG::Input
@@ -56,13 +59,13 @@ class VControllerKeyboard;
 
 struct AspectRatioInfo
 {
-	constexpr AspectRatioInfo(const char *name, unsigned n, unsigned d): name(name), aspect{n, d} {}
+	std::string_view name{};
+	IG::Point2D<int8_t> aspect{};
+
 	constexpr explicit operator double() const { return aspect.ratio<double>(); }
-	const char *name;
-	IG::Point2D<unsigned> aspect;
 };
 
-#define EMU_SYSTEM_DEFAULT_ASPECT_RATIO_INFO_INIT {"1:1", 1, 1}, {"全屏", 0, 1}
+#define EMU_SYSTEM_DEFAULT_ASPECT_RATIO_INFO_INIT {"1:1", {1, 1}}, {"全屏", {0, 1}}
 
 struct BundledGameInfo
 {
@@ -75,8 +78,22 @@ struct EmuSystemCreateParams
 	uint8_t systemFlags;
 };
 
-enum { STATE_RESULT_OK, STATE_RESULT_NO_FILE, STATE_RESULT_NO_FILE_ACCESS, STATE_RESULT_IO_ERROR,
-	STATE_RESULT_INVALID_DATA, STATE_RESULT_OTHER_ERROR };
+enum class ConfigType : uint8_t
+{
+	MAIN, SESSION, CORE
+};
+
+struct InputAction
+{
+	unsigned key{};
+	Input::Action state{};
+	uint32_t metaState{};
+};
+
+enum class VideoSystem: uint8_t
+{
+	NATIVE_NTSC, PAL
+};
 
 class EmuSystem
 {
@@ -100,7 +117,7 @@ public:
 
 	struct LoadProgressMessage
 	{
-		constexpr LoadProgressMessage() {}
+		constexpr LoadProgressMessage() = default;
 		constexpr LoadProgressMessage(LoadProgress progress, int intArg, int intArg2, int intArg3):
 			intArg{intArg}, intArg2{intArg2}, intArg3{intArg3}, progress{progress} {}
 		explicit operator bool() const { return progress != LoadProgress::UNSET; }
@@ -113,25 +130,23 @@ public:
 	using OnLoadProgressDelegate = IG::DelegateFunc<bool(int pos, int max, const char *label)>;
 	using NameFilterFunc = bool(*)(std::string_view name);
 	using BackupMemoryDirtyFlags = uint8_t;
-	enum VideoSystem { VIDSYS_NATIVE_NTSC, VIDSYS_PAL };
-	enum ResetMode { RESET_HARD, RESET_SOFT };
+	enum class ResetMode: uint8_t { HARD, SOFT };
 
 	// Static system configuration
-	static const unsigned maxPlayers;
-	static const AspectRatioInfo aspectRatioInfo[];
-	static const unsigned aspectRatioInfos;
+	static const int maxPlayers;
 	static const char *configFilename;
 	static const char *inputFaceBtnName;
 	static const char *inputCenterBtnName;
-	static const unsigned inputCenterBtns;
-	static const unsigned inputFaceBtns;
+	static const int inputCenterBtns;
+	static const int inputFaceBtns;
 	static int inputLTriggerIndex;
 	static int inputRTriggerIndex;
 	static bool inputHasKeyboard;
 	static bool inputHasShortBtnTexture;
 	static bool hasBundledGames;
 	static bool hasPALVideoSystem;
-	static bool canRenderRGB565;
+	static double staticFrameTime;
+	static double staticPalFrameTime;
 	static bool canRenderRGBA8888;
 	static bool hasResetModes;
 	static bool handlesArchiveFiles;
@@ -144,19 +159,56 @@ public:
 	static NameFilterFunc defaultFsFilter;
 	static NameFilterFunc defaultBenchmarkFsFilter;
 	static const char *creditsViewStr;
-	static constexpr unsigned MAX_CENTER_BTNS = 2;
-	static constexpr unsigned MAX_FACE_BTNS = 8;
-	static std::array<int, MAX_FACE_BTNS> vControllerImageMap;
+	static constexpr int MAX_CENTER_BTNS = EmuEx::MAX_CENTER_BTNS;
+	static constexpr int MAX_FACE_BTNS = EmuEx::MAX_FACE_BTNS;
+	static FaceButtonImageMap vControllerImageMap;
 
 	EmuSystem(IG::ApplicationContext ctx): appCtx{ctx} {}
-	IG::ApplicationContext appContext() const { return appCtx; }
-	void onInit();
+
+	// required sub-class API functions
+	void loadContent(IO &, EmuSystemCreateParams, OnLoadProgressDelegate);
+	[[gnu::hot]] void runFrame(EmuSystemTaskContext task, EmuVideo *video, EmuAudio *audio);
+	FS::FileString stateFilename(int slot, std::string_view name) const;
+	void loadState(EmuApp &, CStringView uri);
+	void saveState(CStringView path);
+	bool readConfig(ConfigType, MapIO &io, unsigned key, size_t readSize);
+	void writeConfig(ConfigType, FileIO &);
+	void reset(EmuApp &, ResetMode mode);
+	void clearInputBuffers(EmuInputView &view);
+	void handleInputAction(EmuApp *, InputAction);
+	unsigned translateInputAction(unsigned input, bool &turbo);
+	VController::Map vControllerMap(int player);
+	void configAudioRate(FloatSeconds frameTime, int rate);
+	static std::span<const AspectRatioInfo> aspectRatioInfos();
+
+	// optional sub-class API functions
+	void onStart();
+	void onStop();
+	void closeSystem();
+	bool onPointerInputStart(const Input::MotionEvent &, Input::DragTrackerState, WindowRect gameRect);
+	bool onPointerInputUpdate(const Input::MotionEvent &, Input::DragTrackerState current, Input::DragTrackerState previous, WindowRect gameRect);
+	bool onPointerInputEnd(const Input::MotionEvent &, Input::DragTrackerState, WindowRect gameRect);
+	void onVKeyboardShown(VControllerKeyboard &, bool shown);
+	VController::KbMap vControllerKeyboardMap(VControllerKbMode mode);
+	VideoSystem videoSystem() const;
+	void renderFramebuffer(EmuVideo &);
+	WP multiresVideoBaseSize() const;
+	double videoAspectRatioScale() const;
+	bool onVideoRenderFormatChange(EmuVideo &, PixelFormat);
+	void onFlushBackupMemory(BackupMemoryDirtyFlags);
+	FS::FileString configName() const;
+	void onOptionsLoaded();
+	void onSessionOptionsLoaded(EmuApp &);
+	bool resetSessionOptions(EmuApp &);
+	void savePathChanged();
+	bool shouldFastForward() const;
+	FS::FileString contentDisplayNameForPath(CStringView path) const;
+	IG::Rotation contentRotation() const;
+
+	ApplicationContext appContext() const { return appCtx; }
 	bool isActive() const { return state == State::ACTIVE; }
 	bool isStarted() const { return state == State::ACTIVE || state == State::PAUSED; }
 	bool isPaused() const { return state == State::PAUSED; }
-	void loadState(EmuApp &, IG::CStringView uri);
-	void loadState(IG::CStringView path);
-	void saveState(IG::CStringView path);
 	bool stateExists(int slot) const;
 	static std::string_view stateSlotName(int slot);
 	std::string_view stateSlotName() { return stateSlotName(stateSlot()); }
@@ -166,7 +218,7 @@ public:
 	void incStateSlot() { if(++saveStateSlot > 9) saveStateSlot = -1; }
 	const char *systemName() const;
 	const char *shortSystemName() const;
-	const BundledGameInfo &bundledGameInfo(unsigned idx) const;
+	const BundledGameInfo &bundledGameInfo(int idx) const;
 	auto contentDirectory() const { return contentDirectory_; }
 	FS::PathString contentDirectory(std::string_view name) const;
 	auto contentLocation() const { return contentLocation_; }
@@ -175,19 +227,17 @@ public:
 	FS::FileString contentFileName() const;
 	std::string contentDisplayName() const;
 	void setContentDisplayName(std::string_view name);
-	FS::FileString contentDisplayNameForPathDefaultImpl(IG::CStringView path);
-	FS::FileString contentDisplayNameForPath(IG::CStringView path);
+	FS::FileString contentDisplayNameForPathDefaultImpl(IG::CStringView path) const;
 	void setInitialLoadPath(IG::CStringView path);
 	FS::PathString fallbackSaveDirectory(bool create = false);
 	FS::PathString contentSaveDirectory() const;
-	FS::PathString contentSavePath(std::string_view name);
+	FS::PathString contentSavePath(std::string_view name) const;
 	const char *contentSaveDirectoryPtr() { return contentSaveDirectory_.data(); }
-	FS::PathString contentSaveFilePath(std::string_view ext);
+	FS::PathString contentSaveFilePath(std::string_view ext) const;
 	FS::PathString userSaveDirectory() const;
 	void setUserSaveDirectory(IG::CStringView path);
 	FS::PathString firmwarePath() const;
 	void setFirmwarePath(std::string_view path);
-	FS::FileString stateFilename(int slot, std::string_view name) const;
 	FS::FileString stateFilename(int slot) const { return stateFilename(slot, contentName_); }
 	FS::PathString statePath(std::string_view filename, std::string_view basePath) const;
 	FS::PathString statePath(std::string_view filename) const;
@@ -197,81 +247,47 @@ public:
 	char saveSlotChar(int slot) const;
 	char saveSlotCharUpper(int slot) const;
 	void flushBackupMemory(BackupMemoryDirtyFlags flags = 0xFF);
-	void onFlushBackupMemory(BackupMemoryDirtyFlags);
 	void onBackupMemoryWritten(BackupMemoryDirtyFlags flags = 0xFF);
 	bool updateBackupMemoryCounter();
-	void savePathChanged();
-	void reset(ResetMode mode);
-	void reset(EmuApp &, ResetMode mode);
-	void initOptions(EmuApp &);
-	FS::FileString configName() const;
-	void onOptionsLoaded();
-	void writeConfig(IO &io);
-	void writeCoreConfig(IO &io);
-	bool readConfig(IO &io, unsigned key, unsigned readSize);
-	bool readCoreConfig(IO &io, unsigned key, unsigned readSize);
-	bool resetSessionOptions(EmuApp &);
 	void sessionOptionSet();
 	void resetSessionOptionsSet() { sessionOptionsSet = false; }
 	bool sessionOptionsAreSet() const { return sessionOptionsSet; }
-	void onSessionOptionsLoaded(EmuApp &);
-	void writeSessionConfig(IO &io);
-	bool readSessionConfig(IO &io, unsigned key, unsigned readSize);
-	void createWithMedia(GenericIO, IG::CStringView path,
+	void createWithMedia(IG::IO, IG::CStringView path,
 		std::string_view displayName, EmuSystemCreateParams, OnLoadProgressDelegate);
-	void loadContent(IO &, EmuSystemCreateParams, OnLoadProgressDelegate);
 	FS::PathString willLoadContentFromPath(std::string_view path, std::string_view displayName);
 	void loadContentFromPath(IG::CStringView path, std::string_view displayName,
 		EmuSystemCreateParams, OnLoadProgressDelegate);
-	void loadContentFromFile(GenericIO, IG::CStringView path, std::string_view displayName,
+	void loadContentFromFile(IG::IO, IG::CStringView path, std::string_view displayName,
 		EmuSystemCreateParams, OnLoadProgressDelegate);
-	[[gnu::hot]] void runFrame(EmuSystemTaskContext task, EmuVideo *video, EmuAudio *audio);
-	void renderFramebuffer(EmuVideo &);
-	bool shouldFastForward();
-	void onPrepareAudio(EmuAudio &);
-	bool onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat);
-	bool vidSysIsPAL();
 	int updateAudioFramesPerVideoFrame();
-	double frameRate();
-	double frameRate(VideoSystem system);
-	IG::FloatSeconds frameTime();
-	IG::FloatSeconds frameTime(VideoSystem system);
-	static IG::FloatSeconds defaultFrameTime(VideoSystem system);
+	double frameRate() const;
+	double frameRate(VideoSystem) const;
+	FloatSeconds frameTime() const;
+	FloatSeconds frameTime(VideoSystem) const;
+	static FloatSeconds defaultFrameTime(VideoSystem system);
 	static bool frameTimeIsValid(VideoSystem system, IG::FloatSeconds time);
 	bool setFrameTime(VideoSystem system, IG::FloatSeconds time);
-	unsigned multiresVideoBaseX();
-	unsigned multiresVideoBaseY();
-	double videoAspectRatioScale();
-	void configAudioRate(IG::FloatSeconds frameTime, uint32_t rate);
 	void configAudioPlayback(EmuAudio &, int rate);
 	void configFrameTime(int rate);
-	void clearInputBuffers(EmuInputView &view);
-	void handleInputAction(EmuApp *, IG::Input::Action state, unsigned emuKey);
-	void handleInputAction(EmuApp *, IG::Input::Action state, unsigned emuKey, uint32_t metaState);
-	unsigned translateInputAction(unsigned input, bool &turbo);
-	unsigned translateInputAction(unsigned input)
-	{
-		bool turbo;
-		return translateInputAction(input, turbo);
-	}
-	bool onPointerInputStart(const Input::MotionEvent &, IG::Input::DragTrackerState, IG::WindowRect gameRect);
-	bool onPointerInputUpdate(const Input::MotionEvent &, IG::Input::DragTrackerState current, IG::Input::DragTrackerState previous, IG::WindowRect gameRect);
-	bool onPointerInputEnd(const Input::MotionEvent &, IG::Input::DragTrackerState, IG::WindowRect gameRect);
-	void onVKeyboardShown(VControllerKeyboard &, bool shown);
 	static bool inputHasTriggers();
 	void setStartFrameTime(IG::FrameTime time);
 	EmuFrameTimeInfo advanceFramesWithTime(IG::FrameTime time);
-	void setSpeedMultiplier(EmuAudio &, uint8_t speed);
+	void setSpeedMultiplier(EmuAudio &, double speed);
 	IG::Time benchmark(EmuVideo &video);
 	bool hasContent() const;
 	void resetFrameTime();
 	void pause(EmuApp &);
 	void start(EmuApp &);
-	void closeSystem();
 	void closeRuntimeSystem(EmuApp &, bool allowAutosaveState = 1);
 	static void throwFileReadError();
 	static void throwFileWriteError();
 	static void throwMissingContentDirError();
+
+	unsigned translateInputAction(unsigned input)
+	{
+		bool turbo;
+		return translateInputAction(input, turbo);
+	}
 
 	//region爱吾
     void setCheatListAiWu(std::list<std::string> cheats);
@@ -303,6 +319,22 @@ protected:
 	void setupContentFilePaths(IG::CStringView filePath, std::string_view displayName);
 	void updateContentSaveDirectory();
 	void closeAndSetupNew(IG::CStringView path, std::string_view displayName);
+
+	static auto &frameTimeVar(auto &self, VideoSystem system)
+	{
+		switch(system)
+		{
+			case VideoSystem::NATIVE_NTSC: return self.frameTimeNative;
+			case VideoSystem::PAL: return self.frameTimePAL;
+		}
+		__builtin_unreachable();
+	}
+	auto &frameTimeVar(VideoSystem system) { return frameTimeVar(*this, system); }
+	auto &frameTimeVar(VideoSystem system) const { return frameTimeVar(*this, system); }
+
+public:
+	IG::OnFrameDelegate onFrameUpdate{};
+	double targetSpeed{1.};
 };
 
 // Global instance access if required by the emulated system, valid if EmuApp::needsGlobalInstance initialized to true

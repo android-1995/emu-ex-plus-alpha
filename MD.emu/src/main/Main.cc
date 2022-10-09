@@ -14,11 +14,8 @@
 	along with MD.emu.  If not, see <http://www.gnu.org/licenses/> */
 
 #define LOGTAG "main"
-#include <emuframework/EmuApp.hh>
-#include <emuframework/EmuInput.hh>
-#include <emuframework/EmuAudio.hh>
 #include <emuframework/EmuAppInlines.hh>
-#include "internal.hh"
+#include <emuframework/EmuSystemInlines.hh>
 #include "system.h"
 #include "loadrom.h"
 #include "md_cart.h"
@@ -52,11 +49,10 @@ namespace EmuEx
 const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2022\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nGenesis Plus Team\ncgfm2.emuviews.com";
 bool EmuSystem::hasCheats = true;
 bool EmuSystem::hasPALVideoSystem = true;
-bool EmuSystem::canRenderRGB565 = RENDER_BPP == 16;
+double EmuSystem::staticFrameTime = (262. * (double)MCYCLES_PER_LINE) / 53693175.; // ~59.92Hz
+double EmuSystem::staticPalFrameTime = (313. * (double)MCYCLES_PER_LINE) / 53203424.; // ~49.70Hz
 bool EmuSystem::canRenderRGBA8888 = RENDER_BPP == 32;
 bool EmuApp::needsGlobalInstance = true;
-int8 mdInputPortDev[2]{-1, -1};
-static unsigned autoDetectedVidSysPAL = 0;
 
 static bool hasBinExtension(std::string_view name)
 {
@@ -74,7 +70,7 @@ bool hasMDExtension(std::string_view name)
 
 static bool hasMDCDExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".cue", ".iso", ".CUE", ".ISO");
+	return IG::stringEndsWithAny(name, ".cue", ".iso", ".chd", ".CUE", ".ISO", ".CHD");
 }
 
 static bool hasMDWithCDExtension(std::string_view name)
@@ -99,7 +95,7 @@ const char *EmuSystem::systemName() const
 EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter = hasMDWithCDExtension;
 EmuSystem::NameFilterFunc EmuSystem::defaultBenchmarkFsFilter = hasMDExtension;
 
-void EmuSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio *audio)
+void MdSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio *audio)
 {
 	//logMsg("frame start");
 	RAMCheatUpdate();
@@ -115,14 +111,14 @@ void EmuSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	//logMsg("frame end");
 }
 
-void EmuSystem::renderFramebuffer(EmuVideo &video)
+void MdSystem::renderFramebuffer(EmuVideo &video)
 {
 	video.startFrameWithAltFormat({}, framebufferRenderFormatPixmap());
 }
 
-bool EmuSystem::vidSysIsPAL() { return vdp_pal; }
+VideoSystem MdSystem::videoSystem() const { return vdp_pal ? VideoSystem::PAL : VideoSystem::NATIVE_NTSC; }
 
-void EmuSystem::reset(ResetMode mode)
+void MdSystem::reset(EmuApp &, ResetMode mode)
 {
 	assert(hasContent());
 	#ifndef NO_SCD
@@ -152,7 +148,7 @@ const char *saveSlotCharAiWu(int slot)
     }
 }
 
-FS::FileString EmuSystem::stateFilename(int slot, std::string_view name) const
+FS::FileString MdSystem::stateFilename(int slot, std::string_view name) const
 {
 	return IG::format<FS::FileString>("{}.{}.gp", name, saveSlotCharAiWu(slot));
 }
@@ -169,7 +165,7 @@ static FS::PathString bramSaveFilename(EmuSystem &sys)
 
 static const unsigned maxSaveStateSize = STATE_SIZE+4;
 
-void EmuSystem::saveState(IG::CStringView path)
+void MdSystem::saveState(IG::CStringView path)
 {
 	auto stateData = std::make_unique<uint8_t[]>(maxSaveStateSize);
 	logMsg("saving state data");
@@ -180,7 +176,7 @@ void EmuSystem::saveState(IG::CStringView path)
 	logMsg("wrote %zu byte state", size);
 }
 
-void EmuSystem::loadState(EmuApp &app, IG::CStringView path)
+void MdSystem::loadState(EmuApp &app, IG::CStringView path)
 {
 	state_load(FileUtils::bufferFromUri(app.appContext(), path).data());
 }
@@ -195,7 +191,7 @@ static bool sramHasContent(std::span<uint8> sram)
 	return false;
 }
 
-void EmuSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
+void MdSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
 {
 	if(!hasContent())
 		return;
@@ -204,7 +200,7 @@ void EmuSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
 	{
 		logMsg("saving BRAM");
 		auto saveStr = bramSaveFilename(*this);
-		auto bramFile = appContext().openFileUri(saveStr, IO::OPEN_NEW | IO::TEST_BIT);
+		auto bramFile = appContext().openFileUri(saveStr, OpenFlagsMask::NEW | OpenFlagsMask::TEST);
 		if(!bramFile)
 			logMsg("error creating bram file");
 		else
@@ -255,7 +251,7 @@ void EmuSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
 	}
 }
 
-void EmuSystem::closeSystem()
+void MdSystem::closeSystem()
 {
 	#ifndef NO_SCD
 	if(sCD.isActive)
@@ -264,97 +260,8 @@ void EmuSystem::closeSystem()
 	}
 	#endif
 	old_system[0] = old_system[1] = -1;
+	input.system[0] = input.system[1] = NO_SYSTEM;
 	clearCheatList();
-}
-
-const char *mdInputSystemToStr(uint8 system)
-{
-	switch(system)
-	{
-		case NO_SYSTEM: return "unconnected";
-		case SYSTEM_MD_GAMEPAD: return "gamepad";
-		case SYSTEM_MS_GAMEPAD: return "sms gamepad";
-		case SYSTEM_MOUSE: return "mouse";
-		case SYSTEM_MENACER: return "menacer";
-		case SYSTEM_JUSTIFIER: return "justifier";
-		case SYSTEM_TEAMPLAYER: return "team-player";
-		default : return "unknown";
-	}
-}
-
-static bool inputPortWasAutoSetByGame(unsigned port)
-{
-	return old_system[port] != -1;
-}
-
-static void setupSMSInput()
-{
-	input.system[0] = input.system[1] =  SYSTEM_MS_GAMEPAD;
-}
-
-void setupMDInput(EmuApp &app)
-{
-	static constexpr std::pair<int, bool> enable6Btn[]{{3, true}, {4, true}, {5, true}};
-	static constexpr std::pair<int, bool> disable6Btn[]{{3, false}, {4, false}, {5, false}};
-	if(!app.system().hasContent())
-	{
-		app.applyEnabledFaceButtons(option6BtnPad ? enable6Btn : disable6Btn);
-		return;
-	}
-
-	IG::fill(playerIdxMap);
-	playerIdxMap[0] = 0;
-	playerIdxMap[1] = 4;
-
-	unsigned mdPad = option6BtnPad ? DEVICE_PAD6B : DEVICE_PAD3B;
-	iterateTimes(4, i)
-		config.input[i].padtype = mdPad;
-
-	if(system_hw == SYSTEM_PBC)
-	{
-		setupSMSInput();
-		io_init();
-		app.applyEnabledFaceButtons(disable6Btn);
-		return;
-	}
-
-	if(cart.special & HW_J_CART)
-	{
-		input.system[0] = input.system[1] = SYSTEM_MD_GAMEPAD;
-		playerIdxMap[2] = 5;
-		playerIdxMap[3] = 6;
-	}
-	else if(optionMultiTap)
-	{
-		input.system[0] = SYSTEM_TEAMPLAYER;
-		input.system[1] = 0;
-
-		playerIdxMap[1] = 1;
-		playerIdxMap[2] = 2;
-		playerIdxMap[3] = 3;
-	}
-	else
-	{
-		iterateTimes(2, i)
-		{
-			if(mdInputPortDev[i] == -1) // user didn't specify device, go with auto settings
-			{
-				if(!inputPortWasAutoSetByGame(i))
-					input.system[i] = SYSTEM_MD_GAMEPAD;
-				else
-				{
-					logMsg("input port %d set by game detection", i);
-					input.system[i] = old_system[i];
-				}
-			}
-			else
-				input.system[i] = mdInputPortDev[i];
-			logMsg("attached %s to port %d%s", mdInputSystemToStr(input.system[i]), i, mdInputPortDev[i] == -1 ? " (auto)" : "");
-		}
-	}
-
-	io_init();
-	app.applyEnabledFaceButtons(option6BtnPad ? enable6Btn : disable6Btn);
 }
 
 static unsigned detectISORegion(uint8 bootSector[0x800])
@@ -387,7 +294,7 @@ FS::PathString EmuSystem::willLoadContentFromPath(std::string_view path, std::st
 	return FS::PathString{path};
 }
 
-void EmuSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegate)
+void MdSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegate)
 {
 	#ifndef NO_SCD
 	using namespace Mednafen;
@@ -453,22 +360,22 @@ void EmuSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 	{
 		vdp_pal = 1;
 	}
-	if(vidSysIsPAL())
+	if(videoSystem() == VideoSystem::PAL)
 		logMsg("using PAL timing");
 
 	system_init();
-	iterateTimes(2, i)
+	for(auto i : iotaCount(2))
 	{
 		if(old_system[i] != -1)
 			old_system[i] = input.system[i]; // store input ports set by game
 	}
-	setupMDInput(EmuApp::get(appContext()));
+	setupInput(EmuApp::get(appContext()));
 
 	#ifndef NO_SCD
 	if(sCD.isActive)
 	{
 		auto saveStr = bramSaveFilename(*this);
-		auto bramFile = appContext().openFileUri(saveStr, IO::AccessHint::ALL, IO::TEST_BIT);
+		auto bramFile = appContext().openFileUri(saveStr, IOAccessHint::ALL, OpenFlagsMask::TEST);
 		if(!bramFile)
 		{
 			logMsg("no BRAM on disk, formatting");
@@ -529,7 +436,7 @@ void EmuSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 	applyCheats();
 }
 
-void EmuSystem::configAudioRate(IG::FloatSeconds frameTime, uint32_t rate)
+void MdSystem::configAudioRate(IG::FloatSeconds frameTime, int rate)
 {
 	audio_init(rate, 1. / frameTime.count());
 	if(hasContent())
@@ -537,7 +444,7 @@ void EmuSystem::configAudioRate(IG::FloatSeconds frameTime, uint32_t rate)
 	logMsg("md sound buffer size %d", snd.buffer_size);
 }
 
-bool EmuSystem::onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat fmt)
+bool MdSystem::onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat fmt)
 {
 	setFramebufferRenderFormat(fmt);
 	return false;
@@ -547,19 +454,12 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 {
 	const Gfx::LGradientStopDesc navViewGrad[] =
 	{
-		{ .0, Gfx::VertexColorPixelFormat.build(.5, .5, .5, 1.) },
-		{ .03, Gfx::VertexColorPixelFormat.build(0., 0., 1. * .4, 1.) },
+		{ .0, Gfx::VertexColorPixelFormat.build(0., 0., 1. * .4, 1.) },
 		{ .3, Gfx::VertexColorPixelFormat.build(0., 0., 1. * .4, 1.) },
 		{ .97, Gfx::VertexColorPixelFormat.build(0., 0., .6 * .4, 1.) },
-		{ 1., Gfx::VertexColorPixelFormat.build(.5, .5, .5, 1.) },
+		{ 1., view.separatorColor() },
 	};
 	view.setBackgroundGradient(navViewGrad);
 }
 
-//region爱吾
-void EmuSystem::setCheatListAiWu(std::list<std::string> cheats)
-{
-    setCheatListForAiWu(*this, cheats);
-}
-//endregion
 }

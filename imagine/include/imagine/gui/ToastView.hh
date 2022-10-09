@@ -32,11 +32,19 @@ public:
 	void setFace(Gfx::GlyphTextureSet &face);
 	void clear();
 	void place() final;
-	void post(IG::utf16String msg, int secs, bool error);
-	void postError(IG::utf16String msg, int secs);
+
+	void post(UTF16Convertible auto &&msg, int secs, bool error)
+	{
+		text.resetString(IG_forward(msg));
+		place();
+		this->error = error;
+		postContent(secs);
+	}
+
+	void postError(UTF16Convertible auto &&msg, int secs) { post(IG_forward(msg), secs, true); }
 	void unpost();
 	void prepareDraw() final;
-	void draw(Gfx::RendererCommands &cmds) final;
+	void draw(Gfx::RendererCommands &__restrict__) final;
 	bool inputEvent(const Input::Event &) final;
 
 private:

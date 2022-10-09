@@ -20,6 +20,7 @@
 #include <imagine/gfx/RendererCommands.hh>
 #include <imagine/util/algorithm.h>
 #include <imagine/util/format.hh>
+#include <imagine/util/string/StaticString.hh>
 #include <imagine/base/Window.hh>
 #include <imagine/base/Screen.hh>
 #include <imagine/logger/logger.h>
@@ -72,7 +73,7 @@ void TestFramework::placeCPUStatsText(Gfx::Renderer &r)
 
 void TestFramework::placeFrameStatsText(Gfx::Renderer &r)
 {
-	if(frameStatsText.compile(r, projP))
+	if(frameStatsText.compile(r, projP, {.maxLineSize = projP.width()}))
 	{
 		frameStatsRect = projP.bounds();
 		frameStatsRect.y2 = (frameStatsRect.y + frameStatsText.nominalHeight() * frameStatsText.currentLines())
@@ -83,7 +84,6 @@ void TestFramework::placeFrameStatsText(Gfx::Renderer &r)
 void TestFramework::place(Gfx::Renderer &r, const Gfx::ProjectionPlane &projP, const Gfx::GCRect &testRect)
 {
 	this->projP = projP;
-	frameStatsText.setMaxLineSize(projP.bounds().xSize());
 	placeCPUStatsText(r);
 	placeFrameStatsText(r);
 	placeTest(testRect);
@@ -112,7 +112,7 @@ void TestFramework::frameUpdate(Gfx::RendererTask &rTask, IG::Window &win, IG::F
 			if(cpuUseStr.size() && cpuFreqStr.size())
 				str += '\n';
 			str += cpuFreqStr;
-			cpuStatsText.setString(str);
+			cpuStatsText.resetString(str);
 			placeCPUStatsText(rTask.renderer());
 		}
 
@@ -155,7 +155,7 @@ void TestFramework::frameUpdate(Gfx::RendererTask &rTask, IG::Window &win, IG::F
 			if(skippedFrameStr.size() && statsStr.size())
 				str += '\n';
 			str += statsStr;
-			frameStatsText.setString(str);
+			frameStatsText.resetString(str);
 			placeFrameStatsText(rTask.renderer());
 		}
 	}
@@ -174,30 +174,30 @@ void TestFramework::prepareDraw(Gfx::Renderer &r)
 void TestFramework::draw(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds, float xIndent)
 {
 	using namespace IG::Gfx;
-	cmds.loadTransform(projP.makeTranslate());
 	drawTest(cmds, bounds);
 	cmds.setClipTest(false);
+	auto &basicEffect = cmds.basicEffect();
 	if(cpuStatsText.isVisible())
 	{
-		cmds.setCommonProgram(CommonProgram::NO_TEX);
-		cmds.setBlendMode(BLEND_MODE_ALPHA);
+		basicEffect.disableTexture(cmds);
+		cmds.set(BlendMode::ALPHA);
 		cmds.setColor(0., 0., 0., .7);
 		GeomRect::draw(cmds, cpuStatsRect);
 		cmds.setColor(1., 1., 1., 1.);
-		cmds.setCommonProgram(CommonProgram::TEX_ALPHA);
-		cpuStatsText.draw(cmds, projP.alignXToPixel(cpuStatsRect.x + xIndent),
-			projP.alignYToPixel(cpuStatsRect.yCenter()), LC2DO, projP);
+		basicEffect.enableAlphaTexture(cmds);
+		cpuStatsText.draw(cmds, {projP.alignXToPixel(cpuStatsRect.x + xIndent),
+			projP.alignYToPixel(cpuStatsRect.yCenter())}, LC2DO, projP);
 	}
 	if(frameStatsText.isVisible())
 	{
-		cmds.setCommonProgram(CommonProgram::NO_TEX);
-		cmds.setBlendMode(BLEND_MODE_ALPHA);
+		basicEffect.disableTexture(cmds);
+		cmds.set(BlendMode::ALPHA);
 		cmds.setColor(0., 0., 0., .7);
 		GeomRect::draw(cmds, frameStatsRect);
 		cmds.setColor(1., 1., 1., 1.);
-		cmds.setCommonProgram(CommonProgram::TEX_ALPHA);
-		frameStatsText.draw(cmds, projP.alignXToPixel(frameStatsRect.x + xIndent),
-			projP.alignYToPixel(frameStatsRect.yCenter()), LC2DO, projP);
+		basicEffect.enableAlphaTexture(cmds);
+		frameStatsText.draw(cmds, {projP.alignXToPixel(frameStatsRect.x + xIndent),
+			projP.alignYToPixel(frameStatsRect.yCenter())}, LC2DO, projP);
 	}
 }
 
@@ -238,8 +238,7 @@ void DrawTest::initTest(IG::ApplicationContext app, Gfx::Renderer &r, IG::WP pix
 {
 	using namespace IG::Gfx;
 	IG::PixmapDesc pixmapDesc = {pixmapSize, IG::PIXEL_FMT_RGB565};
-	TextureConfig texConf{pixmapDesc};
-	texConf.setCompatSampler(&r.make(CommonTextureSampler::NO_MIP_CLAMP));
+	TextureConfig texConf{pixmapDesc, SamplerConfigs::noMipClamp};
 	const bool canSingleBuffer = r.maxSwapChainImages() < 3 || r.supportsSyncFences();
 	texture = r.makePixmapBufferTexture(texConf, bufferMode, canSingleBuffer);
 	if(!texture) [[unlikely]]
@@ -251,8 +250,6 @@ void DrawTest::initTest(IG::ApplicationContext app, Gfx::Renderer &r, IG::WP pix
 	assert(lockedBuff);
 	memset(lockedBuff.pixmap().data(), 0xFF, lockedBuff.pixmap().bytes());
 	texture.unlock(lockedBuff);
-	texture.compileDefaultProgram(IMG_MODE_REPLACE);
-	texture.compileDefaultProgram(IMG_MODE_MODULATE);
 	sprite = {{}, texture};
 }
 
@@ -272,9 +269,7 @@ void DrawTest::drawTest(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds)
 	cmds.clear();
 	cmds.setClipTest(true);
 	cmds.setClipRect(bounds);
-	cmds.setBlendMode(BLEND_MODE_OFF);
-	cmds.set(CommonTextureSampler::NO_MIP_CLAMP);
-	sprite.setCommonProgram(cmds, IMG_MODE_MODULATE);
+	cmds.set(BlendMode::OFF);
 	if(flash)
 	{
 		if(!droppedFrames)
@@ -286,7 +281,7 @@ void DrawTest::drawTest(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds)
 	}
 	else
 		cmds.setColor(0., 0., 0., 1.);
-	sprite.draw(cmds);
+	sprite.draw(cmds, cmds.basicEffect());
 }
 
 void WriteTest::frameUpdateTest(Gfx::RendererTask &rendererTask, IG::Screen &screen, IG::FrameTime frameTime)
@@ -294,7 +289,7 @@ void WriteTest::frameUpdateTest(Gfx::RendererTask &rendererTask, IG::Screen &scr
 	DrawTest::frameUpdateTest(rendererTask, screen, frameTime);
 	rendererTask.clientWaitSync(std::exchange(presentFence, {}));
 	auto lockedBuff = texture.lock();
-	IG::Pixmap pix = lockedBuff.pixmap();
+	auto pix = lockedBuff.pixmap();
 	if(flash)
 	{
 		uint16_t writeColor;
@@ -304,7 +299,7 @@ void WriteTest::frameUpdateTest(Gfx::RendererTask &rendererTask, IG::Screen &scr
 			writeColor = IG::PIXEL_DESC_RGB565.build(.7, .7, .0, 1.);
 		else
 			writeColor = IG::PIXEL_DESC_RGB565.build(.7, .0, .0, 1.);
-		iterateTimes(pix.w() * pix.h(), i)
+		for(auto i : iotaCount(pix.w() * pix.h()))
 		{
 			((uint16_t*)pix.data())[i] = writeColor;
 		}
@@ -322,10 +317,8 @@ void WriteTest::drawTest(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds)
 	cmds.clear();
 	cmds.setClipTest(true);
 	cmds.setClipRect(bounds);
-	cmds.setBlendMode(BLEND_MODE_OFF);
-	cmds.set(CommonTextureSampler::NO_MIP_CLAMP);
-	sprite.setCommonProgram(cmds, IMG_MODE_REPLACE);
-	sprite.draw(cmds);
+	cmds.set(BlendMode::OFF);
+	sprite.draw(cmds, cmds.basicEffect());
 }
 
 }

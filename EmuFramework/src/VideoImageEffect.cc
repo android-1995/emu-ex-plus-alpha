@@ -81,7 +81,6 @@ static Gfx::Shader makeEffectFragmentShader(Gfx::Renderer &r, std::string_view s
 	std::string_view shaderSrc[]
 	{
 		"#define TEXTURE texture\n",
-		"FRAGCOLOR_DEF\n",
 		"uniform sampler2D TEX;\n",
 		src
 	};
@@ -99,14 +98,14 @@ static PixelFormat effectFormat(IG::PixelFormat format, Gfx::ColorSpace colSpace
 }
 
 VideoImageEffect::VideoImageEffect(Gfx::Renderer &r, Id effect, IG::PixelFormat fmt, Gfx::ColorSpace colSpace,
-	const Gfx::TextureSampler &compatTexSampler, IG::WP size):
+	Gfx::TextureSamplerConfig samplerConf, IG::WP size):
 		inputImgSize{size}, format{effectFormat(fmt, colSpace)}, colorSpace{colSpace}
 {
 	logMsg("compiling effect:%s", effectName(effect));
-	compile(r, effectDesc(effect), compatTexSampler);
+	compile(r, effectDesc(effect), samplerConf);
 }
 
-void VideoImageEffect::initRenderTargetTexture(Gfx::Renderer &r, const Gfx::TextureSampler &compatTexSampler)
+void VideoImageEffect::initRenderTargetTexture(Gfx::Renderer &r, Gfx::TextureSamplerConfig samplerConf)
 {
 	if(!renderTargetScale.x)
 		return;
@@ -115,16 +114,15 @@ void VideoImageEffect::initRenderTargetTexture(Gfx::Renderer &r, const Gfx::Text
 	IG::PixmapDesc renderPix{renderTargetImgSize, format};
 	if(!renderTarget_)
 	{
-		Gfx::TextureConfig conf{renderPix, &compatTexSampler};
-		conf.setColorSpace(colorSpace);
+		Gfx::TextureConfig conf{renderPix, samplerConf};
+		conf.colorSpace = colorSpace;
 		renderTarget_ = r.makeTexture(conf);
 	}
 	else
-		renderTarget_.setFormat(renderPix, 1, colorSpace, &compatTexSampler);
-	r.make(Gfx::CommonTextureSampler::NO_LINEAR_NO_MIP_CLAMP);
+		renderTarget_.setFormat(renderPix, 1, colorSpace, samplerConf);
 }
 
-void VideoImageEffect::compile(Gfx::Renderer &r, EffectDesc desc, const Gfx::TextureSampler &compatTexSampler)
+void VideoImageEffect::compile(Gfx::Renderer &r, EffectDesc desc, Gfx::TextureSamplerConfig samplerConf)
 {
 	if(program())
 		return; // already compiled
@@ -134,7 +132,7 @@ void VideoImageEffect::compile(Gfx::Renderer &r, EffectDesc desc, const Gfx::Tex
 		return;
 	}
 	renderTargetScale = desc.scale;
-	initRenderTargetTexture(r, compatTexSampler);
+	initRenderTargetTexture(r, samplerConf);
 	try
 	{
 		compileEffect(r, desc, false);
@@ -163,7 +161,7 @@ void VideoImageEffect::compileEffect(Gfx::Renderer &r, EffectDesc desc, bool use
 
 	auto vShader = makeEffectVertexShader(r,
 		ctx.openAsset(IG::format<FS::PathString>("shaders/{}{}", fallbackStr, desc.vShaderFilename),
-			IO::AccessHint::ALL).buffer().stringView());
+			IOAccessHint::ALL).buffer().stringView());
 	if(!vShader)
 	{
 		throw std::runtime_error{"GPU rejected shader (vertex compile error)"};
@@ -171,34 +169,36 @@ void VideoImageEffect::compileEffect(Gfx::Renderer &r, EffectDesc desc, bool use
 
 	auto fShader = makeEffectFragmentShader(r,
 		ctx.openAsset(IG::format<FS::PathString>("shaders/{}{}", fallbackStr, desc.fShaderFilename),
-		IO::AccessHint::ALL).buffer().stringView());
+		IOAccessHint::ALL).buffer().stringView());
 	if(!fShader)
 	{
 		throw std::runtime_error{"GPU rejected shader (fragment compile error)"};
 	}
-
-	prog = {r.task(), vShader, fShader, false, true};
+	Gfx::UniformLocationDesc uniformDescs[]
+	{
+		{"srcTexelDelta", &srcTexelDeltaU},
+		{"srcTexelHalfDelta", &srcTexelHalfDeltaU},
+		{"srcPixels", &srcPixelsU},
+	};
+	prog = {r.task(), vShader, fShader, Gfx::ProgramFlagsMask::HAS_TEXTURE, uniformDescs};
 	if(!prog)
 	{
 		throw std::runtime_error{"GPU rejected shader (link error)"};
 	}
-	srcTexelDeltaU = prog.uniformLocation("srcTexelDelta");
-	srcTexelHalfDeltaU = prog.uniformLocation("srcTexelHalfDelta");
-	srcPixelsU = prog.uniformLocation("srcPixels");
 	updateProgramUniforms(r);
 }
 
 void VideoImageEffect::updateProgramUniforms(Gfx::Renderer &r)
 {
 	if(srcTexelDeltaU != -1)
-		r.uniformF(prog, srcTexelDeltaU, 1.0f / (float)inputImgSize.x, 1.0f / (float)inputImgSize.y);
+		prog.uniform(srcTexelDeltaU, 1.0f / (float)inputImgSize.x, 1.0f / (float)inputImgSize.y);
 	if(srcTexelHalfDeltaU != -1)
-		r.uniformF(prog, srcTexelHalfDeltaU, 0.5f * (1.0f / (float)inputImgSize.x), 0.5f * (1.0f / (float)inputImgSize.y));
+		prog.uniform(srcTexelHalfDeltaU, 0.5f * (1.0f / (float)inputImgSize.x), 0.5f * (1.0f / (float)inputImgSize.y));
 	if(srcPixelsU != -1)
-		r.uniformF(prog, srcPixelsU, inputImgSize.x, inputImgSize.y);
+		prog.uniform(srcPixelsU, (float)inputImgSize.x, (float)inputImgSize.y);
 }
 
-void VideoImageEffect::setImageSize(Gfx::Renderer &r, IG::WP size, const Gfx::TextureSampler &compatTexSampler)
+void VideoImageEffect::setImageSize(Gfx::Renderer &r, IG::WP size, Gfx::TextureSamplerConfig samplerConf)
 {
 	if(size == IG::WP{0, 0})
 		return;
@@ -207,17 +207,17 @@ void VideoImageEffect::setImageSize(Gfx::Renderer &r, IG::WP size, const Gfx::Te
 	inputImgSize = size;
 	if(program())
 		updateProgramUniforms(r);
-	initRenderTargetTexture(r, compatTexSampler);
+	initRenderTargetTexture(r, samplerConf);
 }
 
-void VideoImageEffect::setFormat(Gfx::Renderer &r,IG::PixelFormat fmt, Gfx::ColorSpace colSpace, const Gfx::TextureSampler &compatTexSampler)
+void VideoImageEffect::setFormat(Gfx::Renderer &r,IG::PixelFormat fmt, Gfx::ColorSpace colSpace, Gfx::TextureSamplerConfig samplerConf)
 {
 	fmt = effectFormat(fmt, colSpace);
 	if(format == fmt && colorSpace == colSpace)
 		return;
 	format = fmt;
 	colorSpace = colSpace;
-	initRenderTargetTexture(r, compatTexSampler);
+	initRenderTargetTexture(r, samplerConf);
 }
 
 Gfx::Program &VideoImageEffect::program()
@@ -232,18 +232,14 @@ Gfx::Texture &VideoImageEffect::renderTarget()
 
 void VideoImageEffect::drawRenderTarget(Gfx::RendererCommands &cmds, const Gfx::TextureSpan span)
 {
-	auto viewport = Gfx::Viewport::makeFromRect({{}, renderTargetImgSize});
-	cmds.setViewport(viewport);
-	cmds.set(Gfx::CommonTextureSampler::NO_LINEAR_NO_MIP_CLAMP);
+	cmds.setViewport(renderTargetImgSize);
 	Gfx::Sprite spr{{{-1., -1.}, {1., 1.}}, {span.texture(), {{0., 1.}, {1., 0.}}}};
 	spr.draw(cmds);
 }
 
-void VideoImageEffect::setCompatTextureSampler(const Gfx::TextureSampler &compatTexSampler)
+void VideoImageEffect::setSampler(Gfx::TextureSamplerConfig samplerConf)
 {
-	if(!renderTarget_)
-		return;
-	renderTarget_.setCompatTextureSampler(compatTexSampler);
+	renderTarget_.setSampler(samplerConf);
 }
 
 }
