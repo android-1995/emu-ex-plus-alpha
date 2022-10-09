@@ -152,4 +152,3 @@ void emulateSound(EmuAudio *audio);
 void setRegion(int region, int defaultRegion, int detectedRegion);
 
 }
-}
