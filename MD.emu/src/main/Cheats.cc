@@ -30,6 +30,7 @@
 #include "md_cart.h"
 #include "genesis.h"
 #include <ranges>
+#include "MainSystem.hh"
 
 namespace EmuEx
 {
@@ -709,28 +710,27 @@ static std::vector<std::string> split(std::string s,char ch)
     return ret;
 }
 
-void setCheatListForAiWu(EmuSystem &sys, std::list<std::string> cheats)
+void MdSystem::setCheatListAiWu(std::list<std::string> cheats)
 {
-    if(sys.hasContent())
+    if(!hasContent())
+        return;
+    //先清空原来的金手指
+    clearCheatList();
+    //再添加新的金手指
+    for (std::list<std::string>::iterator it = cheats.begin(); it != cheats.end(); it++)
     {
-        //先清空原来的金手指
-        clearCheatList();
-        //再添加新的金手指
-        for (std::list<std::string>::iterator it = cheats.begin(); it != cheats.end(); it++)
+        std::string& cheat = *it;
+        MdCheat c;
+        c.code = IG::stringToUpper<decltype(c.code)>(cheat.c_str());
+        if(!decodeCheat(c.code.data(), c.address, c.data, c.origData))
         {
-            std::string& cheat = *it;
-            MdCheat c;
-            c.code = IG::stringToUpper<decltype(c.code)>(cheat.c_str());
-            if(!decodeCheat(c.code.data(), c.address, c.data, c.origData))
-			{
-				continue;
-			}
-			c.name = "Unnamed Cheat";
-			c.toggleOn();
-			cheatList.push_back(c);
+            continue;
         }
-        updateCheats();
+        c.name = "Unnamed Cheat";
+        c.toggleOn();
+        cheatList.push_back(c);
     }
+    updateCheats();
 }
 //endregion
 }
