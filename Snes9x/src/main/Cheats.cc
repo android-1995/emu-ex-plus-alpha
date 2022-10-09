@@ -495,8 +495,8 @@ void Snes9xSystem::setCheatListAiWu(std::list<std::string> cheats)
         std::string& cheat = *it;
         addCheat(cheat.c_str());
     }
-    auto numCheats = numCheats();
-    for (int i = 0; i < numCheats; i++)
+    int count = numCheats();
+    for (int i = 0; i < count; i++)
     {
         enableCheat(i);
     }
