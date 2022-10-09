@@ -283,7 +283,12 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 	};
 	view.setBackgroundGradient(navViewGrad);
 }
-
+//region爱吾
+void Snes9xSystem::setCheatListAiWu(std::list<std::string> cheats)
+{
+    setCheatListForAiWu(cheats);
+}
+//endregion
 }
 
 #ifndef SNES9X_VERSION_1_4

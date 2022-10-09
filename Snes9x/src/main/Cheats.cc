@@ -6,7 +6,6 @@
 #include "EmuCheatViews.hh"
 #include <cheats.h>
 #include <imagine/util/format.hh>
-#include "MainSystem.hh"
 
 namespace EmuEx
 {
@@ -485,7 +484,7 @@ void EmuCheatsView::loadCheatItems()
 }
 
 //region爱吾
-void Snes9xSystem::setCheatListAiWu(std::list<std::string> cheats)
+void setCheatListForAiWu(std::list<std::string> cheats)
 {
     //先清空原来的金手指
     S9xDeleteCheats();

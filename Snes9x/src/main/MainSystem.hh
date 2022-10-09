@@ -144,7 +144,9 @@ inline Snes9xSystem &gSnes9xSystem() { return static_cast<Snes9xSystem&>(gSystem
 void setSuperFXSpeedMultiplier(unsigned val);
 
 uint32_t numCheats();
-
+//region爱吾
+void setCheatListForAiWu(std::list<std::string> cheats);
+//endregion
 }
 
 #ifndef SNES9X_VERSION_1_4
