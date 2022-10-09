@@ -22,6 +22,7 @@
 #include <imagine/fs/FS.hh>
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/gfx/RendererCommands.hh>
+#include <imagine/gfx/BasicEffect.hh>
 #include <imagine/logger/logger.h>
 #include <imagine/util/math/int.hh>
 #include <imagine/util/format.hh>
@@ -39,20 +40,19 @@ FSPicker::FSPicker(ViewAttachParams attach, Gfx::TextureSpan backRes, Gfx::Textu
 	msgText{face_ ? face_ : &defaultFace()},
 	mode_{mode}
 {
-	const Gfx::LGradientStopDesc fsNavViewGrad[]
-	{
-		{ .0, Gfx::VertexColorPixelFormat.build(.5, .5, .5, 1.) },
-		{ .03, Gfx::VertexColorPixelFormat.build(1. * .4, 1. * .4, 1. * .4, 1.) },
-		{ .3, Gfx::VertexColorPixelFormat.build(1. * .4, 1. * .4, 1. * .4, 1.) },
-		{ .97, Gfx::VertexColorPixelFormat.build(.35 * .4, .35 * .4, .35 * .4, 1.) },
-		{ 1., Gfx::VertexColorPixelFormat.build(.5, .5, .5, 1.) },
-	};
 	auto nav = makeView<BasicNavView>
 		(
 			&face(),
 			isSingleDirectoryMode() ? nullptr : backRes,
 			closeRes
 		);
+	const Gfx::LGradientStopDesc fsNavViewGrad[]
+	{
+		{ .0, Gfx::VertexColorPixelFormat.build(1. * .4, 1. * .4, 1. * .4, 1.) },
+		{ .3, Gfx::VertexColorPixelFormat.build(1. * .4, 1. * .4, 1. * .4, 1.) },
+		{ .97, Gfx::VertexColorPixelFormat.build(.35 * .4, .35 * .4, .35 * .4, 1.) },
+		{ 1., nav->separatorColor() },
+	};
 	nav->setBackgroundGradient(fsNavViewGrad);
 	nav->setCenterTitle(false);
 	nav->setOnPushLeftBtn(
@@ -79,7 +79,7 @@ FSPicker::FSPicker(ViewAttachParams attach, Gfx::TextureSpan backRes, Gfx::Textu
 
 void FSPicker::place()
 {
-	controller.place(viewRect(), projP);
+	controller.place(viewRect(), displayRect(), projP);
 	if(dirListThread.isWorking())
 		return;
 	msgText.compile(renderer(), projP);
@@ -156,7 +156,7 @@ void FSPicker::prepareDraw()
 	msgText.makeGlyphs(renderer());
 }
 
-void FSPicker::draw(Gfx::RendererCommands &cmds)
+void FSPicker::draw(Gfx::RendererCommands &__restrict__ cmds)
 {
 	if(!dirListThread.isWorking())
 	{
@@ -168,7 +168,7 @@ void FSPicker::draw(Gfx::RendererCommands &cmds)
 		{
 			using namespace IG::Gfx;
 			cmds.set(ColorName::WHITE);
-			cmds.setCommonProgram(CommonProgram::TEX_ALPHA, projP.makeTranslate());
+			cmds.basicEffect().enableAlphaTexture(cmds);
 			auto textRect = controller.top().viewRect();
 			if(IG::isOdd(textRect.ySize()))
 				textRect.y2--;
@@ -183,22 +183,27 @@ void FSPicker::onAddedToController(ViewController *, const Input::Event &e)
 	controller.top().onAddedToController(&controller, e);
 }
 
-void FSPicker::setEmptyPath()
+void FSPicker::setEmptyPath(std::string_view message)
 {
 	logMsg("setting empty path");
 	dirListThread.stop();
 	dirListEvent.cancel();
 	root = {};
 	dir.clear();
-	msgText.setString("No folder is set");
+	msgText.resetString(message);
 	if(mode_ == Mode::FILE_IN_DIR)
 	{
-		fileTableView().setName({});
+		fileTableView().resetName();
 	}
 	else
 	{
-		fileTableView().setName("Select File Location");
+		fileTableView().resetName("选择文件位置");
 	}
+}
+
+void FSPicker::setEmptyPath()
+{
+	setEmptyPath("未设置文件夹");
 }
 
 void FSPicker::setPath(IG::CStringView path, FS::RootPathInfo rootInfo, const Input::Event &e)
@@ -244,7 +249,7 @@ void FSPicker::setPath(IG::CStringView path, FS::RootPathInfo rootInfo, const In
 	{
 		rootedPath = IG::decodeUri<FS::PathString>(rootedPath);
 	}
-	fileTableView().setName(rootedPath);
+	fileTableView().resetName(rootedPath);
 	onChangePath_.callSafe(*this, e);
 }
 
@@ -320,6 +325,43 @@ void FSPicker::pushFileLocationsView(const Input::Event &e)
 
 	int customItems = 1 + Config::envIsLinux + appContext().hasSystemPathPicker() + appContext().hasSystemDocumentPicker();
 	auto view = makeView<FileLocationsTextTableView>(appContext().rootFileLocations(), customItems);
+	static constexpr std::string_view failedSystemPickerMsg = "This device doesn't have a document browser, please select a media folder instead";
+	if(appContext().hasSystemPathPicker())
+	{
+		view->appendItem("选择文件夹",
+			[this](View &view, const Input::Event &e)
+			{
+				if(!appContext().showSystemPathPicker(
+					[this, &view](IG::CStringView uri, IG::CStringView displayName)
+					{
+						view.dismiss();
+						if(mode_ == Mode::DIR)
+							onSelectPath_.callCopy(*this, uri, displayName, appContext().defaultInputEvent());
+						else
+							changeDirByInput(uri, appContext().rootPathInfo(uri), appContext().defaultInputEvent());
+					}))
+				{
+					setEmptyPath(failedSystemPickerMsg);
+					view.dismiss();
+				}
+			});
+	}
+	if(mode_ != Mode::DIR && appContext().hasSystemDocumentPicker())
+	{
+		view->appendItem("选择文件",
+			[this](View &view, const Input::Event &e)
+			{
+				if(!appContext().showSystemDocumentPicker(
+					[this, &view](IG::CStringView uri, IG::CStringView displayName)
+					{
+						onSelectPath_.callCopy(*this, uri, displayName, appContext().defaultInputEvent());
+					}))
+				{
+					setEmptyPath(failedSystemPickerMsg);
+					view.dismiss();
+				}
+			});
+	}
 	for(auto &loc : view->locations())
 	{
 		view->appendItem(loc.description,
@@ -337,46 +379,18 @@ void FSPicker::pushFileLocationsView(const Input::Event &e)
 	}
 	if(Config::envIsLinux)
 	{
-		view->appendItem("文件系统根目录",
+		view->appendItem("Root Filesystem",
 			[this](View &view, const Input::Event &e)
 			{
 				changeDirByInput("/", {}, e);
 				view.dismiss();
 			});
 	}
-	if(appContext().hasSystemPathPicker())
-	{
-		view->appendItem("浏览文件夹",
-			[this](View &view, const Input::Event &e)
-			{
-				appContext().showSystemPathPicker(
-					[this, &view](IG::CStringView uri, IG::CStringView displayName)
-					{
-						view.dismiss();
-						if(mode_ == Mode::DIR)
-							onSelectPath_.callCopy(*this, uri, displayName, appContext().defaultInputEvent());
-						else
-							changeDirByInput(uri, appContext().rootPathInfo(uri), appContext().defaultInputEvent());
-					});
-			});
-	}
-	if(mode_ != Mode::DIR && appContext().hasSystemDocumentPicker())
-	{
-		view->appendItem("浏览文件",
-			[this](View &view, const Input::Event &e)
-			{
-				appContext().showSystemDocumentPicker(
-					[this, &view](IG::CStringView uri, IG::CStringView displayName)
-					{
-						onSelectPath_.callCopy(*this, uri, displayName, appContext().defaultInputEvent());
-					});
-			});
-	}
 	view->appendItem("自定义路径",
 		[this](const Input::Event &e)
 		{
 			auto textInputView = makeView<CollectTextInputView>(
-				"输入目录路径", root.path, nullptr,
+				"输入文件夹路径", root.path, nullptr,
 				[this](CollectTextInputView &view, const char *str)
 				{
 					if(!str || !strlen(str))
@@ -515,11 +529,11 @@ void FSPicker::listDirectory(IG::CStringView path, ThreadStop &stop)
 						});
 				}
 			}
-			msgText.setString({});
+			msgText.resetString();
 		}
 		else // no entries, show a message instead
 		{
-			msgText.setString("空目录");
+			msgText.resetString("空的文件夹");
 		}
 	}
 	catch(std::system_error &err)
@@ -527,7 +541,7 @@ void FSPicker::listDirectory(IG::CStringView path, ThreadStop &stop)
 		logErr("can't open %s", path.data());
 		auto ec = err.code();
 		std::string_view extraMsg = mode_ == Mode::FILE_IN_DIR ? "" : "\n从顶部栏中选择一条路径";
-		msgText.setString(fmt::format("无法打开目录:\n{}{}", ec.message(), extraMsg));
+		msgText.resetString(fmt::format("无法打开目录:\n{}{}", ec.message(), extraMsg));
 	}
 }
 

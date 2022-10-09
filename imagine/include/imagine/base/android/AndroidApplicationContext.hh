@@ -16,16 +16,16 @@
 	along with Imagine.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <imagine/config/defs.hh>
+#include <android/native_activity.h>
 #include <jni.h>
 #include <array>
 
 struct ANativeActivity;
 struct AAssetManager;
 
-namespace IG
+namespace IG::FS
 {
-class PixelFormat;
-class Pixmap;
+struct PathLocation;
 }
 
 namespace IG
@@ -40,37 +40,29 @@ enum class SustainedPerformanceType
 	NOOP
 };
 
-enum SurfaceRotation : uint8_t;
-
 class AndroidApplicationContext
 {
 public:
 	constexpr AndroidApplicationContext() = default;
 	constexpr AndroidApplicationContext(ANativeActivity *act):act{act} {}
 	constexpr ANativeActivity *aNativeActivityPtr() const { return act; }
-	void setApplicationPtr(Application*);
-	Application &application() const;
+	void setApplicationPtr(auto *appPtr) { act->instance = appPtr; }
+	Application &application() const { return *static_cast<Application*>(act->instance); }
 	JNIEnv *mainThreadJniEnv() const;
 	JNIEnv *thisThreadJniEnv() const;
-	int32_t androidSDK() const;
 	jobject baseActivityObject() const;
 	AAssetManager *aAssetManager() const;
 	std::string androidBuildDevice() const;
 	SustainedPerformanceType sustainedPerformanceModeType() const;
 	void setSustainedPerformanceMode(bool on);
-	bool apkSignatureIsConsistent() const;
+	FS::PathLocation externalMediaPathLocation() const;
 
 	// Input system functions
-	void enumInputDevices() const;
 	bool hasTrackball() const;
 
 protected:
 	ANativeActivity *act{};
 };
-
-IG::PixelFormat makePixelFormatFromAndroidFormat(int32_t androidFormat);
-IG::Pixmap makePixmapView(JNIEnv *env, jobject bitmap, void *pixels, IG::PixelFormat format);
-
 
 using ApplicationContextImpl = AndroidApplicationContext;
 

@@ -97,21 +97,21 @@ IG::Point2D<float> Window::pixelSizeAsScaledMM(IG::Point2D<int> size)
 	return {((float)size.x / densityDPI) * 25.4f, ((float)size.y / densityDPI) * 25.4f};
 }
 
-bool Window::setValidOrientations(Orientation oMask)
+bool Window::setValidOrientations(OrientationMask oMask)
 {
-	logMsg("requested orientation change to %s", orientationToStr(oMask));
-	auto maskToOrientation = [](Orientation oMask)
+	logMsg("requested orientation change to %s", asString(oMask).data());
+	auto maskToOrientation = [](OrientationMask oMask)
 		{
 			switch(oMask)
 			{
 				default: return -1; // SCREEN_ORIENTATION_UNSPECIFIED
-				case VIEW_ROTATE_0: return 1; // SCREEN_ORIENTATION_PORTRAIT
-				case VIEW_ROTATE_90: return 0; // SCREEN_ORIENTATION_LANDSCAPE
-				case VIEW_ROTATE_180: return 9; // SCREEN_ORIENTATION_REVERSE_PORTRAIT
-				case VIEW_ROTATE_270: return 8; // SCREEN_ORIENTATION_REVERSE_LANDSCAPE
-				case VIEW_ROTATE_90 | VIEW_ROTATE_270: return 6; // SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-				case VIEW_ROTATE_0 | VIEW_ROTATE_180: return 7; // SCREEN_ORIENTATION_SENSOR_PORTRAIT
-				case VIEW_ROTATE_ALL: return 10; // SCREEN_ORIENTATION_FULL_SENSOR
+				case OrientationMask::PORTRAIT: return 1; // SCREEN_ORIENTATION_PORTRAIT
+				case OrientationMask::LANDSCAPE_RIGHT: return 0; // SCREEN_ORIENTATION_LANDSCAPE
+				case OrientationMask::PORTRAIT_UPSIDE_DOWN: return 9; // SCREEN_ORIENTATION_REVERSE_PORTRAIT
+				case OrientationMask::LANDSCAPE_LEFT: return 8; // SCREEN_ORIENTATION_REVERSE_LANDSCAPE
+				case OrientationMask::ALL_LANDSCAPE: return 6; // SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+				case OrientationMask::ALL_PORTRAIT: return 7; // SCREEN_ORIENTATION_SENSOR_PORTRAIT
+				case OrientationMask::ALL: return 10; // SCREEN_ORIENTATION_FULL_SENSOR
 			}
 		};
 	int toSet = maskToOrientation(oMask);
@@ -119,7 +119,7 @@ bool Window::setValidOrientations(Orientation oMask)
 	return true;
 }
 
-bool Window::requestOrientationChange(Orientation o)
+bool Window::requestOrientationChange(Rotation o)
 {
 	// no-op, OS manages orientation changes
 	return false;
@@ -154,11 +154,10 @@ Window::Window(ApplicationContext ctx, WindowConfig config, InitDelegate onInit_
 		type = Type::MAIN;
 		logMsg("made device window:%p", (jobject)jWin);
 	}
-	nPixelFormat = config.format() ? config.format() : toAHardwareBufferFormat(ctx.defaultWindowPixelFormat());
+	nPixelFormat = config.nativeFormat ? config.nativeFormat : toAHardwareBufferFormat(ctx.defaultWindowPixelFormat());
 	// default to screen's size
 	updateSize({screen.width(), screen.height()});
-	contentRect.x2 = width();
-	contentRect.y2 = height();
+	contentRect = {{0, 0}, {width(), height()}};
 	onInit = onInit_;
 }
 
@@ -183,20 +182,14 @@ void Window::show()
 	postDraw();
 }
 
-IG::WindowRect Window::contentBounds() const
+WindowRect Window::contentBounds() const
 {
-	return contentRect;
+	return contentRect.value();
 }
 
 bool Window::hasSurface() const
 {
 	return nWin;
-}
-
-void AndroidWindow::updateContentRect(const IG::WindowRect &rect)
-{
-	contentRect = rect;
-	surfaceChangeFlags |= WindowSurfaceChange::CONTENT_RECT_RESIZED;
 }
 
 bool Window::operator ==(Window const &rhs) const
@@ -215,6 +208,7 @@ void AndroidWindow::setNativeWindow(ApplicationContext ctx, ANativeWindow *nWind
 	if(nWin)
 	{
 		nWin = nullptr;
+		contentRect.cancel();
 		thisWindow.dispatchSurfaceDestroyed();
 	}
 	if(!nWindow)
@@ -331,13 +325,25 @@ void AndroidWindow::systemRequestsRedraw(bool sync)
 	}
 }
 
-void AndroidWindow::setContentRect(const IG::WindowRect &rect, const IG::Point2D<int> &winSize)
+void AndroidWindow::setContentRect(WindowRect rect, WP winSize)
 {
 	logMsg("content rect changed: %d:%d:%d:%d in %dx%d",
 		rect.x, rect.y, rect.x2, rect.y2, winSize.x, winSize.y);
-	updateContentRect(rect);
 	auto &win = *static_cast<Window*>(this);
-	win.updateSize(winSize);
+	if(win.updateSize(winSize))
+	{
+		contentRect = rect;
+		surfaceChangeFlags |= WindowSurfaceChange::CONTENT_RECT_RESIZED;
+	}
+	else
+	{
+		contentRect.start(*static_cast<Window*>(this), contentRect.value(), rect, Milliseconds{165},
+			[](auto &win, auto newRect)
+			{
+				win.surfaceChangeFlags |= WindowSurfaceChange::CONTENT_RECT_RESIZED;
+				win.setNeedsDraw(true);
+			});
+	}
 	win.postDraw();
 }
 
@@ -347,7 +353,7 @@ void Window::setAcceptDnd(bool on) {}
 
 void WindowConfig::setFormat(IG::PixelFormat fmt)
 {
-	setFormat(toAHardwareBufferFormat(fmt));
+	nativeFormat = toAHardwareBufferFormat(fmt);
 }
 
 }

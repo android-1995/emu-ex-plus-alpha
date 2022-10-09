@@ -38,7 +38,7 @@ void EmuVideo::resetImage(IG::PixelFormat newFmt)
 
 IG::PixmapDesc EmuVideo::deleteImage()
 {
-	auto desc = vidImg.usedPixmapDesc();
+	auto desc = vidImg.pixmapDesc();
 	vidImg = {};
 	return desc;
 }
@@ -68,13 +68,13 @@ bool EmuVideo::setFormat(IG::PixmapDesc desc, EmuSystemTaskContext taskCtx)
 	}
 	if(!vidImg)
 	{
-		Gfx::TextureConfig conf{desc, texSampler};
-		conf.setColorSpace(colSpace);
+		Gfx::TextureConfig conf{desc, samplerConfig()};
+		conf.colorSpace = colSpace;
 		vidImg = renderer().makePixmapBufferTexture(conf, bufferMode, singleBuffer);
 	}
 	else
 	{
-		vidImg.setFormat(desc, colSpace, texSampler);
+		vidImg.setFormat(desc, colSpace, samplerConfig());
 	}
 	logMsg("resized to:%dx%d", desc.w(), desc.h());
 	if(taskCtx)
@@ -105,7 +105,7 @@ EmuVideoImage EmuVideo::startFrame(EmuSystemTaskContext taskCtx)
 	return {taskCtx, *this, lockedTex};
 }
 
-void EmuVideo::startFrame(EmuSystemTaskContext taskCtx, IG::Pixmap pix)
+void EmuVideo::startFrame(EmuSystemTaskContext taskCtx, IG::PixmapView pix)
 {
 	finishFrame(taskCtx, pix);
 }
@@ -116,13 +116,13 @@ EmuVideoImage EmuVideo::startFrameWithFormat(EmuSystemTaskContext taskCtx, IG::P
 	return startFrame(taskCtx);
 }
 
-void EmuVideo::startFrameWithFormat(EmuSystemTaskContext taskCtx, IG::Pixmap pix)
+void EmuVideo::startFrameWithFormat(EmuSystemTaskContext taskCtx, IG::PixmapView pix)
 {
-	setFormat(pix, taskCtx);
+	setFormat(pix.desc(), taskCtx);
 	startFrame(taskCtx, pix);
 }
 
-void EmuVideo::startFrameWithAltFormat(EmuSystemTaskContext taskCtx, IG::Pixmap pix)
+void EmuVideo::startFrameWithAltFormat(EmuSystemTaskContext taskCtx, IG::PixmapView pix)
 {
 	auto destFmt = renderPixelFormat();
 	assumeExpr(isValidRenderFormat(pix.format()));
@@ -169,7 +169,7 @@ void EmuVideo::finishFrame(EmuSystemTaskContext taskCtx, Gfx::LockedTextureBuffe
 	postFrameFinished(taskCtx);
 }
 
-void EmuVideo::finishFrame(EmuSystemTaskContext taskCtx, IG::Pixmap pix)
+void EmuVideo::finishFrame(EmuSystemTaskContext taskCtx, IG::PixmapView pix)
 {
 	if(screenshotNextFrame) [[unlikely]]
 	{
@@ -208,7 +208,7 @@ void EmuVideo::takeGameScreenshotAiWu(const char *filepath)
 }
 //endregion
 
-void EmuVideo::doScreenshot(EmuSystemTaskContext taskCtx, IG::Pixmap pix)
+void EmuVideo::doScreenshot(EmuSystemTaskContext taskCtx, IG::PixmapView pix)
 {
 	screenshotNextFrame = false;
     //region 爱吾
@@ -246,11 +246,10 @@ void EmuVideo::doScreenshot(EmuSystemTaskContext taskCtx, IG::Pixmap pix)
 
 bool EmuVideo::isExternalTexture() const
 {
-	#ifdef __ANDROID__
-	return vidImg.isExternal();
-	#else
-	return false;
-	#endif
+	if constexpr(Config::envIsAndroid)
+		return vidImg.isExternal();
+	else
+		return false;
 }
 
 Gfx::PixmapBufferTexture &EmuVideo::image()
@@ -271,7 +270,7 @@ IG::ApplicationContext EmuVideo::appContext() const
 EmuVideoImage::EmuVideoImage(EmuSystemTaskContext taskCtx, EmuVideo &vid, Gfx::LockedTextureBuffer texBuff):
 	taskCtx{taskCtx}, emuVideo{&vid}, texBuff{texBuff} {}
 
-IG::Pixmap EmuVideoImage::pixmap() const
+IG::MutablePixmapView EmuVideoImage::pixmap() const
 {
 	return texBuff.pixmap();
 }
@@ -292,12 +291,12 @@ IG::WP EmuVideo::size() const
 	if(!vidImg)
 		return {1, 1};
 	else
-		return vidImg.usedPixmapDesc().size();
+		return vidImg.pixmapDesc().size();
 }
 
 bool EmuVideo::formatIsEqual(IG::PixmapDesc desc) const
 {
-	return vidImg && desc == vidImg.usedPixmapDesc();
+	return vidImg && desc == vidImg.pixmapDesc();
 }
 
 void EmuVideo::setOnFrameFinished(FrameFinishedDelegate del)
@@ -350,12 +349,10 @@ int EmuVideo::imageBuffers() const
 	return singleBuffer ? 1 : 2;
 }
 
-void EmuVideo::setCompatTextureSampler(const Gfx::TextureSampler &compatTexSampler)
+void EmuVideo::setSampler(Gfx::TextureSamplerConfig samplerConf)
 {
-	texSampler = &compatTexSampler;
-	if(!vidImg)
-		return;
-	vidImg.setCompatTextureSampler(compatTexSampler);
+	useLinearFilter = samplerConf.minLinearFilter;
+	vidImg.setSampler(samplerConf);
 }
 
 bool EmuVideo::setRenderPixelFormat(EmuSystem &sys, IG::PixelFormat fmt, Gfx::ColorSpace colorSpace)
@@ -396,6 +393,11 @@ IG::PixelFormat EmuVideo::renderPixelFormat() const
 IG::PixelFormat EmuVideo::internalRenderPixelFormat() const
 {
 	return renderPixelFormat() == IG::PIXEL_BGRA8888 ? IG::PIXEL_FMT_RGBA8888 : renderPixelFormat();
+}
+
+Gfx::TextureSamplerConfig EmuVideo::samplerConfigForLinearFilter(bool useLinearFilter)
+{
+	return useLinearFilter ? Gfx::SamplerConfigs::noMipClamp : Gfx::SamplerConfigs::noLinearNoMipClamp;
 }
 
 }

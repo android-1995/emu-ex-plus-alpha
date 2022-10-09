@@ -28,7 +28,7 @@ FrameBuffer::FrameBuffer(OSystem& osystem):
 	myPaletteHandler.loadConfig(osystem.settings());
 }
 
-void FrameBuffer::showTextMessage(const string& message, MessagePosition, bool)
+void FrameBuffer::showTextMessage(const string& message, MessagePosition, bool) const
 {
 	appPtr->postMessage(3, false, message.c_str());
 }
@@ -62,7 +62,7 @@ void FrameBuffer::setTIAPalette(const PaletteArray& palette)
 {
 	logMsg("setTIAPalette");
 	auto desc32 = format == IG::PIXEL_BGRA8888 ? IG::PIXEL_DESC_BGRA8888.nativeOrder() : IG::PIXEL_DESC_RGBA8888_NATIVE;
-	iterateTimes(256, i)
+	for(auto i : IG::iotaCount(256))
 	{
 		uint8_t r = (palette[i] >> 16) & 0xff;
 		uint8_t g = (palette[i] >> 8) & 0xff;
@@ -107,9 +107,9 @@ uInt32 FrameBuffer::getRGBPhosphor32(const uInt32 c, const uInt32 p) const
 }
 
 template <int outputBits>
-void FrameBuffer::renderOutput(IG::Pixmap pix, TIA &tia)
+void FrameBuffer::renderOutput(IG::MutablePixmapView pix, TIA &tia)
 {
-	IG::Pixmap framePix{{{(int)tia.width(), (int)tia.height()}, IG::PIXEL_I8}, tia.frameBuffer()};
+	IG::PixmapView framePix{{{(int)tia.width(), (int)tia.height()}, IG::PIXEL_I8}, tia.frameBuffer()};
 	assumeExpr(pix.size() == framePix.size());
 	assumeExpr(pix.format().bytesPerPixel() == outputBits / 8);
 	assumeExpr(framePix.format().bytesPerPixel() == 1);
@@ -145,7 +145,7 @@ void FrameBuffer::renderOutput(IG::Pixmap pix, TIA &tia)
 	}
 }
 
-void FrameBuffer::render(IG::Pixmap pix, TIA &tia)
+void FrameBuffer::render(IG::MutablePixmapView pix, TIA &tia)
 {
 	if(format == IG::PIXEL_RGB565)
 	{

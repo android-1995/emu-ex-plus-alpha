@@ -19,24 +19,16 @@
 #include "glIncludes.h"
 #include "defs.hh"
 #include <imagine/base/GLContext.hh>
+#include <imagine/util/memory/UniqueResource.hh>
 #include <array>
 
 namespace IG::Gfx
 {
 
-using VertexPos = GLfloat;
-using ColorComp = GLfloat;
-using Color = std::array<GLfloat, 4>;
-
-static constexpr float angleFromDegree(float deg) { return IG::radians(deg); }
-static constexpr float angleFromRadian(float rad) { return rad; }
-static constexpr float angleToDegree(float a) { return IG::degrees(a); }
-static constexpr float angleToRadian(float a) { return a; }
+class RendererTask;
 
 using TextureRef = GLuint;
-using VertexIndex = GLushort;
-using VertexColor = uint32_t;
-using VertexArrayRef = uint32_t;
+using VertexIndex = uint8_t;
 
 static constexpr int TRIANGLE_IMPL = GL_TRIANGLES;
 static constexpr int TRIANGLE_STRIP_IMPL = GL_TRIANGLE_STRIP;
@@ -58,7 +50,7 @@ static constexpr int ONE_MINUS_CONSTANT_ALPHA_IMPL = GL_ONE_MINUS_CONSTANT_ALPHA
 
 static constexpr int SYNC_FLUSH_COMMANDS_BIT = GL_SYNC_FLUSH_COMMANDS_BIT;
 
-using ClipRect = IG::WindowRect;
+using ClipRect = WRect;
 using Drawable = NativeGLDrawable;
 
 enum class ShaderType : uint16_t
@@ -71,6 +63,27 @@ enum class ColorSpace : uint8_t
 {
 	LINEAR = (uint8_t)GLColorSpace::LINEAR,
 	SRGB = (uint8_t)GLColorSpace::SRGB,
+};
+
+using NativeBuffer = GLuint;
+
+void destroyGLBuffer(RendererTask &, NativeBuffer);
+
+struct GLBufferDeleter
+{
+	RendererTask *rTask{};
+
+	void operator()(NativeBuffer s) const
+	{
+		destroyGLBuffer(*rTask, s);
+	}
+};
+using UniqueGLBuffer = UniqueResource<NativeBuffer, GLBufferDeleter>;
+
+struct TextureBinding
+{
+	TextureRef name{};
+	GLenum target{};
 };
 
 }

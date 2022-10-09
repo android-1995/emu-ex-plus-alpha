@@ -13,16 +13,15 @@
 	You should have received a copy of the GNU General Public License
 	along with NEO.emu.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <emuframework/EmuApp.hh>
-#include <emuframework/EmuAppHelper.hh>
 #include <emuframework/OptionView.hh>
 #include <emuframework/EmuMainMenuView.hh>
 #include <emuframework/EmuSystemActionsView.hh>
 #include <imagine/gui/AlertView.hh>
 #include <imagine/util/bitset.hh>
 #include <imagine/util/ScopeGuard.hh>
-#include "internal.hh"
+#include "MainApp.hh"
 #include <imagine/fs/FS.hh>
+#include <imagine/io/IO.hh>
 #include <imagine/util/format.hh>
 #include <imagine/util/string.h>
 
@@ -39,20 +38,26 @@ extern "C"
 namespace EmuEx
 {
 
-class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionView>
+template <class T>
+using MainAppHelper = EmuAppHelper<T, MainApp>;
+
+class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionView>
 {
 	TextMenuItem timerItem[3]
 	{
-		{"Off",  &defaultFace(), [this](){ setTimerInt(0); }},
-		{"On",   &defaultFace(), [this](){ setTimerInt(1); }},
-		{"Auto", &defaultFace(), [this](){ setTimerInt(2); }},
+		{"Off",  &defaultFace(), setTimerIntDel(), 0},
+		{"On",   &defaultFace(), setTimerIntDel(), 1},
+		{"Auto", &defaultFace(), setTimerIntDel(), 2},
 	};
 
-	void setTimerInt(int val)
+	TextMenuItem::SelectDelegate setTimerIntDel()
 	{
-		system().sessionOptionSet();
-		optionTimerInt = val;
-		setTimerIntOption(system());
+		return [this](TextMenuItem &item)
+		{
+			system().sessionOptionSet();
+			system().optionTimerInt = item.id();
+			system().setTimerIntOption();
+		};
 	}
 
 	MultiChoiceMenuItem timer
@@ -62,13 +67,13 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 		{
 			if(idx == 2)
 			{
-				t.setString(conf.raster ? "On" : "Off");
+				t.resetString(conf.raster ? "On" : "Off");
 				return true;
 			}
 			else
 				return false;
 		},
-		std::min((int)optionTimerInt, 2),
+		std::min((int)system().optionTimerInt, 2),
 		timerItem
 	};
 
@@ -88,15 +93,25 @@ public:
 	{}
 };
 
-class CustomSystemOptionView : public SystemOptionView
+class CustomSystemOptionView : public SystemOptionView, public MainAppHelper<CustomSystemOptionView>
 {
-private:
+	using MainAppHelper<CustomSystemOptionView>::system;
+
+	TextMenuItem::SelectDelegate setRegionDel()
+	{
+		return [this](TextMenuItem &item)
+		{
+			conf.country = (COUNTRY)item.id();
+			system().optionMVSCountry = conf.country;
+		};
+	}
+
 	TextMenuItem regionItem[4]
 	{
-		{"Japan", &defaultFace(), [](){ conf.country = CTY_JAPAN; optionMVSCountry = conf.country; }},
-		{"Europe", &defaultFace(), [](){ conf.country = CTY_EUROPE; optionMVSCountry = conf.country; }},
-		{"USA", &defaultFace(), [](){ conf.country = CTY_USA; optionMVSCountry = conf.country; }},
-		{"Asia", &defaultFace(), [](){ conf.country = CTY_ASIA; optionMVSCountry = conf.country; }},
+		{"Japan",  &defaultFace(), setRegionDel(), CTY_JAPAN},
+		{"Europe", &defaultFace(), setRegionDel(), CTY_EUROPE},
+		{"USA",    &defaultFace(), setRegionDel(), CTY_USA},
+		{"Asia",   &defaultFace(), setRegionDel(), CTY_ASIA},
 	};
 
 	MultiChoiceMenuItem region
@@ -108,10 +123,10 @@ private:
 
 	TextMenuItem::SelectDelegate setBiosDel()
 	{
-		return [](TextMenuItem &item)
+		return [this](TextMenuItem &item)
 		{
 			conf.system = (SYSTEM)item.id();
-			optionBIOSType = conf.system;
+			system().optionBIOSType = conf.system;
 		};
 	}
 
@@ -136,20 +151,20 @@ private:
 	BoolMenuItem createAndUseCache
 	{
 		"Make/Use Cache Files", &defaultFace(),
-		(bool)optionCreateAndUseCache,
+		(bool)system().optionCreateAndUseCache,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
-			optionCreateAndUseCache = item.flipBoolValue(*this);
+			system().optionCreateAndUseCache = item.flipBoolValue(*this);
 		}
 	};
 
 	BoolMenuItem strictROMChecking
 	{
 		"Strict ROM Checking", &defaultFace(),
-		(bool)optionStrictROMChecking,
+		(bool)system().optionStrictROMChecking,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
-			optionStrictROMChecking = item.flipBoolValue(*this);
+			system().optionStrictROMChecking = item.flipBoolValue(*this);
 		}
 	};
 
@@ -164,15 +179,17 @@ public:
 	}
 };
 
-class EmuGUIOptionView : public GUIOptionView
+class EmuGUIOptionView : public GUIOptionView, public MainAppHelper<EmuGUIOptionView>
 {
+	using MainAppHelper<EmuGUIOptionView>::system;
+
 	BoolMenuItem listAll
 	{
 		"List All Games", &defaultFace(),
-		(bool)optionListAllGames,
+		(bool)system().optionListAllGames,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
-			optionListAllGames = item.flipBoolValue(*this);
+			system().optionListAllGames = item.flipBoolValue(*this);
 		}
 	};
 
@@ -323,7 +340,6 @@ constexpr RomListEntry romlist[]
 	{ "mslug3", 0 },
 	{ "mslug3b6", 0 },
 	{ "mslug3h", 0 },
-	{ "mslug3n", 0 },
 	{ "mslug4", 0 },
 	{ "mslug5", 1 },
 	{ "mslug5h", 1 },
@@ -458,7 +474,7 @@ constexpr static bool gameFileExists(std::string_view name, std::string_view nam
 		FS::FileString{name}.append(".rar"));
 }
 
-class GameListView : public TableView, public EmuAppHelper<GameListView>
+class GameListView : public TableView, public MainAppHelper<GameListView>
 {
 private:
 	std::vector<TextMenuItem> item{};
@@ -491,7 +507,7 @@ public:
 			{
 				if(entry.type() == FS::file_type::directory)
 					return true;
-				if(entry.name().size() > 12) // MAME filenames follow 8.3 convention
+				if(entry.name().size() > 13) // MAME filenames follow 8.3 convention but names may have 9 characters
 					return true;
 				fileList += entry.name();
 				return true;
@@ -503,7 +519,7 @@ public:
 				continue;
 			auto freeDrv = IG::scopeGuard([&](){ free(drv); });
 			bool fileExists = gameFileExists(drv->name, fileList);
-			if(!optionListAllGames && !fileExists)
+			if(!system().optionListAllGames && !fileExists)
 			{
 				continue;
 			}

@@ -19,6 +19,7 @@
 #include <imagine/base/EventLoop.hh>
 #include <imagine/util/container/ArrayList.hh>
 #include <array>
+#include <span>
 
 namespace IG
 {
@@ -32,9 +33,9 @@ class EvdevInputDevice : public Device
 {
 public:
 	EvdevInputDevice();
-	EvdevInputDevice(int id, int fd, TypeBits, std::string name);
+	EvdevInputDevice(int id, int fd, TypeBits, std::string name, uint32_t vendorProductId);
 	~EvdevInputDevice();
-	void processInputEvents(LinuxApplication &app, input_event *event, uint32_t events);
+	void processInputEvents(LinuxApplication &app, std::span<const input_event> events);
 	bool setupJoystickBits();
 	void addPollEvent(LinuxApplication &app);
 	std::span<Axis> motionAxes() final;
@@ -43,7 +44,7 @@ public:
 protected:
 	static constexpr unsigned AXIS_SIZE = 24;
 	int fd{-1};
-	StaticArrayList<Axis, AXIS_SIZE> axis{};
+	StaticArrayList<Axis, AXIS_SIZE> axis;
 	std::array<int, AXIS_SIZE> axisRangeOffset{};
 	FDEventSource fdSrc{-1};
 };

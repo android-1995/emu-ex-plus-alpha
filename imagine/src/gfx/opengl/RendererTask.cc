@@ -112,13 +112,13 @@ void GLRendererTask::doPreDraw(Window &win, WindowDrawParams winParams, DrawPara
 		return;
 	}
 	assumeExpr(winData(win).drawable);
-	if(params.asyncMode() == DrawAsyncMode::AUTO)
+	if(params.asyncMode == DrawAsyncMode::AUTO)
 	{
-		params.setAsyncMode(DrawAsyncMode::PRESENT);
+		params.asyncMode = DrawAsyncMode::PRESENT;
 	}
-	if(winParams.needsSync()) [[unlikely]]
+	if(winParams.needsSync) [[unlikely]]
 	{
-		params.setAsyncMode(DrawAsyncMode::NONE);
+		params.asyncMode = DrawAsyncMode::NONE;
 	}
 }
 
@@ -129,21 +129,25 @@ RendererTask::operator bool() const
 
 void RendererTask::updateDrawableForSurfaceChange(Window &win, WindowSurfaceChange change)
 {
-	auto &drawable = winData(win).drawable;
-	switch(change.action())
+	auto &data = winData(win);
+	auto &drawable = data.drawable;
+	switch(change.action)
 	{
 		case WindowSurfaceChange::Action::CREATED:
-			r->makeWindowDrawable(*this, win, winData(win).bufferConfig, winData(win).colorSpace);
+			r->makeWindowDrawable(*this, win, data.bufferConfig, data.colorSpace);
 			return;
 		case WindowSurfaceChange::Action::CHANGED:
 			if(change.surfaceResized())
 			{
 				GLTask::run(
-					[this, drawable = (Drawable)drawable](TaskContext ctx)
+					[this, drawable = (Drawable)drawable, v = data.viewportRect](TaskContext ctx)
 					{
 						// reset the drawable if it's currently in use
 						if(GLManager::hasCurrentDrawable(drawable))
+						{
 							context.setCurrentDrawable(drawable);
+							glViewport(v.x, v.y, v.x2, v.y2);
+						}
 					});
 			}
 			return;
@@ -151,6 +155,21 @@ void RendererTask::updateDrawableForSurfaceChange(Window &win, WindowSurfaceChan
 			destroyDrawable(drawable);
 			return;
 	}
+}
+
+void RendererTask::setDefaultViewport(Window &win, Viewport v)
+{
+	renderer().setDefaultViewport(win, v);
+	auto &data = winData(win);
+	GLTask::run(
+		[this, drawable = (Drawable)data.drawable, v = asYUpRelRect(v)](TaskContext ctx)
+		{
+			// update viewport if drawable is currently in use
+			if(GLManager::hasCurrentDrawable(drawable))
+			{
+				glViewport(v.x, v.y, v.x2, v.y2);
+			}
+		});
 }
 
 void GLRendererTask::destroyDrawable(GLDrawable &drawable)
@@ -182,10 +201,13 @@ void GLRendererTask::runInitialCommandsInGL(TaskContext ctx, DrawContextSupport 
 		initVAO();
 	#endif
 	ctx.notifySemaphore();
-	runGLCheckedVerbose([&]()
+	if(!support.useFixedFunctionPipeline)
 	{
-		glEnableVertexAttribArray(VATTR_POS);
-	}, "glEnableVertexAttribArray(VATTR_POS)");
+		runGLCheckedVerbose([&]()
+		{
+			glEnableVertexAttribArray(VATTR_POS);
+		}, "glEnableVertexAttribArray(VATTR_POS)");
+	}
 	glClearColor(0., 0., 0., 1.);
 	if constexpr((bool)Config::Gfx::OPENGL_ES)
 	{
@@ -303,13 +325,11 @@ void RendererTask::flush()
 
 void RendererTask::releaseShaderCompiler()
 {
-	#ifdef CONFIG_GFX_OPENGL_SHADER_PIPELINE
 	run(
 		[]()
 		{
 			glReleaseShaderCompiler();
 		});
-	#endif
 }
 
 void RendererTask::setDebugOutput(bool on)
@@ -328,15 +348,13 @@ void RendererTask::setDebugOutput(bool on)
 }
 
 RendererCommands GLRendererTask::makeRendererCommands(GLTask::TaskContext taskCtx, bool manageSemaphore,
-	bool notifyWindowAfterPresent, Window &win, Viewport viewport, Mat4 projMat)
+	bool notifyWindowAfterPresent, Window &win)
 {
 	initDefaultFramebuffer();
 	auto &drawable = winData(win).drawable;
 	RendererCommands cmds{*static_cast<RendererTask*>(this),
-		notifyWindowAfterPresent ? &win : nullptr, drawable, taskCtx.glDisplay(),
+		notifyWindowAfterPresent ? &win : nullptr, drawable, winData(win).viewportRect, taskCtx.glDisplay(),
 		glContext(), manageSemaphore ? taskCtx.semaphorePtr() : nullptr};
-	cmds.setViewport(viewport);
-	cmds.setProjectionMatrix(projMat);
 	if(manageSemaphore)
 		taskCtx.markSemaphoreNotified(); // semaphore will be notified in RendererCommands::present()
 	return cmds;

@@ -21,16 +21,6 @@
 #include <iterator>
 #endif
 
-// integer iteration
-// 0 to [counts] - 1, i_s caches the value of counts (type of value is maintained)
-#define iterateTimesTyped(counts, i) for(typeof (counts) i = 0, i ## _s = counts; i < (i ## _s); i++)
-// 0 to [counts] - 1, i_s caches the value of counts
-#define iterateTimes(counts, i) for(int i = 0, i ## _s = counts; i < (i ## _s); i++)
-// [start] to ([start] + ([counts] - 1)), i_s caches the value of counts
-#define iterateTimesFromStart(counts, start, i) for(int i = start, i ## _s = counts; i < start + (i ## _s); i++)
-// [limit] - 1 to 0
-#define iterateTimesRev(limit, i) for(int i = (limit)-1; i >= 0; i--)
-
 #ifdef __cplusplus
 
 namespace IG
@@ -80,12 +70,12 @@ static int findIndexIf(Iterable auto &&c, auto pred, int notFound = -1)
 
 static bool contains(Iterable auto &&c, const auto &val)
 {
-	return std::find(std::begin(c), std::end(c), val) != c.end();
+	return std::find(std::begin(c), std::end(c), val) != std::end(c);
 }
 
 static bool containsIf(Iterable auto &&c, auto pred)
 {
-	return std::find_if(std::begin(c), std::end(c), pred) != c.end();
+	return std::find_if(std::begin(c), std::end(c), pred) != std::end(c);
 }
 
 static bool eraseFirst(Iterable auto &c, const auto &val)

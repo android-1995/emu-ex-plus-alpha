@@ -36,20 +36,22 @@ static bool isValidGGCodeLen(const char *str)
 	return strlen(str) == 6 || strlen(str) == 8;
 }
 
-static const char *cheatName(unsigned idx)
+static auto cheatName(unsigned idx)
 {
-	char *name{};
-	int gotCheat = FCEUI_GetCheat(idx, &name, 0, 0, 0, 0, 0);
-	assert(gotCheat);
+	std::string name;
+	if(!FCEUI_GetCheat(idx, &name, 0, 0, 0, 0, 0)) [[unlikely]]
+	{
+		return std::string{"Corrupt Cheat"};
+	}
 	return name;
 }
 
 EmuEditCheatView::EmuEditCheatView(ViewAttachParams attach, unsigned cheatIdx, RefreshCheatsDelegate onCheatListChanged_):
 	BaseEditCheatView
 	{
-		{},
+		u"",
 		attach,
-		{},
+		u"",
 		[this](const TableView &)
 		{
 			return type ? 3 : 5;
@@ -92,7 +94,7 @@ EmuEditCheatView::EmuEditCheatView(ViewAttachParams attach, unsigned cheatIdx, R
 	addr
 	{
 		"Address",
-		{},
+		u"",
 		&defaultFace(),
 		[this](DualTextMenuItem &item, View &, Input::Event e)
 		{
@@ -119,7 +121,7 @@ EmuEditCheatView::EmuEditCheatView(ViewAttachParams attach, unsigned cheatIdx, R
 	value
 	{
 		"Value",
-		{},
+		u"",
 		&defaultFace(),
 		[this](DualTextMenuItem &item, View &, Input::Event e)
 		{
@@ -146,7 +148,7 @@ EmuEditCheatView::EmuEditCheatView(ViewAttachParams attach, unsigned cheatIdx, R
 	comp
 	{
 		"Compare",
-		{},
+		u"",
 		&defaultFace(),
 		[this](DualTextMenuItem &item, View &, Input::Event e)
 		{
@@ -170,7 +172,7 @@ EmuEditCheatView::EmuEditCheatView(ViewAttachParams attach, unsigned cheatIdx, R
 						else
 						{
 							compStr.clear();
-							comp.set2ndName({});
+							comp.set2ndName();
 						}
 						syncCheat();
 						comp.compile(renderer(), projP);
@@ -184,7 +186,7 @@ EmuEditCheatView::EmuEditCheatView(ViewAttachParams attach, unsigned cheatIdx, R
 	ggCode
 	{
 		"GG Code",
-		{},
+		u"",
 		&defaultFace(),
 		[this](DualTextMenuItem &item, View &, Input::Event e)
 		{
@@ -210,13 +212,15 @@ EmuEditCheatView::EmuEditCheatView(ViewAttachParams attach, unsigned cheatIdx, R
 	uint32 a;
 	uint8 v;
 	int compare;
-	char *nameStr{};
-	int gotCheat = FCEUI_GetCheat(cheatIdx, &nameStr, &a, &v, &compare, 0, &type);
-	logMsg("got cheat with addr 0x%.4x val 0x%.2x comp %d", a, v, compare);
-	name.setName(nameStr);
+	{
+		std::string nameStr{};
+		int gotCheat = FCEUI_GetCheat(cheatIdx, &nameStr, &a, &v, &compare, 0, &type);
+		logMsg("got cheat with addr 0x%.4x val 0x%.2x comp %d", a, v, compare);
+		name.setName(std::move(nameStr));
+	}
 	if(type)
 	{
-		setName("Edit Code");
+		resetName("Edit Code");
 		if(a == 0 && v == 0 && compare == -1)
 			ggCodeStr.clear();
 		else
@@ -229,7 +233,7 @@ EmuEditCheatView::EmuEditCheatView(ViewAttachParams attach, unsigned cheatIdx, R
 	}
 	else
 	{
-		setName("Edit RAM Patch");
+		resetName("Edit RAM Patch");
 		IG::formatTo(addrStr, "{:x}", a);
 		addr.set2ndName(addrStr);
 		IG::formatTo(valueStr, "{:x}", v);
@@ -244,7 +248,7 @@ EmuEditCheatView::EmuEditCheatView(ViewAttachParams attach, unsigned cheatIdx, R
 	}
 }
 
-void EmuEditCheatView::syncCheat(const char *newName)
+void EmuEditCheatView::syncCheat(std::string_view newName)
 {
 	if(type)
 	{
@@ -273,25 +277,24 @@ void EmuEditCheatView::syncCheat(const char *newName)
 	FCEU_FlushGameCheats(nullptr, 0, false);
 }
 
-const char *EmuEditCheatView::cheatNameString() const
+std::string EmuEditCheatView::cheatNameString() const
 {
 	return cheatName(idx);
 }
 
-void EmuEditCheatView::renamed(const char *str)
+void EmuEditCheatView::renamed(std::string_view str)
 {
 	syncCheat(str);
 }
 
 void EmuEditCheatListView::loadCheatItems()
 {
-	unsigned cheats = fceuCheats;
+	auto cheats = fceuCheats;
 	cheat.clear();
 	cheat.reserve(cheats);
-	iterateTimes(cheats, c)
+	for(auto c : iotaCount(cheats))
 	{
-		const char *name = cheatName(c);
-		cheat.emplace_back(name ? name : "Corrupt Cheat", &defaultFace(),
+		cheat.emplace_back(cheatName(c), &defaultFace(),
 			[this, c](TextMenuItem &, View &, Input::Event e)
 			{
 				pushAndShow(makeView<EmuEditCheatView>(c, [this](){ onCheatListChanged(); }), e);
@@ -420,17 +423,19 @@ EmuCheatsView::EmuCheatsView(ViewAttachParams attach): BaseCheatsView{attach}
 
 void EmuCheatsView::loadCheatItems()
 {
-	unsigned cheats = fceuCheats;
+	auto cheats = fceuCheats;
 	cheat.clear();
 	cheat.reserve(cheats);
-	iterateTimes(cheats, c)
+	for(auto c : iotaCount(cheats))
 	{
-		char *name;
+		std::string name;
 		int status = 0;
-		int gotCheat = FCEUI_GetCheat(c, &name, 0, 0, 0, &status, 0);
-		assert(gotCheat);
-		cheat.emplace_back(gotCheat ? name : "Corrupt Cheat", &defaultFace(), status,
-			[this, c](BoolMenuItem &item, View &, Input::Event e)
+		if(!FCEUI_GetCheat(c, &name, 0, 0, 0, &status, 0)) [[unlikely]]
+		{
+			name = "Corrupt Cheat";
+		}
+		cheat.emplace_back(std::move(name), &defaultFace(), status,
+			[this, c](BoolMenuItem &item)
 			{
 				uint32 a;
 				uint8 v;

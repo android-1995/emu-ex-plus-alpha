@@ -14,32 +14,26 @@
 	along with NGP.emu.  If not, see <http://www.gnu.org/licenses/> */
 
 #define LOGTAG "main"
-#include <emuframework/EmuApp.hh>
+#include <emuframework/EmuSystemInlines.hh>
 #include <emuframework/EmuAppInlines.hh>
-#include <emuframework/EmuAudio.hh>
-#include <emuframework/EmuVideo.hh>
 #include <imagine/fs/FS.hh>
 #include <imagine/io/FileIO.hh>
 #include <imagine/util/string.h>
 #include <imagine/util/format.hh>
 #include <imagine/logger/logger.h>
-#include "internal.hh"
 #include <mednafen/state-driver.h>
-#include <mednafen/hash/md5.h>
 #include <mednafen/MemoryStream.h>
 #include <mednafen/ngp/neopop.h>
 #include <mednafen/ngp/flash.h>
+#include <mednafen/ngp/sound.h>
 #include <mednafen-emuex/MDFNUtils.hh>
 
 namespace EmuEx
 {
 
 const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2022\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nNeoPop Team\nwww.nih.at";
-static const unsigned vidBufferX = 160, vidBufferY = 152;
-alignas(8) static uint32_t pixBuff[vidBufferX*vidBufferY]{};
-static IG::Pixmap mSurfacePix;
-uint8_t inputBuff{};
-
+// TODO: Mednafen/Neopop timing is based on 199 lines/frame, verify if this is correct
+double EmuSystem::staticFrameTime = (199. * 515.) / 6144000.; //~59.95Hz
 EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter =
 	[](std::string_view name)
 	{
@@ -58,34 +52,24 @@ const char *EmuSystem::systemName() const
 	return "Neo Geo Pocket";
 }
 
-void EmuSystem::reset(ResetMode mode)
+void NgpSystem::reset(EmuApp &, ResetMode mode)
 {
 	assert(hasContent());
 	MDFN_IEN_NGP::reset();
 }
 
-static char saveSlotChar(int slot)
+FS::FileString NgpSystem::stateFilename(int slot, std::string_view name) const
 {
-	switch(slot)
-	{
-		case -1: return 'q';
-		case 0 ... 9: return '0' + slot;
-		default: bug_unreachable("slot == %d", slot); return 0;
-	}
+	return stateFilenameMDFN(*MDFNGameInfo, slot, name, 'a');
 }
 
-FS::FileString EmuSystem::stateFilename(int slot, std::string_view name) const
-{
-	return IG::format<FS::FileString>("{}.{}.nc{}", name, md5_context::asciistr(MDFNGameInfo->MD5, 0), saveSlotChar(slot));
-}
-
-void EmuSystem::saveState(IG::CStringView path)
+void NgpSystem::saveState(IG::CStringView path)
 {
 	if(!MDFNI_SaveState(path, 0, 0, 0, 0))
 		throwFileWriteError();
 }
 
-void EmuSystem::loadState(IG::CStringView path)
+void NgpSystem::loadState(EmuApp &, IG::CStringView path)
 {
 	if(!MDFNI_LoadState(path, 0))
 		throwFileReadError();
@@ -96,20 +80,20 @@ static FS::PathString saveFilename(EmuSystem &sys)
 	return sys.contentSaveFilePath(".ngf");
 }
 
-void EmuSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
+void NgpSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
 {
 	logMsg("saving flash");
 	MDFN_IEN_NGP::FLASH_SaveNV();
 }
 
-void EmuSystem::closeSystem()
+void NgpSystem::closeSystem()
 {
-	emuSys->CloseGame();
+	mdfnGameInfo.CloseGame();
 }
 
-void EmuSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegate)
+void NgpSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegate)
 {
-	emuSys->name = std::string{EmuSystem::contentName()};
+	mdfnGameInfo.name = std::string{EmuSystem::contentName()};
 	static constexpr size_t maxRomSize = 0x400000;
 	auto stream = std::make_unique<MemoryStream>(maxRomSize, true);
 	auto size = io.read(stream->map(), stream->map_size());
@@ -120,36 +104,28 @@ void EmuSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 	GameFile gf{&NVFS, std::string{contentDirectory()}, fp.stream(),
 		stringWithoutDotExtension<std::string>(contentFileName()),
 		std::string{contentName()}};
-	emuSys->Load(&gf);
-	emuSys->SetInput(0, "gamepad", (uint8*)&inputBuff);
-	EmulateSpecStruct espec{};
-	auto mSurface = pixmapToMDFNSurface(mSurfacePix);
-	espec.surface = &mSurface;
-	MDFN_IEN_NGP::applyVideoFormat(&espec);
+	mdfnGameInfo.Load(&gf);
+	mdfnGameInfo.SetInput(0, "gamepad", (uint8*)&inputBuff);
+	MDFN_IEN_NGP::applyVideoFormat(pixmapToMDFNSurface(mSurfacePix).format);
 }
 
-bool EmuSystem::onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat fmt)
+bool NgpSystem::onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat fmt)
 {
 	mSurfacePix = {{{vidBufferX, vidBufferY}, fmt}, pixBuff};
 	if(!hasContent())
 		return false;
-	EmulateSpecStruct espec{};
-	auto mSurface = pixmapToMDFNSurface(mSurfacePix);
-	espec.surface = &mSurface;
-	MDFN_IEN_NGP::applyVideoFormat(&espec);
+	MDFN_IEN_NGP::applyVideoFormat(pixmapToMDFNSurface(mSurfacePix).format);
 	return false;
 }
 
-void EmuSystem::configAudioRate(IG::FloatSeconds frameTime, uint32_t rate)
+void NgpSystem::configAudioRate(IG::FloatSeconds frameTime, int rate)
 {
-	EmulateSpecStruct espec{};
-	static constexpr double ngpFrameRate = 59.95;
-	espec.SoundRate = std::round(rate * (ngpFrameRate * frameTime.count()));
-	logMsg("emu sound rate:%f", (double)espec.SoundRate);
-	MDFN_IEN_NGP::applySoundFormat(&espec);
+	auto soundRate = std::round(rate / staticFrameTime * frameTime.count());
+	logMsg("emu sound rate:%f", soundRate);
+	MDFN_IEN_NGP::MDFNNGPC_SetSoundRate(soundRate);
 }
 
-void EmuSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio *audio)
+void NgpSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio *audio)
 {
 	unsigned maxFrames = 48000/54;
 	int16 audioBuff[maxFrames*2];
@@ -160,11 +136,12 @@ void EmuSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 		espec.SoundBufMaxSize = maxFrames;
 	}
 	espec.taskCtx = taskCtx;
+	espec.sys = this;
 	espec.video = video;
 	espec.skip = !video;
 	auto mSurface = pixmapToMDFNSurface(mSurfacePix);
 	espec.surface = &mSurface;
-	emuSys->Emulate(&espec);
+	mdfnGameInfo.Emulate(&espec);
 	if(audio)
 	{
 		assert((unsigned)espec.SoundBufSize <= audio->format().bytesToFrames(sizeof(audioBuff)));
@@ -176,11 +153,10 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 {
 	const Gfx::LGradientStopDesc navViewGrad[] =
 	{
-		{ .0, Gfx::VertexColorPixelFormat.build(.5, .5, .5, 1.) },
-		{ .03, Gfx::VertexColorPixelFormat.build((101./255.) * .4, (45./255.) * .4, (193./255.) * .4, 1.) },
+		{ .0, Gfx::VertexColorPixelFormat.build((101./255.) * .4, (45./255.) * .4, (193./255.) * .4, 1.) },
 		{ .3, Gfx::VertexColorPixelFormat.build((101./255.) * .4, (45./255.) * .4, (193./255.) * .4, 1.) },
 		{ .97, Gfx::VertexColorPixelFormat.build((34./255.) * .4, (15./255.) * .4, (64./255.) * .4, 1.) },
-		{ 1., Gfx::VertexColorPixelFormat.build(.5, .5, .5, 1.) },
+		{ 1., view.separatorColor() },
 	};
 	view.setBackgroundGradient(navViewGrad);
 }
@@ -214,7 +190,7 @@ namespace Mednafen
 
 void MDFND_commitVideoFrame(EmulateSpecStruct *espec)
 {
-	espec->video->startFrameWithFormat(espec->taskCtx, EmuEx::mSurfacePix);
+	espec->video->startFrameWithFormat(espec->taskCtx, static_cast<EmuEx::NgpSystem&>(*espec->sys).mSurfacePix);
 }
 
 }

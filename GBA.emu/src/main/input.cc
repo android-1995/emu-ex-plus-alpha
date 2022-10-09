@@ -15,11 +15,14 @@
 
 #include <emuframework/EmuApp.hh>
 #include <emuframework/EmuInput.hh>
-#include "internal.hh"
+#include <imagine/util/format.hh>
+#include "MainSystem.hh"
 #include <vbam/gba/GBA.h>
 
 namespace EmuEx
 {
+
+using namespace IG;
 
 enum
 {
@@ -41,31 +44,41 @@ enum
 	gbaKeyIdxBTurbo,
 	gbaKeyIdxAB,
 	gbaKeyIdxRB,
+	gbaKeyIdxLightInc,
+	gbaKeyIdxLightDec,
 };
 
 const char *EmuSystem::inputFaceBtnName = "A/B/L/R";
 const char *EmuSystem::inputCenterBtnName = "Select/Start";
-const unsigned EmuSystem::inputFaceBtns = 4;
-const unsigned EmuSystem::inputCenterBtns = 2;
+const int EmuSystem::inputFaceBtns = 4;
+const int EmuSystem::inputCenterBtns = 2;
 int EmuSystem::inputLTriggerIndex = 2;
 int EmuSystem::inputRTriggerIndex = 3;
-const unsigned EmuSystem::maxPlayers = 1;
+const int EmuSystem::maxPlayers = 1;
 std::array<int, EmuSystem::MAX_FACE_BTNS> EmuSystem::vControllerImageMap{1, 0, 2, 3};
+constexpr int gbaKeypadBits = 10;
+constexpr unsigned gbaKeypadMask = 0x3FF;
 
-namespace GbaKeyStatus
+enum ActionBits : unsigned
 {
+	A = bit(0),
+	B = bit(1),
+	SELECT = bit(2),
+	START = bit(3),
+	RIGHT = bit(4),
+	LEFT = bit(5),
+	UP = bit(6),
+	DOWN = bit(7),
+	R = bit(8),
+	L = bit(9),
+};
 
-using namespace IG;
-static const unsigned A = bit(0), B = bit(1),
-	SELECT = bit(2), START = bit(3),
-	RIGHT = bit(4), LEFT = bit(5), UP = bit(6), DOWN = bit(7),
-	R = bit(8), L = bit(9);
+constexpr unsigned lightIncKey = 1;
+constexpr unsigned lightDecKey = 2;
 
-}
-
-void updateVControllerMapping(unsigned player, VController::Map &map)
+VController::Map GbaSystem::vControllerMap(int player)
 {
-	using namespace GbaKeyStatus;
+	VController::Map map{};
 	map[VController::F_ELEM] = B;
 	map[VController::F_ELEM+1] = A;
 	map[VController::F_ELEM+2] = L;
@@ -82,11 +95,11 @@ void updateVControllerMapping(unsigned player, VController::Map &map)
 	map[VController::D_ELEM+6] = DOWN | LEFT;
 	map[VController::D_ELEM+7] = DOWN;
 	map[VController::D_ELEM+8] = DOWN | RIGHT;
+	return map;
 }
 
-unsigned EmuSystem::translateInputAction(unsigned input, bool &turbo)
+unsigned GbaSystem::translateInputAction(unsigned input, bool &turbo)
 {
-	using namespace GbaKeyStatus;
 	turbo = 0;
 	switch(input)
 	{
@@ -108,19 +121,37 @@ unsigned EmuSystem::translateInputAction(unsigned input, bool &turbo)
 		case gbaKeyIdxR: return R;
 		case gbaKeyIdxAB: return A | B;
 		case gbaKeyIdxRB: return R | B;
-		default: bug_unreachable("input == %d", input);
+		case gbaKeyIdxLightInc: return lightIncKey << gbaKeypadBits;
+		case gbaKeyIdxLightDec: return lightDecKey << gbaKeypadBits;
 	}
-	return 0;
+	bug_unreachable("input == %d", input);
 }
 
-void EmuSystem::handleInputAction(EmuApp *, Input::Action action, unsigned emuKey)
+void GbaSystem::handleInputAction(EmuApp *app, InputAction a)
 {
-	P1 = IG::setOrClearBits(P1, (uint16_t)emuKey, action != Input::Action::PUSHED);
+	if(auto exKey = a.key >> gbaKeypadBits;
+		exKey)
+	{
+		if(a.state == Input::Action::PUSHED && (exKey == lightIncKey || exKey == lightDecKey))
+		{
+			int darknessChange = exKey == lightDecKey ? 17 : -17;
+			darknessLevel = std::clamp(darknessLevel + darknessChange, 0, 0xff);
+			if(app)
+			{
+				app->postMessage(1, false, fmt::format("Light sensor level: {}%", IG::remap(darknessLevel, 0xff, 0, 0, 100)));
+			}
+		}
+	}
+	else
+	{
+		P1 = IG::setOrClearBits(P1, uint16_t(a.key & gbaKeypadMask), a.state != Input::Action::PUSHED);
+	}
 }
 
-void EmuSystem::clearInputBuffers(EmuInputView &)
+void GbaSystem::clearInputBuffers(EmuInputView &)
 {
 	P1 = 0x03FF;
+	clearSensorValues();
 }
 
 }

@@ -17,10 +17,10 @@
 #include <emuframework/FilePicker.hh>
 #include <emuframework/EmuSystem.hh>
 #include <emuframework/EmuApp.hh>
-#include "private.hh"
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/gui/FSPicker.hh>
 #include <imagine/fs/FS.hh>
+#include <imagine/io/IO.hh>
 #include <imagine/util/format.hh>
 #include <imagine/logger/logger.h>
 #include <string>
@@ -40,8 +40,8 @@ EmuFilePicker::EmuFilePicker(ViewAttachParams attach, EmuApp &app,
 	FSPicker
 	{
 		attach,
-		&app.asset(EmuApp::AssetID::ARROW),
-		mode == FSPicker::Mode::DIR ? &app.asset(EmuApp::AssetID::ACCEPT) : &app.asset(EmuApp::AssetID::CLOSE),
+		&app.asset(AssetID::ARROW),
+		mode == FSPicker::Mode::DIR ? &app.asset(AssetID::ACCEPT) : &app.asset(AssetID::CLOSE),
 		mode == FSPicker::Mode::DIR ?
 		FSPicker::FilterFunc{} :
 		FSPicker::FilterFunc{[filter, includeArchives](auto &entry)
@@ -80,7 +80,7 @@ std::unique_ptr<EmuFilePicker> EmuFilePicker::makeForBenchmarking(ViewAttachPara
 			app.createSystemWithMedia({}, path, displayName, e, {}, picker.attachParams(),
 				[&app](const Input::Event &)
 				{
-					runBenchmarkOneShot(app, app.video());
+					app.runBenchmarkOneShot(app.video());
 				});
 		});
 	return picker;
@@ -101,7 +101,7 @@ std::unique_ptr<EmuFilePicker> EmuFilePicker::makeForLoading(ViewAttachParams at
 	picker->setOnSelectPath(
 		[=, &app](FSPicker &picker, CStringView path, std::string_view displayName, const Input::Event &e)
 		{
-			onSelectFileFromPicker(app, {}, path, displayName, e, params, picker.attachParams());
+			app.onSelectFileFromPicker({}, path, displayName, e, params, picker.attachParams());
 		});
 	return picker;
 }

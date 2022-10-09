@@ -15,39 +15,41 @@
 
 #include <emuframework/EmuApp.hh>
 #include <emuframework/Option.hh>
-#include "internal.hh"
+#include "MainSystem.hh"
 
 namespace EmuEx
 {
 
-enum
-{
-	CFGKEY_NGPKEY_LANGUAGE = 269,
-};
-
 const char *EmuSystem::configFilename = "NgpEmu.config";
-const AspectRatioInfo EmuSystem::aspectRatioInfo[] =
-{
-		{"20:19 (Original)", 20, 19},
-		EMU_SYSTEM_DEFAULT_ASPECT_RATIO_INFO_INIT
-};
-const unsigned EmuSystem::aspectRatioInfos = std::size(EmuSystem::aspectRatioInfo);
 
-Byte1Option optionNGPLanguage{CFGKEY_NGPKEY_LANGUAGE, 1};
-
-bool EmuSystem::readConfig(IO &io, unsigned key, unsigned readSize)
+std::span<const AspectRatioInfo> NgpSystem::aspectRatioInfos()
 {
-	switch(key)
+	static constexpr AspectRatioInfo aspectRatioInfo[]
 	{
-		default: return 0;
-		bcase CFGKEY_NGPKEY_LANGUAGE: optionNGPLanguage.readFromIO(io, readSize);
-	}
-	return 1;
+		{"20:19 (Original)", {20, 19}},
+		EMU_SYSTEM_DEFAULT_ASPECT_RATIO_INFO_INIT
+	};
+	return aspectRatioInfo;
 }
 
-void EmuSystem::writeConfig(IO &io)
+bool NgpSystem::readConfig(ConfigType type, MapIO &io, unsigned key, size_t readSize)
 {
-	optionNGPLanguage.writeWithKeyIfNotDefault(io);
+	if(type == ConfigType::MAIN)
+	{
+		switch(key)
+		{
+			case CFGKEY_NGPKEY_LANGUAGE: return optionNGPLanguage.readFromIO(io, readSize);
+		}
+	}
+	return false;
+}
+
+void NgpSystem::writeConfig(ConfigType type, FileIO &io)
+{
+	if(type == ConfigType::MAIN)
+	{
+		optionNGPLanguage.writeWithKeyIfNotDefault(io);
+	}
 }
 
 }

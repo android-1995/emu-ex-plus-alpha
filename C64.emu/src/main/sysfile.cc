@@ -17,8 +17,8 @@
 #include <array>
 #include <emuframework/EmuApp.hh>
 #include <emuframework/FilePicker.hh>
-#include "internal.hh"
-#include <imagine/io/FileIO.hh>
+#include "MainSystem.hh"
+#include <imagine/io/IO.hh>
 #include <imagine/fs/ArchiveFS.hh>
 #include <imagine/fs/FS.hh>
 #include <imagine/util/format.hh>
@@ -33,9 +33,7 @@ extern "C"
 namespace EmuEx
 {
 
-const char *sysFileDir{};
-
-static int loadSysFile(IO &file, const char *name, uint8_t *dest, int minsize, int maxsize)
+static int loadSysFile(Readable auto &file, const char *name, uint8_t *dest, int minsize, int maxsize)
 {
 	//logMsg("loading system file: %s", complete_path);
 	ssize_t rsize = file.size();
@@ -80,6 +78,7 @@ static int loadSysFile(IO &file, const char *name, uint8_t *dest, int minsize, i
 
 static ArchiveIO archiveIOForSysFile(IG::CStringView archivePath, std::string_view sysFileName, std::string_view subPath, char **complete_path_return)
 {
+	auto sysFilePath = FS::pathString(subPath, sysFileName);
 	try
 	{
 		for(auto &entry : FS::ArchiveIterator{gAppContext().openFileUri(archivePath)})
@@ -89,7 +88,7 @@ static ArchiveIO archiveIOForSysFile(IG::CStringView archivePath, std::string_vi
 				continue;
 			}
 			auto name = entry.name();
-			if(FS::basename(name) != sysFileName || FS::basename(FS::dirname(name)) != subPath)
+			if(!name.ends_with(sysFilePath))
 				continue;
 			logMsg("archive file entry:%s", name.data());
 			if(complete_path_return)
@@ -111,7 +110,7 @@ static ArchiveIO archiveIOForSysFile(IG::CStringView archivePath, std::string_vi
 static AssetIO assetIOForSysFile(IG::ApplicationContext ctx, std::string_view sysFileName, std::string_view subPath, char **complete_path_return)
 {
 	auto fullPath = FS::pathString(subPath, sysFileName);
-	auto file = ctx.openAsset(fullPath, IO::AccessHint::ALL, IO::TEST_BIT);
+	auto file = ctx.openAsset(fullPath, IOAccessHint::ALL, OpenFlagsMask::TEST);
 	if(!file)
 		return {};
 	if(complete_path_return)
@@ -122,7 +121,7 @@ static AssetIO assetIOForSysFile(IG::ApplicationContext ctx, std::string_view sy
 	return file;
 }
 
-std::vector<std::string> systemFilesWithExtension(const char *ext)
+std::vector<std::string> C64System::systemFilesWithExtension(const char *ext) const
 {
 	logMsg("looking for system files with extension:%s", ext);
 	auto appContext = gAppContext();
@@ -147,7 +146,7 @@ std::vector<std::string> systemFilesWithExtension(const char *ext)
 					auto name = entry.name();
 					if(FS::basename(FS::dirname(name)) != sysFileDir)
 						continue;
-					if(FS::basename(name).ends_with(ext))
+					if(name.ends_with(ext))
 					{
 						logMsg("archive file entry:%s", name.data());
 						filenames.emplace_back(FS::basename(name));
@@ -184,7 +183,7 @@ using namespace EmuEx;
 
 CLINK int sysfile_init(const char *emu_id)
 {
-	sysFileDir = emu_id;
+	static_cast<C64System&>(gSystem()).sysFileDir = emu_id;
 	return 0;
 }
 
@@ -192,6 +191,7 @@ CLINK FILE *sysfile_open(const char *name, const char *subPath, char **complete_
 {
 	logMsg("sysfile open:%s subPath:%s", name, subPath);
 	auto appContext = gAppContext();
+	auto &sysFilePath = static_cast<C64System&>(gSystem()).sysFilePath;
 	for(const auto &basePath : sysFilePath)
 	{
 		if(basePath.empty())
@@ -205,7 +205,7 @@ CLINK FILE *sysfile_open(const char *name, const char *subPath, char **complete_
 			if(!io)
 				continue;
 			// Uncompress file into memory and wrap in FILE
-			return GenericIO{MapIO{std::move(io)}}.moveToFileStream(open_mode);
+			return MapIO{std::move(io)}.toFileStream(open_mode);
 		}
 		else
 		{
@@ -226,7 +226,7 @@ CLINK FILE *sysfile_open(const char *name, const char *subPath, char **complete_
 		auto io = assetIOForSysFile(appContext, name, subPath, complete_path_return);
 		if(io)
 		{
-			return GenericIO{std::move(io)}.moveToFileStream(open_mode);
+			return io.toFileStream(open_mode);
 		}
 	}
 	logErr("can't open %s in system paths", name);
@@ -237,6 +237,7 @@ CLINK int sysfile_locate(const char *name, const char *subPath, char **complete_
 {
 	logMsg("sysfile locate:%s subPath:%s", name, subPath);
 	auto appContext = gAppContext();
+	auto &sysFilePath = static_cast<C64System&>(gSystem()).sysFilePath;
 	for(const auto &basePath : sysFilePath)
 	{
 		if(basePath.empty())
@@ -284,6 +285,7 @@ CLINK int sysfile_load(const char *name, const char *subPath, uint8_t *dest, int
 {
 	logMsg("sysfile load:%s subPath:%s", name, subPath);
 	auto appContext = gAppContext();
+	auto &sysFilePath = static_cast<C64System&>(gSystem()).sysFilePath;
 	for(const auto &basePath : sysFilePath)
 	{
 		if(basePath.empty())
@@ -306,7 +308,7 @@ CLINK int sysfile_load(const char *name, const char *subPath, uint8_t *dest, int
 		}
 		else
 		{
-			auto file = appContext.openFileUri(FS::uriString(basePath, subPath, name), IO::AccessHint::ALL, IO::TEST_BIT);
+			auto file = appContext.openFileUri(FS::uriString(basePath, subPath, name), IOAccessHint::ALL, OpenFlagsMask::TEST);
 			if(!file)
 				continue;
 			//logMsg("loading system file: %s", complete_path);

@@ -28,25 +28,24 @@
 #include <imagine/font/FontSettings.hh>
 #include <imagine/font/GlyphMetrics.hh>
 #include <imagine/base/ApplicationContext.hh>
+#include <imagine/pixmap/Pixmap.hh>
 #include <system_error>
 
 namespace IG
 {
 
-class GenericIO;
+class IO;
 
 namespace Data
 {
 class PixmapSource;
 }
 
-class Pixmap;
-
 class GlyphImage: public GlyphImageImpl
 {
 public:
 	using GlyphImageImpl::GlyphImageImpl;
-	IG::Pixmap pixmap();
+	PixmapView pixmap();
 	explicit operator bool() const;
 	operator IG::Data::PixmapSource();
 };
@@ -72,7 +71,7 @@ class FontManager : public FontManagerImpl
 {
 public:
 	using FontManagerImpl::FontManagerImpl;
-	Font makeFromFile(GenericIO io) const;
+	Font makeFromFile(IO) const;
 	Font makeFromFile(const char *name) const;
 	Font makeSystem() const;
 	Font makeBoldSystem() const;

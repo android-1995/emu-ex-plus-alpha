@@ -21,7 +21,6 @@
 
 #include <imagine/config/defs.hh>
 #include <imagine/base/WindowConfig.hh>
-#include <imagine/base/Error.hh>
 #include <imagine/base/glDefs.hh>
 #include <EGL/egl.h>
 #include <optional>
@@ -36,6 +35,7 @@ class GLDisplay;
 class GLDrawable;
 class GLContextAttributes;
 class GLBufferConfigAttributes;
+class ErrorCode;
 
 using NativeGLDrawable = EGLSurface;
 using NativeGLContext = EGLContext;
@@ -72,7 +72,7 @@ class EGLDrawable
 {
 public:
 	constexpr EGLDrawable() = default;
-	EGLDrawable(EGLDisplay, Window &, EGLConfig, const EGLint *surfaceAttr, IG::ErrorCode &);
+	EGLDrawable(EGLDisplay, Window &, EGLConfig, const EGLint *surfaceAttr);
 	operator EGLSurface() const { return surface.get(); }
 	bool operator ==(EGLDrawable const&) const = default;
 	explicit operator bool() const { return (bool)surface; }
@@ -99,7 +99,7 @@ class EGLContextBase
 {
 public:
 	constexpr EGLContextBase() = default;
-	EGLContextBase(EGLDisplay, GLContextAttributes, EGLConfig, EGLContext shareContext, bool savePBuffConfig, IG::ErrorCode &);
+	EGLContextBase(EGLDisplay, GLContextAttributes, EGLConfig, EGLContext shareContext, bool savePBuffConfig);
 	operator EGLContext() const { return context.get(); }
 	bool operator ==(EGLContextBase const&) const = default;
 	explicit operator bool() const { return (bool)context; }

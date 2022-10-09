@@ -5,24 +5,30 @@
 #endif
 #include <emuframework/EmuApp.hh>
 #include <emuframework/OptionView.hh>
+#include <emuframework/AudioOptionView.hh>
 #include <emuframework/EmuSystemActionsView.hh>
 #include "EmuCheatViews.hh"
-#include "internal.hh"
+#include "MainApp.hh"
 #include <snes9x.h>
 #include <imagine/util/format.hh>
 
 namespace EmuEx
 {
 
+template <class T>
+using MainAppHelper = EmuAppHelper<T, MainApp>;
+
 constexpr bool HAS_NSRT = !IS_SNES9X_VERSION_1_4;
 
 #ifndef SNES9X_VERSION_1_4
-class CustomAudioOptionView : public AudioOptionView
+class CustomAudioOptionView : public AudioOptionView, public MainAppHelper<CustomAudioOptionView>
 {
+	using MainAppHelper<CustomAudioOptionView>::system;
+
 	void setDSPInterpolation(uint8_t val)
 	{
 		logMsg("set DSP interpolation:%u", val);
-		optionAudioDSPInterpolation = val;
+		system().optionAudioDSPInterpolation = val;
 		SNES::dsp.spc_dsp.interpolation = val;
 	}
 
@@ -38,7 +44,7 @@ class CustomAudioOptionView : public AudioOptionView
 	MultiChoiceMenuItem dspInterpolation
 	{
 		"DSP插值", &defaultFace(),
-		optionAudioDSPInterpolation.val,
+		system().optionAudioDSPInterpolation.val,
 		dspInterpolationItem
 	};
 
@@ -51,34 +57,35 @@ public:
 };
 #endif
 
-class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionView>
+class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionView>
 {
 	BoolMenuItem multitap
 	{
 		"5玩家模式", &defaultFace(),
-		(bool)optionMultitap,
+		(bool)system().optionMultitap,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
 			system().sessionOptionSet();
-			optionMultitap = item.flipBoolValue(*this);
-			setupSNESInput(system(), app().defaultVController());
+			system().optionMultitap = item.flipBoolValue(*this);
+			system().setupSNESInput(app().defaultVController());
 		}
 	};
 
-	TextMenuItem inputPortsItem[HAS_NSRT ? 4 : 3]
+	TextMenuItem inputPortsItem[HAS_NSRT ? 5 : 4]
 	{
 		#ifndef SNES9X_VERSION_1_4
 		{"Auto (NSRT)", &defaultFace(), setInputPortsDel(), SNES_AUTO_INPUT},
 		#endif
 		{"Gamepads",    &defaultFace(), setInputPortsDel(), SNES_JOYPAD},
 		{"Superscope",  &defaultFace(), setInputPortsDel(), SNES_SUPERSCOPE},
+		{"Justifier",   &defaultFace(), setInputPortsDel(), SNES_JUSTIFIER},
 		{"Mouse",       &defaultFace(), setInputPortsDel(), SNES_MOUSE_SWAPPED},
 	};
 
 	MultiChoiceMenuItem inputPorts
 	{
 		"Input Ports", &defaultFace(),
-		(MenuItem::Id)snesInputPort,
+		(MenuItem::Id)system().snesInputPort,
 		inputPortsItem
 	};
 
@@ -87,9 +94,9 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 		return [this](TextMenuItem &item)
 		{
 			system().sessionOptionSet();
-			optionInputPort = item.id();
-			snesInputPort = item.id();
-			setupSNESInput(system(), app().defaultVController());
+			system().optionInputPort = item.id();
+			system().snesInputPort = item.id();
+			system().setupSNESInput(app().defaultVController());
 		};
 	}
 
@@ -104,14 +111,14 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 	MultiChoiceMenuItem videoSystem
 	{
 		"视频制式", &defaultFace(),
-		optionVideoSystem.val,
+		system().optionVideoSystem.val,
 		videoSystemItem
 	};
 
 	void setVideoSystem(int val, Input::Event e)
 	{
 		system().sessionOptionSet();
-		optionVideoSystem = val;
+		system().optionVideoSystem = val;
 		app().promptSystemReloadDueToSetOption(attachParams(), e);
 	}
 
@@ -120,11 +127,11 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 	BoolMenuItem allowExtendedLines
 	{
 		"允许扩展 239/478 线路", &defaultFace(),
-		(bool)optionAllowExtendedVideoLines,
+		(bool)system().optionAllowExtendedVideoLines,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
 			system().sessionOptionSet();
-			optionAllowExtendedVideoLines = item.flipBoolValue(*this);
+			system().optionAllowExtendedVideoLines = item.flipBoolValue(*this);
 		}
 	};
 
@@ -134,32 +141,32 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 	BoolMenuItem blockInvalidVRAMAccess
 	{
 		"允许无效的VRAM访问", &defaultFace(),
-		(bool)!optionBlockInvalidVRAMAccess,
+		(bool)!system().optionBlockInvalidVRAMAccess,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
 			system().sessionOptionSet();
-			optionBlockInvalidVRAMAccess = !item.flipBoolValue(*this);
-			PPU.BlockInvalidVRAMAccess = optionBlockInvalidVRAMAccess;
+			system().optionBlockInvalidVRAMAccess = !item.flipBoolValue(*this);
+			PPU.BlockInvalidVRAMAccess = system().optionBlockInvalidVRAMAccess;
 		}
 	};
 
 	BoolMenuItem separateEchoBuffer
 	{
 		"将回声缓冲区与Ram分开", &defaultFace(),
-		(bool)optionSeparateEchoBuffer,
+		(bool)system().optionSeparateEchoBuffer,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
 			system().sessionOptionSet();
-			optionSeparateEchoBuffer = item.flipBoolValue(*this);
-			SNES::dsp.spc_dsp.separateEchoBuffer = optionSeparateEchoBuffer;
+			system().optionSeparateEchoBuffer = item.flipBoolValue(*this);
+			SNES::dsp.spc_dsp.separateEchoBuffer = system().optionSeparateEchoBuffer;
 		}
 	};
 
 	void setSuperFXClock(unsigned val)
 	{
 		system().sessionOptionSet();
-		optionSuperFXClockMultiplier = val;
-		setSuperFXSpeedMultiplier(optionSuperFXClockMultiplier);
+		system().optionSuperFXClockMultiplier = val;
+		setSuperFXSpeedMultiplier(system().optionSuperFXClockMultiplier);
 	}
 
 	TextMenuItem superFXClockItem[2]
@@ -171,7 +178,7 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 				app().pushAndShowNewCollectValueInputView<int>(attachParams(), e, "输入5到250", "",
 					[this](EmuApp &app, auto val)
 					{
-						if(optionSuperFXClockMultiplier.isValidVal(val))
+						if(system().optionSuperFXClockMultiplier.isValidVal(val))
 						{
 							setSuperFXClock(val);
 							superFXClock.setSelected(std::size(superFXClockItem) - 1, *this);
@@ -194,12 +201,12 @@ class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionVie
 		"SuperFX时钟倍增器", &defaultFace(),
 		[this](uint32_t idx, Gfx::Text &t)
 		{
-			t.setString(fmt::format("{}%", optionSuperFXClockMultiplier.val));
+			t.resetString(fmt::format("{}%", system().optionSuperFXClockMultiplier.val));
 			return true;
 		},
-		[]()
+		[this]()
 		{
-			if(optionSuperFXClockMultiplier.val == 100)
+			if(system().optionSuperFXClockMultiplier.val == 100)
 				return 0;
 			else
 				return 1;
