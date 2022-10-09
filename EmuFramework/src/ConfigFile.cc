@@ -26,8 +26,8 @@
 namespace EmuEx
 {
 
-static constexpr unsigned KEY_CONFIGS_HARD_LIMIT = 256;
-static constexpr unsigned INPUT_DEVICE_CONFIGS_HARD_LIMIT = 256;
+static constexpr int KEY_CONFIGS_HARD_LIMIT = 256;
+static constexpr int INPUT_DEVICE_CONFIGS_HARD_LIMIT = 256;
 
 static bool windowPixelFormatIsValid(uint8_t val)
 {
@@ -51,7 +51,7 @@ static bool colorSpaceIsValid(Gfx::ColorSpace val)
 }
 
 static bool readKeyConfig(KeyConfigContainer &customKeyConfigs,
-	IO &io, uint16_t &size, std::span<const KeyCategory> categorySpan)
+	MapIO &io, uint16_t &size, std::span<const KeyCategory> categorySpan)
 {
 	auto confs = io.get<uint8_t>(); // TODO: unused currently, use to pre-allocate memory for configs
 	size--;
@@ -85,7 +85,7 @@ static bool readKeyConfig(KeyConfigContainer &customKeyConfigs,
 			return false;
 		}
 
-		iterateTimes(categories, i)
+		for(auto i : iotaCount(categories))
 		{
 			if(!size)
 				return false;
@@ -106,7 +106,7 @@ static bool readKeyConfig(KeyConfigContainer &customKeyConfigs,
 			if(size < catSize)
 				return false;
 
-			if(catSize > cat.keys * sizeof(KeyConfig::Key))
+			if(catSize > cat.keys() * sizeof(KeyConfig::Key))
 				return false;
 			auto key = keyConf.key(cat);
 			if(io.read(key, catSize) != catSize)
@@ -116,7 +116,7 @@ static bool readKeyConfig(KeyConfigContainer &customKeyConfigs,
 			// verify keys
 			{
 				const auto keyMax = Input::KeyEvent::mapNumKeys(keyConf.map);
-				iterateTimes(cat.keys, i)
+				for(auto i : iotaCount(cat.keys()))
 				{
 					if(key[i] >= keyMax)
 					{
@@ -141,7 +141,125 @@ static bool readKeyConfig(KeyConfigContainer &customKeyConfigs,
 	return true;
 }
 
-void EmuApp::saveConfigFile(IO &io)
+static void readInputDeviceConfig(InputDeviceSavedConfigContainer &savedInputDevs,
+	MapIO &io, uint16_t &size, const KeyConfigContainer &customKeyConfigs)
+{
+	auto confs = io.get<uint8_t>(); // TODO: unused currently, use to pre-allocate memory for configs
+	size--;
+	if(!size)
+		return;
+
+	while(size)
+	{
+		InputDeviceSavedConfig devConf;
+
+		auto enumIdWithFlags = io.get<uint8_t>();
+		size--;
+		if(!size)
+			break;
+		devConf.handleUnboundEvents = enumIdWithFlags & devConf.HANDLE_UNBOUND_EVENTS_FLAG;
+		devConf.enumId = enumIdWithFlags & devConf.ENUM_ID_MASK;
+
+		devConf.enabled = io.get<uint8_t>();
+		size--;
+		if(!size)
+			break;
+
+		devConf.player = io.get<uint8_t>();
+		if(devConf.player != InputDeviceConfig::PLAYER_MULTI && devConf.player > EmuSystem::maxPlayers)
+		{
+			logWarn("player %d out of range", devConf.player);
+			devConf.player = 0;
+		}
+		size--;
+		if(!size)
+			break;
+
+		devConf.joystickAxisAsDpadBits = io.get<uint8_t>();
+		size--;
+		if(!size)
+			break;
+
+		#ifdef CONFIG_INPUT_ICADE
+		devConf.iCadeMode = io.get<uint8_t>();
+		size--;
+		if(!size)
+			break;
+		#endif
+
+		auto nameLen = io.get<uint8_t>();
+		size--;
+		if(size < nameLen)
+			break;
+
+		io.readSized(devConf.name, nameLen);
+		size -= nameLen;
+		if(!size)
+			break;
+
+		auto keyConfMap = Input::validateMap(io.get<uint8_t>());
+		size--;
+
+		if(keyConfMap != Input::Map::UNKNOWN)
+		{
+			if(!size)
+				break;
+
+			auto keyConfNameLen = io.get<uint8_t>();
+			size--;
+			if(size < keyConfNameLen)
+				break;
+
+			char keyConfName[keyConfNameLen + 1];
+			if(io.read(keyConfName, keyConfNameLen) != keyConfNameLen)
+				break;
+			keyConfName[keyConfNameLen] = '\0';
+			size -= keyConfNameLen;
+
+			for(auto &ePtr : customKeyConfigs)
+			{
+				auto &e = *ePtr;
+				if(e.map == keyConfMap && e.name == keyConfName)
+				{
+					logMsg("found referenced custom key config %s while reading input device config", keyConfName);
+					devConf.keyConf = &e;
+					break;
+				}
+			}
+
+			if(!devConf.keyConf) // check built-in configs after user-defined ones
+			{
+				for(const auto &conf : KeyConfig::defaultConfigsForInputMap(keyConfMap))
+				{
+					if(conf.name == keyConfName)
+					{
+						logMsg("found referenced built-in key config %s while reading input device config", keyConfName);
+						devConf.keyConf = &conf;
+						break;
+					}
+				}
+			}
+		}
+
+		if(!IG::containsIf(savedInputDevs, [&](const auto &confPtr){ return *confPtr == devConf;}))
+		{
+			logMsg("read input device config:%s, id:%d", devConf.name.data(), devConf.enumId);
+			savedInputDevs.emplace_back(std::make_unique<InputDeviceSavedConfig>(devConf));
+		}
+		else
+		{
+			logMsg("ignoring duplicate input device config:%s, id:%d", devConf.name.data(), devConf.enumId);
+		}
+
+		if(savedInputDevs.size() == INPUT_DEVICE_CONFIGS_HARD_LIMIT)
+		{
+			logWarn("reached input device config hard limit:%d", INPUT_DEVICE_CONFIGS_HARD_LIMIT);
+			break;
+		}
+	}
+}
+
+void EmuApp::saveConfigFile(FileIO &io)
 {
 	if(!io)
 	{
@@ -174,7 +292,7 @@ void EmuApp::saveConfigFile(IO &io)
 		optionEmuOrientation,
 		optionMenuOrientation,
 		optionConfirmOverwriteState,
-		optionFastForwardSpeed,
+		optionFastSlowModeSpeed,
 		#ifdef CONFIG_INPUT_DEVICE_HOTSWAP
 		optionNotifyInputDeviceChange,
 		#endif
@@ -220,8 +338,17 @@ void EmuApp::saveConfigFile(IO &io)
 		if(mogaManagerPtr)
 			writeOptionValue(io, CFGKEY_MOGA_INPUT_SYSTEM, true);
 	}
+	if(appContext().hasTranslucentSysUI() && !doesLayoutBehindSystemUI())
+		writeOptionValue(io, CFGKEY_LAYOUT_BEHIND_SYSTEM_UI, false);
+	if(contentRotation_ != Rotation::ANY)
+		writeOptionValue(io, CFGKEY_CONTENT_ROTATION, contentRotation_);
 	vController.writeConfig(io);
-	viewController().writeConfig(io);
+	if(IG::used(usePresentationTime_) && !usePresentationTime_)
+		writeOptionValue(io, CFGKEY_RENDERER_PRESENTATION_TIME, false);
+	if(IG::used(forceMaxScreenFrameRate) && forceMaxScreenFrameRate)
+		writeOptionValue(io, CFGKEY_FORCE_MAX_SCREEN_FRAME_RATE, true);
+	if(videoBrightnessRGB != Gfx::Vec3{1.f, 1.f, 1.f})
+		writeOptionValue(io, CFGKEY_VIDEO_BRIGHTNESS, videoBrightnessRGB);
 	#ifdef CONFIG_BLUETOOTH_SCAN_CACHE_USAGE
 	if(!BluetoothAdapter::scanCacheUsage())
 		writeOptionValue(io, CFGKEY_BLUETOOTH_SCAN_CACHE, false);
@@ -235,7 +362,7 @@ void EmuApp::saveConfigFile(IO &io)
 		std::fill_n(writeCategories, customKeyConfigs.size(), 0);
 		// compute total size
 		static_assert(sizeof(KeyConfig::name) <= 255, "key config name array is too large");
-		unsigned bytes = 2; // config key size
+		size_t bytes = 2; // config key size
 		bytes += 1; // number of configs
 		for(uint8_t configs = 0; auto &ePtr : customKeyConfigs)
 		{
@@ -248,7 +375,7 @@ void EmuApp::saveConfigFile(IO &io)
 			{
 				bool write{};
 				const auto key = e.key(cat);
-				iterateTimes(cat.keys, k)
+				for(auto k : iotaCount(cat.keys()))
 				{
 					if(key[k]) // check if category has any keys defined
 					{
@@ -259,13 +386,13 @@ void EmuApp::saveConfigFile(IO &io)
 				writeCategory[configs][std::distance(inputControlCategories().data(), &cat)] = write;
 				if(!write)
 				{
-					logMsg("category:%s of key conf:%s skipped", cat.name, e.name.data());
+					logMsg("category:%s of key conf:%s skipped", cat.name.data(), e.name.data());
 					continue;
 				}
 				writeCategories[configs]++;
 				bytes += 1; // category index
 				bytes += 2; // category key array size
-				bytes += cat.keys * sizeof(KeyConfig::Key); // keys array
+				bytes += cat.keys() * sizeof(KeyConfig::Key); // keys array
 			}
 			configs++;
 		}
@@ -274,7 +401,7 @@ void EmuApp::saveConfigFile(IO &io)
 			bug_unreachable("excessive key config size, should not happen");
 		}
 		// write to config file
-		logMsg("saving %d key configs, %d bytes", (int)customKeyConfigs.size(), bytes);
+		logMsg("saving %d key configs, %zu bytes", (int)customKeyConfigs.size(), bytes);
 		io.write(uint16_t(bytes));
 		io.write((uint16_t)CFGKEY_INPUT_KEY_CONFIGS);
 		io.write((uint8_t)customKeyConfigs.size());
@@ -293,7 +420,7 @@ void EmuApp::saveConfigFile(IO &io)
 				if(!writeCategory[configs][catIdx])
 					continue;
 				io.write((uint8_t)catIdx);
-				uint16_t catSize = cat.keys * sizeof(KeyConfig::Key);
+				uint16_t catSize = cat.keys() * sizeof(KeyConfig::Key);
 				io.write(catSize);
 				io.write(e.key(cat), catSize);
 			}
@@ -369,7 +496,7 @@ void EmuApp::saveConfigFile(IO &io)
 	writeStringOptionValue(io, CFGKEY_LAST_DIR, contentSearchPath());
 	writeStringOptionValue(io, CFGKEY_SAVE_PATH, system().userSaveDirectory());
 
-	system().writeConfig(io);
+	system().writeConfig(ConfigType::MAIN, io);
 }
 
 EmuApp::ConfigParams EmuApp::loadConfigFile(IG::ApplicationContext ctx)
@@ -404,14 +531,14 @@ EmuApp::ConfigParams EmuApp::loadConfigFile(IG::ApplicationContext ctx)
 	#endif
 	ConfigParams appConfig{};
 	Gfx::DrawableConfig pendingWindowDrawableConf{};
-	readConfigKeys(FileUtils::bufferFromPath(configFilePath, IO::TEST_BIT),
-		[&](uint16_t key, uint16_t size, IO &io)
+	readConfigKeys(FileUtils::bufferFromPath(configFilePath, OpenFlagsMask::TEST),
+		[&](uint16_t key, uint16_t size, auto &io)
 		{
 			switch(key)
 			{
 				default:
 				{
-					if(system().readConfig(io, key, size))
+					if(system().readConfig(ConfigType::MAIN, io, key, size))
 					{
 						break;
 					}
@@ -419,7 +546,7 @@ EmuApp::ConfigParams EmuApp::loadConfigFile(IG::ApplicationContext ctx)
 					{
 						break;
 					}
-					logMsg("skipping unknown key %u", (unsigned)key);
+					logMsg("skipping key %u", (unsigned)key);
 				}
 				bcase CFGKEY_SOUND: optionSound.readFromIO(io, size);
 				bcase CFGKEY_SOUND_RATE: optionSoundRate.readFromIO(io, size);
@@ -431,16 +558,7 @@ EmuApp::ConfigParams EmuApp::loadConfigFile(IG::ApplicationContext ctx)
 				bcase CFGKEY_FRAME_RATE: optionFrameRate.readFromIO(io, size);
 				bcase CFGKEY_FRAME_RATE_PAL: optionFrameRatePAL.readFromIO(io, size);
 				bcase CFGKEY_LAST_DIR:
-					readStringOptionValue<FS::PathString>(io, size,
-						[&](auto &path)
-						{
-							if(ctx.permissionIsRestricted(IG::Permission::WRITE_EXT_STORAGE) && path[0] == '/')
-							{
-								logWarn("not restoring content dir due to storage permission restriction");
-								return;
-							}
-							setContentSearchPath(path);
-						});
+					readStringOptionValue<FS::PathString>(io, size, [&](auto &&path){setContentSearchPath(path);});
 				bcase CFGKEY_FONT_Y_SIZE: optionFontSize.readFromIO(io, size);
 				bcase CFGKEY_GAME_ORIENTATION: optionEmuOrientation.readFromIO(io, size);
 				bcase CFGKEY_MENU_ORIENTATION: optionMenuOrientation.readFromIO(io, size);
@@ -468,19 +586,16 @@ EmuApp::ConfigParams EmuApp::loadConfigFile(IG::ApplicationContext ctx)
 				bcase CFGKEY_IDLE_DISPLAY_POWER_SAVE: optionIdleDisplayPowerSave.readFromIO(io, size);
 				bcase CFGKEY_HIDE_STATUS_BAR:
 					doIfUsed(optionHideStatusBar, [&](auto &opt){ opt.readFromIO(io, size); });
+				bcase CFGKEY_LAYOUT_BEHIND_SYSTEM_UI:
+					if(ctx.hasTranslucentSysUI()) readOptionValue(io, size, layoutBehindSystemUI);
 				bcase CFGKEY_CONFIRM_OVERWRITE_STATE: optionConfirmOverwriteState.readFromIO(io, size);
-				bcase CFGKEY_FAST_FORWARD_SPEED: optionFastForwardSpeed.readFromIO(io, size);
+				bcase CFGKEY_FAST_SLOW_MODE_SPEED: optionFastSlowModeSpeed.readFromIO(io, size);
 				#ifdef CONFIG_INPUT_DEVICE_HOTSWAP
 				bcase CFGKEY_NOTIFY_INPUT_DEVICE_CHANGE: optionNotifyInputDeviceChange.readFromIO(io, size);
 				#endif
 				bcase CFGKEY_MOGA_INPUT_SYSTEM:
 					if constexpr(MOGA_INPUT)
-					{
-						if(readOptionValue<bool>(io, size).value_or(false))
-						{
-							setMogaManagerActive(true, false);
-						}
-					}
+						readOptionValue<bool>(io, size, [&](auto on){setMogaManagerActive(on, false);});
 				bcase CFGKEY_TEXTURE_BUFFER_MODE: optionTextureBufferMode.readFromIO(io, size);
 				#if defined __ANDROID__
 				bcase CFGKEY_LOW_PROFILE_OS_NAV: optionLowProfileOSNav.readFromIO(io, size);
@@ -492,7 +607,7 @@ EmuApp::ConfigParams EmuApp::loadConfigFile(IG::ApplicationContext ctx)
 					doIfUsed(optionKeepBluetoothActive, [&](auto &opt){ opt.readFromIO(io, size); });
 				bcase CFGKEY_SHOW_BLUETOOTH_SCAN: optionShowBluetoothScan.readFromIO(io, size);
 					#ifdef CONFIG_BLUETOOTH_SCAN_CACHE_USAGE
-					bcase CFGKEY_BLUETOOTH_SCAN_CACHE: BluetoothAdapter::setScanCacheUsage(readOptionValue<bool>(io, size).value_or(true));
+					bcase CFGKEY_BLUETOOTH_SCAN_CACHE: readOptionValue<bool>(io, size, [](auto on){BluetoothAdapter::setScanCacheUsage(on);});
 					#endif
 				#endif
 				bcase CFGKEY_SOUND_BUFFERS: optionSoundBuffers.readFromIO(io, size);
@@ -503,25 +618,19 @@ EmuApp::ConfigParams EmuApp::loadConfigFile(IG::ApplicationContext ctx)
 				bcase CFGKEY_AUDIO_API: optionAudioAPI.readFromIO(io, size);
 				#endif
 				bcase CFGKEY_SAVE_PATH:
-					readStringOptionValue<FS::PathString>(io, size,
-						[&](auto &path)
-						{
-							if(ctx.permissionIsRestricted(IG::Permission::WRITE_EXT_STORAGE) && path[0] == '/')
-							{
-								logWarn("not restoring save dir due to storage permission restriction");
-								return;
-							}
-							system().setUserSaveDirectory(path);
-						});
+					readStringOptionValue<FS::PathString>(io, size, [&](auto &&path){system().setUserSaveDirectory(path);});
 				bcase CFGKEY_SHOW_BUNDLED_GAMES:
 				{
 					if(EmuSystem::hasBundledGames)
 						optionShowBundledGames.readFromIO(io, size);
 				}
-				bcase CFGKEY_WINDOW_PIXEL_FORMAT: pendingWindowDrawableConf.pixelFormat = readOptionValue<IG::PixelFormat>(io, size, windowPixelFormatIsValid).value_or(IG::PixelFormat{});
-				bcase CFGKEY_VIDEO_COLOR_SPACE: pendingWindowDrawableConf.colorSpace = readOptionValue<Gfx::ColorSpace>(io, size, colorSpaceIsValid).value_or(Gfx::ColorSpace{});
-				bcase CFGKEY_SHOW_HIDDEN_FILES: setShowHiddenFilesInPicker(readOptionValue<bool>(io, size).value_or(false));
-				bcase CFGKEY_RENDERER_PRESENTATION_TIME: appConfig.setRendererPresentationTime(readOptionValue<bool>(io, size).value_or(true));
+				bcase CFGKEY_WINDOW_PIXEL_FORMAT: readOptionValue(io, size, pendingWindowDrawableConf.pixelFormat, windowPixelFormatIsValid);
+				bcase CFGKEY_VIDEO_COLOR_SPACE: readOptionValue(io, size, pendingWindowDrawableConf.colorSpace, colorSpaceIsValid);
+				bcase CFGKEY_SHOW_HIDDEN_FILES: readOptionValue<bool>(io, size, [&](auto on){setShowHiddenFilesInPicker(on);});
+				bcase CFGKEY_RENDERER_PRESENTATION_TIME: readOptionValue<bool>(io, size, [&](auto on){setUsePresentationTime(on);});
+				bcase CFGKEY_FORCE_MAX_SCREEN_FRAME_RATE: readOptionValue<bool>(io, size, [&](auto on){setForceMaxScreenFrameRate(on);});
+				bcase CFGKEY_CONTENT_ROTATION: readOptionValue(io, size, contentRotation_, [](auto r){return r <= lastEnum<Rotation>;});
+				bcase CFGKEY_VIDEO_BRIGHTNESS: readOptionValue(io, size, videoBrightnessRGB);
 				bcase CFGKEY_INPUT_KEY_CONFIGS:
 				{
 					if(!readKeyConfig(customKeyConfigs, io, size, inputControlCategories()))
@@ -536,116 +645,7 @@ EmuApp::ConfigParams EmuApp::loadConfigFile(IG::ApplicationContext ctx)
 				}
 				bcase CFGKEY_INPUT_DEVICE_CONFIGS:
 				{
-					auto confs = io.get<uint8_t>(); // TODO: unused currently, use to pre-allocate memory for configs
-					size--;
-					if(!size)
-						break;
-
-					while(size)
-					{
-						InputDeviceSavedConfig devConf;
-
-						auto enumIdWithFlags = io.get<uint8_t>();
-						size--;
-						if(!size)
-							break;
-						devConf.handleUnboundEvents = enumIdWithFlags & devConf.HANDLE_UNBOUND_EVENTS_FLAG;
-						devConf.enumId = enumIdWithFlags & devConf.ENUM_ID_MASK;
-
-						devConf.enabled = io.get<uint8_t>();
-						size--;
-						if(!size)
-							break;
-
-						devConf.player = io.get<uint8_t>();
-						if(devConf.player != InputDeviceConfig::PLAYER_MULTI && devConf.player > EmuSystem::maxPlayers)
-						{
-							logWarn("player %d out of range", devConf.player);
-							devConf.player = 0;
-						}
-						size--;
-						if(!size)
-							break;
-
-						devConf.joystickAxisAsDpadBits = io.get<uint8_t>();
-						size--;
-						if(!size)
-							break;
-
-						#ifdef CONFIG_INPUT_ICADE
-						devConf.iCadeMode = io.get<uint8_t>();
-						size--;
-						if(!size)
-							break;
-						#endif
-
-						auto nameLen = io.get<uint8_t>();
-						size--;
-						if(size < nameLen)
-							break;
-
-						io.readSized(devConf.name, nameLen);
-						size -= nameLen;
-						if(!size)
-							break;
-
-						auto keyConfMap = Input::validateMap(io.get<uint8_t>());
-						size--;
-
-						if(keyConfMap != Input::Map::UNKNOWN)
-						{
-							if(!size)
-								break;
-
-							auto keyConfNameLen = io.get<uint8_t>();
-							size--;
-							if(size < keyConfNameLen)
-								break;
-
-							if(keyConfNameLen > devConf.name.max_size()-1)
-								break;
-							char keyConfName[keyConfNameLen + 1];
-							if(io.read(keyConfName, keyConfNameLen) != keyConfNameLen)
-								break;
-							keyConfName[keyConfNameLen] = '\0';
-							size -= keyConfNameLen;
-
-							for(auto &ePtr : customKeyConfigs)
-							{
-								auto &e = *ePtr;
-								if(e.map == keyConfMap && e.name == keyConfName)
-								{
-									logMsg("found referenced custom key config %s while reading input device config", keyConfName);
-									devConf.keyConf = &e;
-									break;
-								}
-							}
-
-							if(!devConf.keyConf) // check built-in configs after user-defined ones
-							{
-								unsigned defaultConfs = 0;
-								auto defaultConf = KeyConfig::defaultConfigsForInputMap(keyConfMap, defaultConfs);
-								iterateTimes(defaultConfs, c)
-								{
-									if(defaultConf[c].name == keyConfName)
-									{
-										logMsg("found referenced built-in key config %s while reading input device config", keyConfName);
-										devConf.keyConf = &defaultConf[c];
-										break;
-									}
-								}
-							}
-						}
-
-						logMsg("read input device config %s, id %d", devConf.name.data(), devConf.enumId);
-						savedInputDevs.emplace_back(std::make_unique<InputDeviceSavedConfig>(devConf));
-
-						if(savedInputDevs.size() == INPUT_DEVICE_CONFIGS_HARD_LIMIT)
-						{
-							logWarn("reached input device config hard limit:%d", INPUT_DEVICE_CONFIGS_HARD_LIMIT);
-							break;
-						}
-					}
+					readInputDeviceConfig(savedInputDevs, io, size, customKeyConfigs);
 					if(size)
 					{
 						// skip leftover bytes
@@ -671,7 +671,8 @@ void EmuApp::saveConfigFile(IG::ApplicationContext ctx)
 	auto configFilePath = FS::pathString(ctx.supportPath(), "config");
 	try
 	{
-		saveConfigFile(FileIO{configFilePath, IO::OPEN_NEW});
+		FileIO file{configFilePath, OpenFlagsMask::NEW};
+		saveConfigFile(file);
 	}
 	catch(...)
 	{

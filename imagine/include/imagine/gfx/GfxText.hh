@@ -19,35 +19,41 @@
 #include <imagine/gfx/defs.hh>
 #include <imagine/util/2DOrigin.h>
 #include <imagine/util/string/utf16.hh>
-#include <vector>
 #include <limits>
+#include <concepts>
 
 namespace IG::Gfx
 {
 
-class Renderer;
-class RendererCommands;
-class GlyphTextureSet;
-struct TexVertex;
-class ProjectionPlane;
+struct TextLayoutConfig
+{
+	static constexpr auto NO_MAX_LINES = std::numeric_limits<int>::max();
+	static constexpr auto NO_MAX_LINE_SIZE = std::numeric_limits<float>::max();
+
+	float maxLineSize = NO_MAX_LINE_SIZE;
+	int maxLines = NO_MAX_LINES;
+};
 
 class Text
 {
 public:
-	static constexpr uint16_t NO_MAX_LINES = std::numeric_limits<uint16_t>::max();
-	static constexpr float NO_MAX_LINE_SIZE = std::numeric_limits<float>::max();
+	constexpr Text() = default;
 
-	Text() = default;
-	Text(GlyphTextureSet *face);
-	Text(IG::utf16String str, GlyphTextureSet *face = nullptr);
-	void setString(IG::utf16String);
+	Text(GlyphTextureSet *face): Text{UTF16String{}, face} {}
+	Text(UTF16Convertible auto &&str, GlyphTextureSet *face = nullptr):
+		textStr{IG_forward(str)}, face_{face} {}
+
+	void resetString(UTF16Convertible auto &&str)
+	{
+		textStr = IG_forward(str);
+		sizeBeforeLineSpans = {};
+	}
+
+	void resetString() { resetString(UTF16String{}); }
 	void setFace(GlyphTextureSet *face);
 	void makeGlyphs(Renderer &r);
-	bool compile(Renderer &r, ProjectionPlane projP);
-	void draw(RendererCommands &cmds, float xPos, float yPos, _2DOrigin o, ProjectionPlane projP) const;
-	void draw(RendererCommands &cmds, GP p, _2DOrigin o, ProjectionPlane projP) const;
-	void setMaxLineSize(float size);
-	void setMaxLines(uint16_t lines);
+	bool compile(Renderer &, ProjectionPlane, TextLayoutConfig conf = {});
+	void draw(RendererCommands &cmds, FP p, _2DOrigin o, ProjectionPlane projP) const;
 	float width() const;
 	float height() const;
 	float fullHeight() const;
@@ -63,26 +69,25 @@ public:
 protected:
 	struct LineSpan
 	{
-		constexpr LineSpan(float size, uint32_t chars):
-			size{size}, chars{chars}
-		{}
 		float size;
-		uint32_t chars;
+		uint16_t chars;
+		static constexpr size_t encodedChar16Size = (sizeof(size) / 2) + (sizeof(chars) / 2);
+
+		constexpr LineSpan(float size, uint16_t chars):
+			size{size}, chars{chars} {}
+		void encodeTo(std::u16string &);
+		static LineSpan decode(std::u16string_view);
 	};
 
-	std::u16string textStr{};
+	UTF16String textStr{};
 	GlyphTextureSet *face_{};
-	std::vector<LineSpan> lineInfo{};
+	size_t sizeBeforeLineSpans{}; // encoded LineSpans in textStr start after this offset
 	float spaceSize = 0;
 	float nominalHeight_ = 0;
 	float yLineStart = 0;
 	float xSize = 0;
 	float ySize = 0;
-	float maxLineSize = NO_MAX_LINE_SIZE;
-	uint16_t lines = 0;
-	uint16_t maxLines = NO_MAX_LINES;
 
-	void drawSpan(RendererCommands &cmds, float xPos, float yPos, ProjectionPlane projP, std::u16string_view strView, std::array<TexVertex, 4> &vArr) const;
 	bool hasText() const;
 };
 

@@ -19,6 +19,8 @@
 #include <imagine/base/sharedLibrary.hh>
 #include <imagine/time/Time.hh>
 #include <imagine/thread/Thread.hh>
+#include <imagine/util/math/Point2D.hh>
+#include <imagine/util/ranges.hh>
 #include <imagine/logger/logger.h>
 #include <cstdlib>
 #include <cstring>
@@ -41,25 +43,22 @@
 namespace IG
 {
 
-const char *orientationToStr(Orientation o)
+std::string_view asString(OrientationMask o)
 {
+	using enum OrientationMask;
 	switch(o)
 	{
-		case VIEW_ROTATE_AUTO: return "Auto";
-		case VIEW_ROTATE_0: return "0";
-		case VIEW_ROTATE_90: return "90";
-		case VIEW_ROTATE_180: return "180";
-		case VIEW_ROTATE_270: return "270";
-		case VIEW_ROTATE_0 | VIEW_ROTATE_90 | VIEW_ROTATE_270: return "0/90/270";
-		case VIEW_ROTATE_0 | VIEW_ROTATE_90 | VIEW_ROTATE_180 | VIEW_ROTATE_270: return "0/90/180/270";
-		case VIEW_ROTATE_90 | VIEW_ROTATE_270: return "90/270";
-		default: bug_unreachable("o == %d", o); return "";
+		case UNSET: return "Unset";
+		case PORTRAIT: return "Portrait";
+		case LANDSCAPE_RIGHT: return "Landscape Right";
+		case PORTRAIT_UPSIDE_DOWN: return "Portrait Upside-Down";
+		case LANDSCAPE_LEFT: return "Landscape Left";
+		case ALL_LANDSCAPE: return "Either Landscape";
+		case ALL_PORTRAIT: return "Either Portrait";
+		case ALL_BUT_UPSIDE_DOWN: return "All But Upside-Down";
+		case ALL: return "All";
 	}
-}
-
-bool orientationIsSideways(Orientation o)
-{
-	return o == VIEW_ROTATE_90 || o == VIEW_ROTATE_270;
+	return "Unknown";
 }
 
 FDEventSource::FDEventSource(const char *debugLabel, MaybeUniqueFileDescriptor fd, EventLoop loop, PollEventDelegate callback, uint32_t events):
@@ -96,20 +95,20 @@ void *loadSymbol(SharedLibraryRef lib, const char *name)
 	return dlsym(lib, name);
 }
 
-GLContext GLManager::makeContext(GLContextAttributes attr, GLBufferConfig config, IG::ErrorCode &ec)
+const char *lastOpenSharedLibraryError()
 {
-	return makeContext(attr, config, {}, ec);
+	return dlerror();
+}
+
+GLContext GLManager::makeContext(GLContextAttributes attr, GLBufferConfig config)
+{
+	return makeContext(attr, config, {});
 }
 
 void GLManager::resetCurrentContext() const
 {
 	display().resetCurrentContext();
 }
-
-}
-
-namespace IG
-{
 
 FrameTime FrameParams::presentTime() const
 {
@@ -171,46 +170,23 @@ ThreadId thisThreadId()
 	#endif
 }
 
-}
-
-#if defined(__has_feature)
-	#if __has_feature(address_sanitizer) && defined CONFIG_BASE_CUSTOM_NEW_DELETE
-	#undef CONFIG_BASE_NO_CUSTOM_NEW_DELETE
-	#warning "cannot use custom new/delete with address sanitizer"
-	#endif
-#endif
-
-#ifdef CONFIG_BASE_CUSTOM_NEW_DELETE
-
-void* operator new (std::size_t size)
-#ifdef __EXCEPTIONS
-	throw (std::bad_alloc)
-#endif
-{ return std::malloc(size); }
-
-void* operator new[] (std::size_t size)
-#ifdef __EXCEPTIONS
-	throw (std::bad_alloc)
-#endif
-{ return std::malloc(size); }
-
-void operator delete (void *o) noexcept { std::free(o); }
-void operator delete[] (void *o) noexcept { std::free(o); }
-
-#endif
-
-#ifdef __EXCEPTIONS
-namespace __gnu_cxx
+WRect Viewport::relRect(WP pos, WP size, _2DOrigin posOrigin, _2DOrigin screenOrigin) const
 {
+	// adjust to the requested origin on the screen
+	auto newX = LT2DO.adjustX(pos.x, width(), screenOrigin.invertYIfCartesian());
+	auto newY = LT2DO.adjustY(pos.y, height(), screenOrigin.invertYIfCartesian());
+	WRect rect;
+	rect.setPosRel({newX, newY}, size, posOrigin);
+	return rect;
+}
 
-void __verbose_terminate_handler()
+WRect Viewport::relRectBestFit(WP pos, float aspectRatio, _2DOrigin posOrigin, _2DOrigin screenOrigin) const
 {
-	logErr("terminated by uncaught exception");
-  abort();
+	auto size = sizesWithRatioBestFit(aspectRatio, width(), height());
+	return relRect(pos, size, posOrigin, screenOrigin);
 }
 
 }
-#endif
 
 #ifndef __ANDROID__
 static void logBacktrace()
@@ -218,7 +194,7 @@ static void logBacktrace()
 	void *arr[10];
 	auto size = backtrace(arr, 10);
 	char **backtraceStrings = backtrace_symbols(arr, size);
-	iterateTimes(size, i)
+	for(auto i : IG::iotaCount(size))
 		logger_printf(LOG_E, "%s\n", backtraceStrings[i]);
 }
 #endif

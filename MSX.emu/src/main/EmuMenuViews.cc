@@ -13,8 +13,8 @@
 	You should have received a copy of the GNU General Public License
 	along with MSX.emu.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <emuframework/EmuApp.hh>
 #include <emuframework/OptionView.hh>
+#include <emuframework/AudioOptionView.hh>
 #include <emuframework/EmuSystemActionsView.hh>
 #include <emuframework/FilePicker.hh>
 #include <imagine/gui/AlertView.hh>
@@ -22,7 +22,8 @@
 #include <imagine/fs/FS.hh>
 #include <imagine/fs/AssetFS.hh>
 #include <imagine/util/format.hh>
-#include "internal.hh"
+#include <imagine/util/string.h>
+#include "MainApp.hh"
 
 extern "C"
 {
@@ -31,6 +32,9 @@ extern "C"
 
 namespace EmuEx
 {
+
+template <class T>
+using MainAppHelper = EmuAppHelper<T, MainApp>;
 
 static std::vector<FS::FileString> machinesNames(IG::ApplicationContext ctx, std::string_view basePath)
 {
@@ -104,9 +108,10 @@ static int machineIndex(std::vector<FS::FileString> &name, FS::FileString search
 	}
 }
 
-class CustomSystemOptionView : public SystemOptionView
+class CustomSystemOptionView : public SystemOptionView, public MainAppHelper<CustomSystemOptionView>
 {
-private:
+	using MainAppHelper<CustomSystemOptionView>::system;
+
 	std::vector<FS::FileString> msxMachineName{};
 	std::vector<TextMenuItem> msxMachineItem{};
 
@@ -117,7 +122,7 @@ private:
 		{
 			if(idx == -1)
 			{
-				t.setString("None");
+				t.resetString("None");
 				return true;
 			}
 			return false;
@@ -142,13 +147,13 @@ private:
 		for(const auto &name : msxMachineName)
 		{
 			msxMachineItem.emplace_back(name, &defaultFace(),
-			[name = name.data()](Input::Event)
+			[this, name = name.data()](Input::Event)
 			{
-				setDefaultMachineName(name);
+				system().setDefaultMachineName(name);
 				logMsg("set machine type: %s", name);
 			});
 		}
-		msxMachine.setSelected(machineIndex(msxMachineName, optionDefaultMachineNameStr));
+		msxMachine.setSelected(machineIndex(msxMachineName, system().optionDefaultMachineNameStr));
 	}
 
 	BoolMenuItem skipFdcAccess
@@ -230,7 +235,7 @@ public:
 
 static const char *insertEjectDiskMenuStr[] {"Insert File", "Eject"};
 
-class MsxIOControlView : public TableView, public EmuAppHelper<MsxIOControlView>
+class MsxIOControlView : public TableView, public MainAppHelper<MsxIOControlView>
 {
 public:
 	static const char *hdSlotPrefix[4];
@@ -305,22 +310,22 @@ public:
 
 	TextMenuItem hdSlot[4]
 	{
-		{{}, &defaultFace(), [this](TextMenuItem &item, Input::Event e) { onSelectHD(item, e, 0); }},
-		{{}, &defaultFace(), [this](TextMenuItem &item, Input::Event e) { onSelectHD(item, e, 1); }},
-		{{}, &defaultFace(), [this](TextMenuItem &item, Input::Event e) { onSelectHD(item, e, 2); }},
-		{{}, &defaultFace(), [this](TextMenuItem &item, Input::Event e) { onSelectHD(item, e, 3); }}
+		{u"", &defaultFace(), [this](TextMenuItem &item, Input::Event e) { onSelectHD(item, e, 0); }},
+		{u"", &defaultFace(), [this](TextMenuItem &item, Input::Event e) { onSelectHD(item, e, 1); }},
+		{u"", &defaultFace(), [this](TextMenuItem &item, Input::Event e) { onSelectHD(item, e, 2); }},
+		{u"", &defaultFace(), [this](TextMenuItem &item, Input::Event e) { onSelectHD(item, e, 3); }}
 	};
 
 	static const char *romSlotPrefix[2];
 
 	void updateROMText(int slot)
 	{
-		romSlot[slot].setName(fmt::format("{} {}", romSlotPrefix[slot], cartName[slot]));
+		romSlot[slot].setName(fmt::format("{} {}", romSlotPrefix[slot], system().cartName[slot]));
 	}
 
 	void onROMMediaChange(std::string_view name, int slot)
 	{
-		cartName[slot] = name;
+		system().cartName[slot] = name;
 		updateROMText(slot);
 		romSlot[slot].compile(renderer(), projP);
 		updateHDStatusFromCartSlot(slot);
@@ -389,20 +394,20 @@ public:
 
 	TextMenuItem romSlot[2]
 	{
-		{{}, &defaultFace(), [this](Input::Event e) { onSelectROM(e, 0); }},
-		{{}, &defaultFace(), [this](Input::Event e) { onSelectROM(e, 1); }}
+		{u"", &defaultFace(), [this](Input::Event e) { onSelectROM(e, 0); }},
+		{u"", &defaultFace(), [this](Input::Event e) { onSelectROM(e, 1); }}
 	};
 
 	static const char *diskSlotPrefix[2];
 
 	void updateDiskText(int slot)
 	{
-		diskSlot[slot].setName(fmt::format("{} {}", diskSlotPrefix[slot], diskName[slot]));
+		diskSlot[slot].setName(fmt::format("{} {}", diskSlotPrefix[slot], system().diskName[slot]));
 	}
 
 	void onDiskMediaChange(std::string_view name, int slot)
 	{
-		diskName[slot] = name;
+		system().diskName[slot] = name;
 		updateDiskText(slot);
 		diskSlot[slot].compile(renderer(), projP);
 	}
@@ -427,7 +432,7 @@ public:
 
 	void onSelectDisk(Input::Event e, uint8_t slot)
 	{
-		if(diskName[slot].size())
+		if(system().diskName[slot].size())
 		{
 			auto multiChoiceView = makeViewWithName<TextTableView>("Disk Drive", std::size(insertEjectDiskMenuStr));
 			multiChoiceView->appendItem(insertEjectDiskMenuStr[0],
@@ -453,11 +458,11 @@ public:
 
 	TextMenuItem diskSlot[2]
 	{
-		{{}, &defaultFace(), [this](Input::Event e) { onSelectDisk(e, 0); }},
-		{{}, &defaultFace(), [this](Input::Event e) { onSelectDisk(e, 1); }}
+		{u"", &defaultFace(), [this](Input::Event e) { onSelectDisk(e, 0); }},
+		{u"", &defaultFace(), [this](Input::Event e) { onSelectDisk(e, 1); }}
 	};
 
-	StaticArrayList<MenuItem*, 9> item{};
+	StaticArrayList<MenuItem*, 9> item;
 
 public:
 	MsxIOControlView(ViewAttachParams attach):
@@ -475,19 +480,19 @@ public:
 			}
 		}
 	{
-		iterateTimes(2, slot)
+		for(auto slot : iotaCount(2))
 		{
 			updateROMText(slot);
 			romSlot[slot].setActive((int)slot < boardInfo.cartridgeCount);
 			item.emplace_back(&romSlot[slot]);
 		}
-		iterateTimes(2, slot)
+		for(auto slot : iotaCount(2))
 		{
 			updateDiskText(slot);
 			diskSlot[slot].setActive((int)slot < boardInfo.diskdriveCount);
 			item.emplace_back(&diskSlot[slot]);
 		}
-		iterateTimes(4, slot)
+		for(auto slot : iotaCount(4))
 		{
 			updateHDText(slot);
 			hdSlot[slot].setActive(boardGetHdType(slot/2) == HD_SUNRISEIDE);
@@ -500,8 +505,11 @@ const char *MsxIOControlView::romSlotPrefix[2] {"ROM1:", "ROM2:"};
 const char *MsxIOControlView::diskSlotPrefix[2] {"Disk1:", "Disk2:"};
 const char *MsxIOControlView::hdSlotPrefix[4] {"IDE1-M:", "IDE1-S:", "IDE2-M:", "IDE2-S:"};
 
-class CustomSystemActionsView : public EmuSystemActionsView
+class CustomSystemActionsView : public EmuSystemActionsView, public MainAppHelper<CustomSystemActionsView>
 {
+	using MainAppHelper<CustomSystemActionsView>::system;
+	using MainAppHelper<CustomSystemActionsView>::app;
+
 private:
 	TextMenuItem msxIOControl
 	{
@@ -512,7 +520,7 @@ private:
 			{
 				pushAndShow(makeView<MsxIOControlView>(), e);
 			}
-			else if(system().hasContent() && activeBoardType != BOARD_MSX)
+			else if(system().hasContent() && system().activeBoardType != BOARD_MSX)
 			{
 				app().postMessage(2, false, "Only used in MSX mode");
 			}
@@ -529,7 +537,7 @@ private:
 		{
 			if(idx == -1)
 			{
-				t.setString("None");
+				t.resetString("None");
 				return true;
 			}
 			return false;
@@ -561,7 +569,7 @@ private:
 					{
 						try
 						{
-							setCurrentMachineName(app(), name);
+							system().setCurrentMachineName(app(), name);
 						}
 						catch(std::exception &err)
 						{
@@ -569,7 +577,7 @@ private:
 							return;
 						}
 						auto machineName = currentMachineName();
-						optionSessionMachineNameStr = machineName;
+						system().optionSessionMachineNameStr = machineName;
 						msxMachine.setSelected(machineIndex(msxMachineName, machineName));
 						system().sessionOptionSet();
 						dismissPrevious();
@@ -599,7 +607,7 @@ public:
 	void onShow()
 	{
 		EmuSystemActionsView::onShow();
-		msxIOControl.setActive(system().hasContent() && activeBoardType == BOARD_MSX);
+		msxIOControl.setActive(system().hasContent() && system().activeBoardType == BOARD_MSX);
 		msxMachine.setSelected(machineIndex(msxMachineName, currentMachineName()));
 	}
 };
@@ -615,7 +623,7 @@ static const MixerAudioType channelType[]
 	MIXER_CHANNEL_PCM,
 };
 
-class SoundMixerView : public TableView, public EmuAppHelper<SoundMixerView>
+class SoundMixerView : public TableView, public MainAppHelper<SoundMixerView>
 {
 public:
 	SoundMixerView(ViewAttachParams attach):
@@ -719,7 +727,7 @@ protected:
 			"Volume", &defaultFace(),
 			[this, type](uint32_t idx, Gfx::Text &t)
 			{
-				t.setString(fmt::format("{}%", mixerVolumeOption(type)));
+				t.resetString(fmt::format("{}%", mixerVolumeOption(type)));
 				return true;
 			},
 			1,
@@ -790,7 +798,7 @@ protected:
 			"Pan", &defaultFace(),
 			[this, type](uint32_t idx, Gfx::Text &t)
 			{
-				t.setString(fmt::format("{}%", mixerPanOption(type)));
+				t.resetString(fmt::format("{}%", mixerPanOption(type)));
 				return true;
 			},
 			1,

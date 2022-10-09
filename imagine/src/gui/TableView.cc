@@ -18,8 +18,9 @@
 #include <imagine/gui/TableView.hh>
 #include <imagine/gui/ViewManager.hh>
 #include <imagine/gui/MenuItem.hh>
-#include <imagine/gfx/GeomRect.hh>
+#include <imagine/gfx/GeomQuad.hh>
 #include <imagine/gfx/RendererCommands.hh>
+#include <imagine/gfx/Renderer.hh>
 #include <imagine/input/Input.hh>
 #include <imagine/base/Window.hh>
 #include <imagine/util/algorithm.h>
@@ -81,12 +82,15 @@ void TableView::prepareDraw()
 	}
 }
 
-void TableView::draw(Gfx::RendererCommands &cmds)
+void TableView::draw(Gfx::RendererCommands &__restrict__ cmds)
 {
 	ssize_t cells_ = items(*this);
 	if(!cells_)
 		return;
 	using namespace IG::Gfx;
+	auto visibleRect = viewRect() + WindowRect{{}, {0, displayRect().y2 - viewRect().y2}};
+	cmds.setClipRect(renderer().makeClipRect(window(), visibleRect));
+	cmds.setClipTest(true);
 	auto y = viewRect().yPos(LT2DO);
 	auto x = viewRect().xPos(LT2DO);
 	int startYCell = std::min(scrollOffset() / yCellSize, (int)cells_);
@@ -97,15 +101,15 @@ void TableView::draw(Gfx::RendererCommands &cmds)
 		y += -startYCell * yCellSize;
 		startYCell = 0;
 	}
-	//logMsg("draw cells [%d,%d)", startYCell, endYCell);
+	//logMsg("draw cells [%d,%d)", startYCell, (int)endYCell);
 	y -= scrollOffset() % yCellSize;
 
 	// draw separators
 	int yStart = y;
-	cmds.setCommonProgram(CommonProgram::NO_TEX, projP.makeTranslate());
+	cmds.basicEffect().disableTexture(cmds);
 	int selectedCellY = INT_MAX;
 	{
-		StaticArrayList<std::array<ColVertex, 4>, 80> vRect;
+		StaticArrayList<ColQuad, 80> vRect;
 		StaticArrayList<std::array<VertexIndex, 6>, vRect.capacity()> vRectIdx;
 		const auto headingColor = VertexColorPixelFormat.build(.4, .4, .4, 1.);
 		const auto regularColor = VertexColorPixelFormat.build(.2, .2, .2, 1.);
@@ -128,7 +132,7 @@ void TableView::draw(Gfx::RendererCommands &cmds)
 				}
 				vRectIdx.emplace_back(makeRectIndexArray(vRect.size()));
 				auto rect = IG::makeWindowRectRel({x, y-1}, {viewRect().xSize(), ySize});
-				vRect.emplace_back(makeColVertArray(projP.unProjectRect(rect), color));
+				vRect.emplace_back(projP.unProjectRect(rect), color);
 			}
 			y += yCellSize;
 			if(vRect.size() == vRect.capacity()) [[unlikely]]
@@ -136,9 +140,9 @@ void TableView::draw(Gfx::RendererCommands &cmds)
 		}
 		if(vRect.size())
 		{
-			cmds.setBlendMode(0);
+			cmds.set(BlendMode::OFF);
 			cmds.set(ColorName::WHITE);
-			drawQuads(cmds, &vRect[0], vRect.size(), &vRectIdx[0], vRectIdx.size());
+			drawQuads(cmds, vRect, vRectIdx);
 		}
 	}
 
@@ -148,7 +152,7 @@ void TableView::draw(Gfx::RendererCommands &cmds)
 	// draw selected rectangle
 	if(selectedCellY != INT_MAX)
 	{
-		cmds.setBlendMode(BLEND_MODE_ALPHA);
+		cmds.set(BlendMode::ALPHA);
 		if(hasFocus)
 			cmds.setColor(.2, .71, .9, 1./3.);
 		else
@@ -166,12 +170,13 @@ void TableView::draw(Gfx::RendererCommands &cmds)
 		drawElement(cmds, i, item(*this, i), projP.unProjectRect(rect), xIndent);
 		y += yCellSize;
 	}
+	cmds.setClipTest(false);
 }
 
 void TableView::place()
 {
 	auto cells_ = items(*this);
-	iterateTimes(cells_, i)
+	for(auto i : iotaCount(cells_))
 	{
 		//logMsg("compile item %d", i);
 		item(*this, i).compile(renderer(), projP);
@@ -179,7 +184,7 @@ void TableView::place()
 	if(cells_)
 	{
 		setYCellSize(IG::makeEvenRoundedUp(item(*this, 0).ySize()*2));
-		visibleCells = IG::divRoundUp(viewRect().ySize(), yCellSize) + 1;
+		visibleCells = IG::divRoundUp(displayRect().ySize(), yCellSize) + 1;
 		scrollToFocusRect();
 	}
 	else
@@ -286,7 +291,7 @@ IG::WindowRect TableView::focusRect()
 int TableView::nextSelectableElement(int start, int items)
 {
 	int elem = wrapMinMax(start, 0, items);
-	iterateTimes(items, i)
+	for(auto i : iotaCount(items))
 	{
 		if(elementIsSelectable(item(*this, elem)))
 		{
@@ -300,7 +305,7 @@ int TableView::nextSelectableElement(int start, int items)
 int TableView::prevSelectableElement(int start, int items)
 {
 	int elem = wrapMinMax(start, 0, items);
-	iterateTimes(items, i)
+	for(auto i : iotaCount(items))
 	{
 		if(elementIsSelectable(item(*this, elem)))
 		{
@@ -485,10 +490,10 @@ bool TableView::handleTableInput(const Input::Event &e, bool &movedSelected)
 			}
 			return true;
 		}
-	}, e.asVariant());
+	}, e);
 }
 
-void TableView::drawElement(Gfx::RendererCommands &cmds, size_t i, MenuItem &item, Gfx::GCRect rect, float xIndent) const
+void TableView::drawElement(Gfx::RendererCommands &__restrict__ cmds, size_t i, MenuItem &item, Gfx::GCRect rect, float xIndent) const
 {
 	item.draw(cmds, rect.x, rect.pos(C2DO).y, rect.xSize(), rect.ySize(), xIndent, align, projP, Gfx::color(Gfx::ColorName::WHITE));
 }

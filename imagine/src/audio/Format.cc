@@ -24,7 +24,8 @@ namespace IG::Audio
 
 static int16_t clamp16FromFloat(float x)
 {
-	return IG::clampFromFloat<int16_t>(x);
+	assumeExpr(x >= -1.f && x <= 1.f);
+	return remap(x, -1.f, 1.f, std::numeric_limits<int16_t>{});
 }
 
 static float *convertI16SamplesToFloat(float * __restrict__ dest, size_t samples, const int16_t * __restrict__ src, float volume)
@@ -96,7 +97,6 @@ void *Format::copyFrames(void * __restrict__ dest, const void * __restrict__ src
 			else
 			{
 				bug_unreachable("unimplemented conversion");
-				return dest;
 			}
 		}
 		case 4:
@@ -112,13 +112,11 @@ void *Format::copyFrames(void * __restrict__ dest, const void * __restrict__ src
 			else
 			{
 				bug_unreachable("unimplemented conversion");
-				return dest;
 			}
 		}
 		default:
 		{
 			bug_unreachable("unimplemented conversion");
-			return dest;
 		}
 	}
 }

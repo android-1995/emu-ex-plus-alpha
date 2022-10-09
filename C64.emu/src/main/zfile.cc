@@ -14,12 +14,12 @@
 	along with C64.emu.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <imagine/fs/ArchiveFS.hh>
-#include <imagine/io/FileIO.hh>
+#include <imagine/io/IO.hh>
 #include <imagine/logger/logger.h>
 #include <imagine/util/string.h>
 #include <emuframework/EmuApp.hh>
 #include <emuframework/FilePicker.hh>
-#include "internal.hh"
+#include "MainSystem.hh"
 
 extern "C"
 {
@@ -33,7 +33,7 @@ CLINK FILE *zfile_fopen(const char *path, const char *mode)
 	auto appContext = gAppContext();
 	if(EmuApp::hasArchiveExtension(appContext.fileUriDisplayName(path)))
 	{
-		if(IG::stringContains(mode, 'w'))
+		if(std::string_view{mode}.contains('w'))
 		{
 			logErr("opening archive %s with write mode not supported", path);
 			return nullptr;
@@ -49,7 +49,7 @@ CLINK FILE *zfile_fopen(const char *path, const char *mode)
 				if(EmuSystem::defaultFsFilter(entry.name()))
 				{
 					logMsg("archive file entry:%s", entry.name().data());
-					return GenericIO{MapIO{entry.moveIO()}}.moveToFileStream(mode);
+					return MapIO{entry.moveIO()}.toFileStream(mode);
 				}
 			}
 			logErr("no recognized file extensions in archive:%s", path);

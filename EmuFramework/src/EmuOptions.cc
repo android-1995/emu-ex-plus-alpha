@@ -19,13 +19,15 @@
 #include <emuframework/VideoImageEffect.hh>
 #include <emuframework/VideoImageOverlay.hh>
 #include <emuframework/VController.hh>
-#include "private.hh"
 #include "privateInput.hh"
+#include "WindowData.hh"
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/gfx/Renderer.hh>
 #include <imagine/base/Screen.hh>
 #include <imagine/base/Window.hh>
 #include <imagine/fs/FS.hh>
+#include <imagine/io/FileIO.hh>
+#include <imagine/io/MapIO.hh>
 #include <imagine/util/format.hh>
 
 namespace EmuEx
@@ -128,21 +130,25 @@ void EmuApp::initOptions(IG::ApplicationContext ctx)
 	{
 		optionFrameRate.isConst = true;
 	}
-
-	system().initOptions(*this);
 }
 
 void EmuApp::applyFontSize(Window &win)
 {
-	float size = optionFontSize / 1000.;
-	logMsg("setting up font size %f", (double)size);
-	viewManager.defaultFace().setFontSettings(renderer, IG::FontSettings(win.heightScaledMMInPixels(size)));
-	viewManager.defaultBoldFace().setFontSettings(renderer, IG::FontSettings(win.heightScaledMMInPixels(size)));
+	auto settings = fontSettings(win);
+	logMsg("setting up font with pixel height:%d", settings.pixelHeight());
+	viewManager.defaultFace().setFontSettings(renderer, settings);
+	viewManager.defaultBoldFace().setFontSettings(renderer, settings);
 }
 
-void EmuApp::writeRecentContent(IO &io)
+IG::FontSettings EmuApp::fontSettings(Window &win) const
 {
-	unsigned strSizes = 0;
+	float size = optionFontSize / 1000.;
+	return {win.heightScaledMMInPixels(size)};
+}
+
+void EmuApp::writeRecentContent(FileIO &io)
+{
+	size_t strSizes = 0;
 	for(const auto &e : recentContentList)
 	{
 		strSizes += 2;
@@ -158,14 +164,14 @@ void EmuApp::writeRecentContent(IO &io)
 	}
 }
 
-void EmuApp::readRecentContent(IG::ApplicationContext ctx, IO &io, unsigned readSize_)
+void EmuApp::readRecentContent(IG::ApplicationContext ctx, MapIO &io, size_t readSize_)
 {
-	int readSize = readSize_;
+	auto readSize = readSize_;
 	while(readSize && !recentContentList.isFull())
 	{
 		if(readSize < 2)
 		{
-			logMsg("expected string length but only %d bytes left", readSize);
+			logMsg("expected string length but only %zu bytes left", readSize);
 			break;
 		}
 
@@ -174,7 +180,7 @@ void EmuApp::readRecentContent(IG::ApplicationContext ctx, IO &io, unsigned read
 
 		if(len > readSize)
 		{
-			logMsg("string length %d longer than %d bytes left", len, readSize);
+			logMsg("string length %d longer than %zu bytes left", len, readSize);
 			break;
 		}
 
@@ -201,22 +207,35 @@ void EmuApp::readRecentContent(IG::ApplicationContext ctx, IO &io, unsigned read
 
 	if(readSize)
 	{
-		logMsg("skipping excess %d bytes", readSize);
+		logMsg("skipping excess %zu bytes", readSize);
 	}
 }
 
-void EmuApp::setFrameTime(EmuSystem::VideoSystem system, IG::FloatSeconds time)
+std::pair<IG::FloatSeconds, bool> EmuApp::setFrameTime(VideoSystem vidSys, IG::FloatSeconds time)
 {
-	frameTimeOption(system) = time.count();
+	auto wantedTime = time;
+	if(!time.count())
+	{
+		wantedTime = bestFrameTimeForScreen(vidSys);
+	}
+	if(!system().setFrameTime(vidSys, wantedTime))
+	{
+		return {wantedTime, false};
+	}
+	system().configFrameTime(soundRate());
+	frameTimeOption(vidSys) = time.count();
+	return {wantedTime, true};
 }
 
-IG::FloatSeconds EmuApp::frameTime(EmuSystem::VideoSystem system, IG::FloatSeconds fallback) const
+IG::FloatSeconds EmuApp::frameTime(VideoSystem system) const
 {
 	auto &opt = frameTimeOption(system);
-	return opt.val ? IG::FloatSeconds(opt.val) : fallback;
+	if(opt.val)
+		return IG::FloatSeconds(opt.val);
+	return bestFrameTimeForScreen(system);
 }
 
-bool EmuApp::frameTimeIsConst(EmuSystem::VideoSystem system) const
+bool EmuApp::frameTimeIsConst(VideoSystem system) const
 {
 	return frameTimeOption(system).isConst;
 }
@@ -259,8 +278,26 @@ bool EmuApp::setViewportZoom(uint8_t val)
 		return false;
 	optionViewportZoom = val;
 	logMsg("set viewport zoom: %d", int(optionViewportZoom));
-	viewController().startMainViewportAnimation();
+	auto &win = appContext().mainWindow();
+	viewController().updateMainWindowViewport(win, makeViewport(win), renderer.task());
+	viewController().postDrawToEmuWindows();
 	return true;
+}
+
+void EmuApp::setContentRotation(IG::Rotation r)
+{
+	contentRotation_ = r;
+	updateContentRotation();
+	viewController().placeEmuViews();
+	viewController().postDrawToEmuWindows();
+}
+
+void EmuApp::updateContentRotation()
+{
+	if(contentRotation_ == Rotation::ANY)
+		emuVideoLayer.setRotation(system().contentRotation());
+	else
+		emuVideoLayer.setRotation(contentRotation_);
 }
 
 bool EmuApp::setOverlayEffectLevel(EmuVideoLayer &videoLayer, uint8_t val)
@@ -321,17 +358,17 @@ void EmuApp::setHideStatusBarMode(Tristate mode)
 	applyOSNavStyle(appContext(), false);
 }
 
-void EmuApp::setEmuOrientation(Orientation o)
+void EmuApp::setEmuOrientation(OrientationMask o)
 {
-	optionEmuOrientation = o;
-	logMsg("set game orientation: %s", orientationToStr(int(optionEmuOrientation)));
+	optionEmuOrientation = std::to_underlying(o);
+	logMsg("set game orientation: %s", asString(o).data());
 }
 
-void EmuApp::setMenuOrientation(Orientation o)
+void EmuApp::setMenuOrientation(OrientationMask o)
 {
-	optionMenuOrientation = o;
-	renderer.setWindowValidOrientations(appContext().mainWindow(), optionMenuOrientation);
-	logMsg("set menu orientation: %s", IG::orientationToStr(int(optionMenuOrientation)));
+	optionMenuOrientation = std::to_underlying(o);
+	renderer.setWindowValidOrientations(appContext().mainWindow(), o);
+	logMsg("set menu orientation: %s", asString(o).data());
 }
 
 void EmuApp::setShowsBundledGames(bool on)
@@ -344,6 +381,14 @@ void EmuApp::setShowsBluetoothScanItems(bool on)
 {
 	optionShowBluetoothScan = on;
 	dispatchOnMainMenuItemOptionChanged();
+}
+
+void EmuApp::setLayoutBehindSystemUI(bool on)
+{
+	layoutBehindSystemUI = on;
+	auto &win = appContext().mainWindow();
+	viewController().updateMainWindowViewport(win, makeViewport(win), renderer.task());
+	viewController().postDrawToEmuWindows();
 }
 
 }

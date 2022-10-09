@@ -13,47 +13,87 @@
 	You should have received a copy of the GNU General Public License
 	along with PCE.emu.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <emuframework/EmuApp.hh>
 #include <emuframework/OptionView.hh>
+#include <emuframework/AudioOptionView.hh>
+#include <emuframework/VideoOptionView.hh>
 #include <emuframework/EmuSystemActionsView.hh>
 #include <emuframework/EmuInput.hh>
-#include "internal.hh"
+#include "MainApp.hh"
 #include <imagine/fs/FS.hh>
 #include <imagine/util/format.hh>
+#include <mednafen/pce_fast/vdc.h>
 
 namespace EmuEx
 {
 
-class ConsoleOptionView : public TableView, public EmuAppHelper<ConsoleOptionView>
+template <class T>
+using MainAppHelper = EmuAppHelper<T, MainApp>;
+
+class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionView>
 {
 	BoolMenuItem sixButtonPad
 	{
 		"6按键模式", &defaultFace(),
-		(bool)option6BtnPad,
+		(bool)system().option6BtnPad,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
 			system().sessionOptionSet();
-			option6BtnPad = item.flipBoolValue(*this);
-			set6ButtonPadEnabled(app(), option6BtnPad);
+			system().option6BtnPad = item.flipBoolValue(*this);
+			set6ButtonPadEnabled(app(), system().option6BtnPad);
 		}
 	};
 
 	BoolMenuItem arcadeCard
 	{
 		"街机卡", &defaultFace(),
-		(bool)optionArcadeCard,
+		(bool)system().optionArcadeCard,
 		[this](BoolMenuItem &item, View &, Input::Event e)
 		{
 			system().sessionOptionSet();
-			optionArcadeCard = item.flipBoolValue(*this);
+			system().optionArcadeCard = item.flipBoolValue(*this);
 			app().promptSystemReloadDueToSetOption(attachParams(), e);
 		}
 	};
 
-	std::array<MenuItem*, 2> menuItem
+	TextHeadingMenuItem videoHeading{"Video", &defaultBoldFace()};
+
+	TextMenuItem visibleVideoLinesItem[5]
+	{
+		{"11+224", &defaultFace(), setVisibleVideoLinesDel(11, 234)},
+		{"18+224", &defaultFace(), setVisibleVideoLinesDel(18, 241)},
+		{"4+232",  &defaultFace(), setVisibleVideoLinesDel(4, 235)},
+		{"3+239",  &defaultFace(), setVisibleVideoLinesDel(3, 241)},
+		{"0+242",  &defaultFace(), setVisibleVideoLinesDel(0, 241)},
+	};
+
+	MultiChoiceMenuItem visibleVideoLines
+	{
+		"Visible Lines", &defaultFace(),
+		[this]()
+		{
+			switch(system().visibleLines.first)
+			{
+				default: return 0;
+				case 18: return 1;
+				case 4: return 2;
+				case 3: return 3;
+				case 0: return 4;
+			}
+		}(),
+		visibleVideoLinesItem
+	};
+
+	TextMenuItem::SelectDelegate setVisibleVideoLinesDel(uint8_t startLine, uint8_t endLine)
+	{
+		return [=, this]() { system().setVisibleLines({startLine, endLine}); };
+	}
+
+	std::array<MenuItem*, 4> menuItem
 	{
 		&sixButtonPad,
-		&arcadeCard
+		&arcadeCard,
+		&videoHeading,
+		&visibleVideoLines,
 	};
 
 public:
@@ -73,10 +113,7 @@ private:
 	TextMenuItem options
 	{
 		"控制台设置", &defaultFace(),
-		[this](TextMenuItem &, View &, Input::Event e)
-		{
-			pushAndShow(makeView<ConsoleOptionView>(), e);
-		}
+		[this](Input::Event e) { pushAndShow(makeView<ConsoleOptionView>(), e); }
 	};
 
 public:
@@ -87,17 +124,19 @@ public:
 	}
 };
 
-class CustomFilePathOptionView : public FilePathOptionView
+class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper<CustomFilePathOptionView>
 {
+	using MainAppHelper<CustomFilePathOptionView>::system;
+
 	TextMenuItem sysCardPath
 	{
-		biosMenuEntryStr(appContext().fileUriDisplayName(EmuEx::sysCardPath)), &defaultFace(),
-		[this](TextMenuItem &, View &, Input::Event e)
+		biosMenuEntryStr(appContext().fileUriDisplayName(system().sysCardPath)), &defaultFace(),
+		[this](Input::Event e)
 		{
-			auto biosSelectMenu = makeViewWithName<BiosSelectMenu>("系统卡", &EmuEx::sysCardPath,
+			auto biosSelectMenu = makeViewWithName<BiosSelectMenu>("系统卡", &system().sysCardPath,
 				[this](std::string_view displayName)
 				{
-					logMsg("set bios %s", EmuEx::sysCardPath.data());
+					logMsg("set bios %s", system().sysCardPath.data());
 					sysCardPath.compile(biosMenuEntryStr(displayName), renderer(), projP);
 				},
 				hasHuCardExtension);
@@ -118,11 +157,216 @@ public:
 	}
 };
 
+class CustomVideoOptionView : public VideoOptionView, public MainAppHelper<CustomVideoOptionView>
+{
+	using  MainAppHelper<CustomVideoOptionView>::app;
+	using  MainAppHelper<CustomVideoOptionView>::system;
+
+	BoolMenuItem spriteLimit
+	{
+		"限制精灵", &defaultFace(),
+		!system().noSpriteLimit,
+		[this](BoolMenuItem &item) { system().setNoSpriteLimit(!item.flipBoolValue(*this)); }
+	};
+
+	TextMenuItem visibleVideoLinesItem[5]
+	{
+		{"11+224", &defaultFace(), setVisibleVideoLinesDel(11, 234)},
+		{"18+224", &defaultFace(), setVisibleVideoLinesDel(18, 241)},
+		{"4+232",  &defaultFace(), setVisibleVideoLinesDel(4, 235)},
+		{"3+239",  &defaultFace(), setVisibleVideoLinesDel(3, 241)},
+		{"0+242",  &defaultFace(), setVisibleVideoLinesDel(0, 241)},
+	};
+
+	MultiChoiceMenuItem visibleVideoLines
+	{
+		"默认可见视频线", &defaultFace(),
+		[this]()
+		{
+			switch(system().defaultVisibleLines.first)
+			{
+				default: return 0;
+				case 18: return 1;
+				case 4: return 2;
+				case 3: return 3;
+				case 0: return 4;
+			}
+		}(),
+		visibleVideoLinesItem
+	};
+
+	TextMenuItem::SelectDelegate setVisibleVideoLinesDel(uint8_t startLine, uint8_t endLine)
+	{
+		return [=, this]() { system().defaultVisibleLines = {startLine, endLine}; };
+	}
+
+	BoolMenuItem correctLineAspect
+	{
+		"正确的线条比例", &defaultFace(),
+		system().correctLineAspect,
+		[this](BoolMenuItem &item)
+		{
+			system().correctLineAspect = item.flipBoolValue(*this);
+			app().viewController().placeEmuViews();
+		}
+	};
+
+public:
+	CustomVideoOptionView(ViewAttachParams attach): VideoOptionView{attach, true}
+	{
+		loadStockItems();
+		item.emplace_back(&systemSpecificHeading);
+		item.emplace_back(&spriteLimit);
+		item.emplace_back(&visibleVideoLines);
+		item.emplace_back(&correctLineAspect);
+	}
+};
+
+class CustomSystemOptionView : public SystemOptionView, public MainAppHelper<CustomSystemOptionView>
+{
+	using MainAppHelper<CustomSystemOptionView>::system;
+
+	TextMenuItem cdSpeedItem[5]
+	{
+		{"1x", &defaultFace(), setCdSpeedDel(), 1},
+		{"2x", &defaultFace(), setCdSpeedDel(), 2},
+		{"4x", &defaultFace(), setCdSpeedDel(), 4},
+		{"8x", &defaultFace(), setCdSpeedDel(), 8},
+	};
+
+	MultiChoiceMenuItem cdSpeed
+	{
+		"CD访问速度", &defaultFace(),
+		(MenuItem::Id)system().cdSpeed,
+		cdSpeedItem
+	};
+
+	TextMenuItem::SelectDelegate setCdSpeedDel()
+	{
+		return [this](TextMenuItem &item) { system().setCdSpeed(item.id()); };
+	}
+
+public:
+	CustomSystemOptionView(ViewAttachParams attach): SystemOptionView{attach, true}
+	{
+		loadStockItems();
+		item.emplace_back(&cdSpeed);
+	}
+};
+
+class CustomAudioOptionView : public AudioOptionView, public MainAppHelper<CustomAudioOptionView>
+{
+	using MainAppHelper<CustomAudioOptionView>::system;
+	using MainAppHelper<CustomAudioOptionView>::app;
+
+	TextHeadingMenuItem mixer{"混音器", &defaultBoldFace()};
+
+	struct VolumeTypeDesc
+	{
+		std::string_view name{};
+		size_t idx{};
+	};
+
+	static constexpr VolumeTypeDesc desc(VolumeType type)
+	{
+		switch(type)
+		{
+			case VolumeType::CDDA: return {"CD-DA音量", 0};
+			case VolumeType::ADPCM: return {"ADPCM音量", 1};
+		}
+		bug_unreachable("invalid VolumeType");
+	}
+
+	using VolumeChoiceItemArr = std::array<TextMenuItem, 3>;
+
+	VolumeChoiceItemArr volumeLevelChoiceItems(VolumeType type)
+	{
+		return
+		{
+			TextMenuItem
+			{
+				"默认", &defaultFace(),
+				[=, this]() { system().setVolume(type, 100); },
+				100
+			},
+			TextMenuItem
+			{
+				"关", &defaultFace(),
+				[=, this]() { system().setVolume(type, 0); },
+				0
+			},
+			TextMenuItem
+			{
+				"自定义值", &defaultFace(),
+				[=, this](Input::Event e)
+				{
+					app().pushAndShowNewCollectValueRangeInputView<int, 0, 200>(attachParams(), e, "输入0到200", "",
+						[=, this](EmuApp &, auto val)
+						{
+							system().setVolume(type, val);
+							volumeLevel[desc(type).idx].setSelected((MenuItem::Id)val, *this);
+							dismissPrevious();
+							return true;
+						});
+					return false;
+				}, MenuItem::DEFAULT_ID
+			}
+		};
+	}
+
+	std::array<VolumeChoiceItemArr, 2> volumeLevelItem
+	{
+		volumeLevelChoiceItems(VolumeType::CDDA),
+		volumeLevelChoiceItems(VolumeType::ADPCM),
+	};
+
+	MultiChoiceMenuItem volumeLevelMenuItem(VolumeType type)
+	{
+		return
+		{
+			desc(type).name, &defaultFace(),
+			[=, this](size_t idx, Gfx::Text &t)
+			{
+				t.resetString(fmt::format("{}%", system().volume(type)));
+				return true;
+			},
+			(MenuItem::Id)system().volume(type),
+			volumeLevelItem[desc(type).idx]
+		};
+	}
+
+	std::array<MultiChoiceMenuItem, 2> volumeLevel
+	{
+		volumeLevelMenuItem(VolumeType::CDDA),
+		volumeLevelMenuItem(VolumeType::ADPCM),
+	};
+
+	BoolMenuItem adpcmFilter
+	{
+		"ADPCM低通滤波器", &defaultFace(),
+		system().adpcmFilter,
+		[this](BoolMenuItem &item) { system().setAdpcmFilter(item.flipBoolValue(*this)); }
+	};
+
+public:
+	CustomAudioOptionView(ViewAttachParams attach): AudioOptionView{attach, true}
+	{
+		loadStockItems();
+		item.emplace_back(&adpcmFilter);
+		item.emplace_back(&mixer);
+		item.emplace_back(&volumeLevel[0]);
+		item.emplace_back(&volumeLevel[1]);
+	}
+};
+
 std::unique_ptr<View> EmuApp::makeCustomView(ViewAttachParams attach, ViewID id)
 {
 	switch(id)
 	{
 		case ViewID::SYSTEM_ACTIONS: return std::make_unique<CustomSystemActionsView>(attach);
+		case ViewID::AUDIO_OPTIONS: return std::make_unique<CustomAudioOptionView>(attach);
+		case ViewID::VIDEO_OPTIONS: return std::make_unique<CustomVideoOptionView>(attach);
+		case ViewID::SYSTEM_OPTIONS: return std::make_unique<CustomSystemOptionView>(attach);
 		case ViewID::FILE_PATH_OPTIONS: return std::make_unique<CustomFilePathOptionView>(attach);
 		default: return nullptr;
 	}

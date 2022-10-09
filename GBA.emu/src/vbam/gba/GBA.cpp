@@ -27,6 +27,7 @@
 #include "elf.h"
 #include "ereader.h"
 #include <imagine/logger/logger.h>
+#include <imagine/io/IO.hh>
 #include <imagine/io/FileIO.hh>
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/util/algorithm.h>
@@ -858,7 +859,7 @@ static bool CPUWriteState(GBASys &gba, gzFile gzFile)
 
 bool CPUWriteState(IG::ApplicationContext ctx, GBASys &gba, const char* file)
 {
-  gzFile gzFile = utilGzOpen(ctx.openFileUriFd(file, IG::IO::OPEN_NEW | IG::IO::TEST_BIT).release(), "wb");
+  gzFile gzFile = utilGzOpen(ctx.openFileUriFd(file, IG::OpenFlagsMask::NEW | IG::OpenFlagsMask::TEST).release(), "wb");
 
   if (gzFile == NULL) {
     systemMessage(MSG_ERROR_CREATING_FILE, N_("Error creating file %s"), file);
@@ -1356,7 +1357,7 @@ bool CPUImportEepromFile(GBASys &gba, const char* fileName)
 
 bool CPUReadBatteryFile(IG::ApplicationContext ctx, GBASys &gba, const char* fileName)
 {
-  auto buff = IG::FileUtils::rwBufferFromUri(ctx, fileName, IG::IO::TEST_BIT, saveMemorySize(), 0xFF);
+  auto buff = IG::FileUtils::rwBufferFromUri(ctx, fileName, IG::OpenFlagsMask::TEST, saveMemorySize(), 0xFF);
   if(!buff)
     return false;
   saveMemoryIsMappedFile = buff.isMappedFile();
@@ -2693,7 +2694,6 @@ void CPUUpdateRegister(ARM7TDMI &cpu, uint32_t address, uint16_t value)
       CPUUpdateRender();
       // we only care about changes in BG0-BG3
       if (changeBG) {
-      	logMsg("changed bg mode: %d", DISPCNT & 7);
         CPUUpdateRenderBuffers(false);
       }
       break;

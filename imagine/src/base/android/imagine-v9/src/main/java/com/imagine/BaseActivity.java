@@ -34,6 +34,7 @@ import android.view.WindowManager;
 import android.view.Display;
 import android.view.InputDevice;
 import android.view.Gravity;
+import android.view.DisplayCutout;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.PixelFormat;
@@ -51,6 +52,7 @@ import android.content.pm.ShortcutInfo;
 import android.content.ContentResolver;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.io.File;
 import android.util.Log;
 import android.provider.DocumentsContract;
 
@@ -65,7 +67,7 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 		float refreshRate, int rotation, DisplayMetrics metrics);
 	static native void inputDeviceEnumerated(long nativeUserData,
 		int devID, InputDevice dev, String name, int src, int kbType,
-		int jsAxisBits, boolean isPowerButton);
+		int jsAxisBits, int vendorProductId, boolean isPowerButton);
 	static native void uriPicked(long nativeUserData, String uri, String name);
 	static native boolean uriFileListed(long nativeUserData, String uri, String name, boolean isDir);
 	private static final int commonUILayoutFlags = View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
@@ -76,29 +78,33 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 	private static final int REQUEST_BT_ON = 2;
 	private static final int REQUEST_OPEN_DOCUMENT = 3;
 
-	boolean hasPermanentMenuKey()
+	int deviceFlags()
 	{
+		// keep in sync with AndroidApplication.hh
+		final int PERMANENT_MENU_KEY_BIT = 1;
+		final int DISPLAY_CUTOUT_BIT = 1 << 1;
+		final int HANDLE_ROTATION_ANIMATION_BIT = 1 << 2;
+		int flags = 0;
 		if(android.os.Build.VERSION.SDK_INT >= 14)
 		{
-			return ViewConfiguration.get(this).hasPermanentMenuKey();
+			if(ViewConfiguration.get(this).hasPermanentMenuKey())
+				flags |= PERMANENT_MENU_KEY_BIT;
 		}
-		return true;
-	}
-		
-	int sigHash()
-	{
-		try
+		if(android.os.Build.VERSION.SDK_INT >= 29)
 		{
-			Signature[] sig = getPackageManager().getPackageInfo(getPackageName(), PackageManager.GET_SIGNATURES).signatures;
-			//Log.i(logTag, "sig hash " + sig[0].hashCode());
-			return sig[0].hashCode();
+			DisplayCutout cutout = defaultDpy.getCutout();
+			if(cutout != null)
+				flags |= DISPLAY_CUTOUT_BIT;
 		}
-		catch(PackageManager.NameNotFoundException e)
+		if(android.os.Build.VERSION.SDK_INT <= 10)
 		{
-			return 0;
+			// Use our on rotation animation on Gingerbread OS versions
+			if(!android.os.Build.DISPLAY.contains("cyano")) // CM7 provides its own animation
+				flags |= HANDLE_ROTATION_ANIMATION_BIT;
 		}
+		return flags;
 	}
-	
+
 	boolean packageIsInstalled(String name)
 	{
 		boolean found = false;
@@ -111,12 +117,6 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 		{
 		}
 		return found;
-	}
-	
-	static boolean gbAnimatesRotation()
-	{
-		// Check if Gingerbread OS provides rotation animation
-		return android.os.Build.DISPLAY.contains("cyano"); // Disable our rotation animation on CM7
 	}
 
 	int mainDisplayRotation()
@@ -152,12 +152,23 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 	{
 		return getCacheDir().getAbsolutePath();
 	}
-	
+
+	String extMediaDir()
+	{
+		File[] dirs = getExternalMediaDirs();
+		for(File d: dirs)
+		{
+			if(d != null)
+				return d.getAbsolutePath();
+		}
+		return "";
+	}
+
 	static String extStorageDir()
 	{
 		return Environment.getExternalStorageDirectory().getAbsolutePath();
 	}
-	
+
 	static String devName()
 	{
 		return android.os.Build.DEVICE;
@@ -566,35 +577,59 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 
 	// Storage Access Framework support
 
-	void openDocumentTree(long nativeUserData)
+	boolean openDocumentTree(long nativeUserData)
 	{
 		if(android.os.Build.VERSION.SDK_INT < 21)
-			return;
+			return false;
 		activityResultNativeUserData = nativeUserData;
 		Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-		startActivityForResult(intent, REQUEST_OPEN_DOCUMENT_TREE);
+		try
+		{
+			startActivityForResult(intent, REQUEST_OPEN_DOCUMENT_TREE);
+		}
+		catch(Exception e)
+		{
+			return false;
+		}
+		return true;
 	}
 
-	void openDocument(long nativeUserData)
+	boolean openDocument(long nativeUserData)
 	{
 		if(android.os.Build.VERSION.SDK_INT < 19)
-			return;
+			return false;
 		activityResultNativeUserData = nativeUserData;
 		Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
 		intent.addCategory(Intent.CATEGORY_OPENABLE);
 		intent.setType("application/*");
-		startActivityForResult(intent, REQUEST_OPEN_DOCUMENT);
+		try
+		{
+			startActivityForResult(intent, REQUEST_OPEN_DOCUMENT);
+		}
+		catch(Exception e)
+		{
+			return false;
+		}
+		return true;
 	}
 
-	void createDocument(long nativeUserData)
+	boolean createDocument(long nativeUserData)
 	{
 		if(android.os.Build.VERSION.SDK_INT < 19)
-			return;
+			return false;
 		activityResultNativeUserData = nativeUserData;
 		Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
 		intent.addCategory(Intent.CATEGORY_OPENABLE);
 		intent.setType("application/octet-stream");
-		startActivityForResult(intent, REQUEST_OPEN_DOCUMENT);
+		try
+		{
+			startActivityForResult(intent, REQUEST_OPEN_DOCUMENT);
+		}
+		catch(Exception e)
+		{
+			return false;
+		}
+		return true;
 	}
 
 	int openUriFd(String uriStr, int flags)

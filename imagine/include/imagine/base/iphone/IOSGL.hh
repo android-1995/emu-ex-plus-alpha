@@ -18,7 +18,6 @@
 #include <imagine/config/defs.hh>
 #include <imagine/base/iphone/config.h>
 #include <imagine/base/iphone/IOSWindow.hh>
-#include <imagine/base/Error.hh>
 #include <imagine/util/memory/UniqueCFObject.hh>
 #include <compare>
 #include <type_traits>
@@ -55,7 +54,7 @@ class IOSGLContext
 {
 public:
 	constexpr IOSGLContext() = default;
-	IOSGLContext(GLContextAttributes, NativeGLContext shareContext, IG::ErrorCode &);
+	IOSGLContext(GLContextAttributes, NativeGLContext shareContext);
 	operator NativeGLContext() const { return context_.get(); }
 	#ifdef __OBJC__
 	EAGLContext *context() const { return (__bridge EAGLContext*)context_.get(); }

@@ -24,6 +24,7 @@
 #include <imagine/util/algorithm.h>
 #include <emuframework/EmuApp.hh>
 #include "shared.h"
+#include "vdp_render.h"
 #include "Fir_Resampler.h"
 #include "eq.h"
 #include "assert.h"
@@ -172,7 +173,7 @@ int audioUpdateAll(int16 *sb)
 	{
 		auto cddaPtr = (int32*)cddaBuff;
 		auto cddaResampledPtr = (int32*)cddaRemsampledBuff;
-		iterateTimes(size, i)
+		for(auto i : IG::iotaCount(size))
 		{
 			unsigned samplePos = round(i * cddaRatio);
 			if(samplePos > cddaFrames)

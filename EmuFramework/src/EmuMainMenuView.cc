@@ -21,11 +21,12 @@
 #include <emuframework/FilePicker.hh>
 #include <emuframework/StateSlotView.hh>
 #include <emuframework/OptionView.hh>
+#include <emuframework/AudioOptionView.hh>
+#include <emuframework/VideoOptionView.hh>
 #include "EmuOptions.hh"
 #include <emuframework/InputManagerView.hh>
 #include <emuframework/TouchConfigView.hh>
 #include <emuframework/BundledGamesView.hh>
-#include "private.hh"
 #include "RecentGameView.hh"
 #include <imagine/gui/AlertView.hh>
 #include <imagine/gui/TextEntry.hh>
@@ -39,6 +40,15 @@
 
 namespace EmuEx
 {
+
+class OptionCategoryView : public TableView, public EmuAppHelper<OptionCategoryView>
+{
+public:
+	OptionCategoryView(ViewAttachParams attach, EmuAudio &audio, EmuVideoLayer &videoLayer);
+
+protected:
+	TextMenuItem subConfig[6];
+};
 
 #ifdef CONFIG_BLUETOOTH
 
@@ -177,7 +187,7 @@ void EmuMainMenuView::setAudioVideo(EmuAudio &audio_, EmuVideoLayer &videoLayer_
 }
 
 EmuMainMenuView::EmuMainMenuView(ViewAttachParams attach, bool customMenu):
-	TableView{appViewTitle(), attach, item},
+	TableView{EmuApp::mainViewName(), attach, item},
 	loadGame
 	{
 		"Open Content", &defaultFace(),
@@ -373,7 +383,7 @@ OptionCategoryView::OptionCategoryView(ViewAttachParams attach, EmuAudio &audio,
 	{
 		"设置",
 		attach,
-		[this](const TableView &) { return hasGooglePlayStoreFeatures() ? std::size(subConfig) : std::size(subConfig)-1; },
+		[this](const TableView &) { return EmuApp::hasGooglePlayStoreFeatures() ? std::size(subConfig) : std::size(subConfig)-1; },
 		[this](const TableView &, size_t idx) -> MenuItem& { return subConfig[idx]; }
 	},
 	subConfig
@@ -391,8 +401,7 @@ OptionCategoryView::OptionCategoryView(ViewAttachParams attach, EmuAudio &audio,
 			"音频", &defaultFace(),
 			[this, &audio](const Input::Event &e)
 			{
-				auto view = EmuApp::makeView(attachParams(), EmuApp::ViewID::AUDIO_OPTIONS);
-				pushAndShow(std::move(view), e);
+				pushAndShow(EmuApp::makeView(attachParams(), EmuApp::ViewID::AUDIO_OPTIONS), e);
 			}
 		},
 		{
@@ -418,7 +427,7 @@ OptionCategoryView::OptionCategoryView(ViewAttachParams attach, EmuAudio &audio,
 		}
 	}
 {
-	if(hasGooglePlayStoreFeatures())
+	if(EmuApp::hasGooglePlayStoreFeatures())
 	{
 		subConfig[std::size(subConfig)-1] =
 		{
@@ -445,9 +454,7 @@ std::unique_ptr<View> EmuApp::makeView(ViewAttachParams attach, ViewID id)
 		case ViewID::SYSTEM_OPTIONS: return std::make_unique<SystemOptionView>(attach);
 		case ViewID::FILE_PATH_OPTIONS: return std::make_unique<FilePathOptionView>(attach);
 		case ViewID::GUI_OPTIONS: return std::make_unique<GUIOptionView>(attach);
-		default:
-			bug_unreachable("Tried to make non-existing view ID:%d", (int)id);
-			return nullptr;
+		default: bug_unreachable("Tried to make non-existing view ID:%d", (int)id);
 	}
 }
 

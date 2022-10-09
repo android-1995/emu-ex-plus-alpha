@@ -6,8 +6,6 @@ include $(imagineSrcDir)/input/build.mk
 include $(IMAGINE_PATH)/make/package/egl.mk
 include $(imagineSrcDir)/util/fdUtils.mk
 
-configDefs += CONFIG_BASE_ANDROID
-
 SRC += base/android/android.cc \
 base/android/AndroidWindow.cc \
 base/android/AndroidScreen.cc \
@@ -20,6 +18,7 @@ base/android/inputConfig.cc \
 base/android/textInput.cc \
 base/android/input.cc \
 base/android/moga.cc \
+base/android/Sensor.cc \
 base/android/system.cc \
 base/android/surfaceTexture.cc \
 base/android/RootCpufreqParamSetter.cc \

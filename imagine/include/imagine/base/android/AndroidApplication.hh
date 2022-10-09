@@ -19,7 +19,6 @@
 #include <imagine/base/BaseApplication.hh>
 #include <imagine/base/Timer.hh>
 #include <imagine/base/android/Choreographer.hh>
-#include <imagine/fs/FSDefs.hh>
 #include <imagine/util/jni.hh>
 #include <pthread.h>
 #include <optional>
@@ -35,13 +34,17 @@ namespace IG::Input
 class AndroidInputDevice;
 }
 
+namespace IG::FS
+{
+class PathString;
+class FileString;
+}
+
 namespace IG
 {
 
 class ApplicationContext;
 class FrameTimer;
-
-enum SurfaceRotation : uint8_t;
 
 struct ApplicationInitParams
 {
@@ -56,39 +59,41 @@ public:
 	AndroidApplication(ApplicationInitParams);
 	void onWindowFocusChanged(ApplicationContext, int focused);
 	JNIEnv* thisThreadJniEnv() const;
-	bool hasHardwareNavButtons() const;
+	bool hasHardwareNavButtons() const { return deviceFlags & PERMANENT_MENU_KEY_BIT; }
 	constexpr JNI::InstMethod<void()> recycleBitmapMethod() const { return jRecycle; }
 	jobject makeFontRenderer(JNIEnv *, jobject baseActivity);
 	void setStatusBarHidden(JNIEnv *, jobject baseActivity, bool hidden);
 	std::string androidBuildDevice(JNIEnv *env, jclass baseActivityClass) const;
 	Window *deviceWindow() const;
 	FS::PathString sharedStoragePath(JNIEnv *, jclass baseActivityClass) const;
+	FS::PathString externalMediaPath(JNIEnv *, jobject baseActivity) const;
 	void setRequestedOrientation(JNIEnv *, jobject baseActivity, int orientation);
-	SurfaceRotation currentRotation() const;
-	void setCurrentRotation(ApplicationContext, SurfaceRotation, bool notify = false);
-	SurfaceRotation mainDisplayRotation(JNIEnv *, jobject baseActivity) const;
+	Rotation currentRotation() const;
+	void setCurrentRotation(ApplicationContext, Rotation, bool notify = false);
+	Rotation mainDisplayRotation(JNIEnv *, jobject baseActivity) const;
 	void setOnSystemOrientationChanged(SystemOrientationChangedDelegate del);
 	bool systemAnimatesWindowRotation() const;
 	void setIdleDisplayPowerSave(JNIEnv *, jobject baseActivity, bool on);
 	void endIdleByUserActivity(ApplicationContext);
 	void setSysUIStyle(JNIEnv *, jobject baseActivity, int32_t androidSDK, uint32_t flags);
+	bool hasDisplayCutout() const { return deviceFlags & DISPLAY_CUTOUT_BIT; }
 	bool hasFocus() const;
 	void addNotification(JNIEnv *, jobject baseActivity, const char *onShow, const char *title, const char *message);
 	void removePostedNotifications(JNIEnv *, jobject baseActivity);
 	void handleIntent(ApplicationContext);
-	void openDocumentTreeIntent(JNIEnv *, jobject baseActivity, SystemDocumentPickerDelegate);
-	void openDocumentIntent(JNIEnv *, jobject baseActivity, SystemDocumentPickerDelegate);
-	void createDocumentIntent(JNIEnv *, jobject baseActivity, SystemDocumentPickerDelegate);
+	bool openDocumentTreeIntent(JNIEnv *, jobject baseActivity, SystemDocumentPickerDelegate);
+	bool openDocumentIntent(JNIEnv *, jobject baseActivity, SystemDocumentPickerDelegate);
+	bool createDocumentIntent(JNIEnv *, jobject baseActivity, SystemDocumentPickerDelegate);
 	FrameTimer makeFrameTimer(Screen &);
 	bool requestPermission(ApplicationContext, Permission);
-	UniqueFileDescriptor openFileUriFd(JNIEnv *, jobject baseActivity, IG::CStringView uri, IODefs::OpenFlags oFlags = {}) const;
+	UniqueFileDescriptor openFileUriFd(JNIEnv *, jobject baseActivity, CStringView uri, OpenFlagsMask oFlags = {}) const;
 	bool fileUriExists(JNIEnv *, jobject baseActivity, IG::CStringView uri) const;
 	std::string fileUriFormatLastWriteTimeLocal(JNIEnv *, jobject baseActivity, IG::CStringView uri) const;
 	FS::FileString fileUriDisplayName(JNIEnv *, jobject baseActivity, IG::CStringView uri) const;
 	bool removeFileUri(JNIEnv *, jobject baseActivity, IG::CStringView uri, bool isDir) const;
 	bool renameFileUri(JNIEnv *, jobject baseActivity, IG::CStringView oldUri, IG::CStringView newUri) const;
 	bool createDirectoryUri(JNIEnv *, jobject baseActivity, IG::CStringView uri) const;
-	void forEachInDirectoryUri(JNIEnv *, jobject baseActivity, IG::CStringView uri, FS::DirectoryEntryDelegate) const;
+	void forEachInDirectoryUri(JNIEnv *, jobject baseActivity, CStringView uri, DirectoryEntryDelegate) const;
 
 	// Input system functions
 	void onInputQueueCreated(ApplicationContext, AInputQueue *);
@@ -109,6 +114,11 @@ public:
 	bool hasMultipleInputDeviceSupport() const;
 
 private:
+	using DeviceFlags = uint8_t;
+	static constexpr DeviceFlags PERMANENT_MENU_KEY_BIT = bit(0);
+	static constexpr DeviceFlags DISPLAY_CUTOUT_BIT = bit(1);
+	static constexpr DeviceFlags HANDLE_ROTATION_ANIMATION_BIT = bit(2);
+
 	JNI::UniqueGlobalRef displayListenerHelper{};
 	JNI::InstMethod<void()> jRecycle{};
 	JNI::InstMethod<void(jint)> jSetUIVisibility{};
@@ -141,10 +151,9 @@ private:
 	int aHardKeyboardState{};
 	int aKeyboardType{};
 	int mostRecentKeyEventDevID{-1};
-	SurfaceRotation osRotation{};
-	bool osAnimatesRotation{};
+	Rotation osRotation{};
 	bool aHasFocus{true};
-	bool hasPermanentMenuKey{true};
+	DeviceFlags deviceFlags{PERMANENT_MENU_KEY_BIT};
 	bool keepScreenOn{};
 	bool trackballNav{};
 

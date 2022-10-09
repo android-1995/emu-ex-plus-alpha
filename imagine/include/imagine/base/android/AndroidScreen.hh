@@ -20,6 +20,7 @@
 #include <imagine/base/baseDefs.hh>
 #include <imagine/base/SimpleFrameTimer.hh>
 #include <imagine/base/android/Choreographer.hh>
+#include <imagine/base/FrameTimerInterface.hh>
 #include <imagine/util/jni.hh>
 #include <utility>
 #include <compare>
@@ -30,14 +31,12 @@ namespace IG
 
 class ApplicationContext;
 
-enum SurfaceRotation : uint8_t;
-
 using FrameTimerVariant = std::variant<NativeChoreographerFrameTimer, JavaChoreographerFrameTimer, SimpleFrameTimer>;
 
-class FrameTimer : public FrameTimerVariantWrapper<FrameTimerVariant>
+class FrameTimer : public FrameTimerInterface<FrameTimerVariant>
 {
 public:
-	using FrameTimerVariantWrapper::FrameTimerVariantWrapper;
+	using FrameTimerInterface::FrameTimerInterface;
 };
 
 class AndroidScreen
@@ -50,7 +49,7 @@ public:
 		jobject metrics;
 		int id;
 		float refreshRate;
-		SurfaceRotation rotation;
+		Rotation rotation;
 	};
 
 	AndroidScreen(ApplicationContext, InitParams);
