@@ -22,6 +22,7 @@
 #include "EmuCheatViews.hh"
 #include <fceu/driver.h>
 #include <fceu/cheat.h>
+#include "MainSystem.hh"
 
 void EncodeGG(char *str, int a, int v, int c);
 
