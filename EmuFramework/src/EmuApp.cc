@@ -2056,5 +2056,9 @@ void ApplicationContext::setCheatListAiWu(std::list<std::string> cheats)
         return ;
     sys.setCheatListAiWu(cheats);
 }
+void ApplicationContext::setDebugEnabledAiWu(bool enabled)
+{
+    logger_setEnabled(enabled);
+}
 //endregion
 }
