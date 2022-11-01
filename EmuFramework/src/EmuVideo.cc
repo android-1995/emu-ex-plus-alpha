@@ -213,7 +213,7 @@ void EmuVideo::doScreenshot(EmuSystemTaskContext taskCtx, IG::PixmapView pix)
 	screenshotNextFrame = false;
     //region 爱吾
     if(screenshotPathAiWu != nullptr){
-        auto success = app().writeScreenshot(pix, screenshotPathAiWu);
+        auto success = app().writeScreenshot(pix, FS::PathString{screenshotPathAiWu});
         screenshotPathAiWu = nullptr;
         return;
     }
