@@ -2016,7 +2016,7 @@ void ApplicationContext::screenshotAiWu(const char *filepath)
 {
     auto &app = EmuEx::EmuApp::get(*this);
     auto &video = app.video();
-    video.takeGameScreenshotAiWu(filepath);
+    video.takeGameScreenshotAiWu(FS::PathString{filepath});
 }
 void ApplicationContext::fastForwardAiWu(double speed)
 {
@@ -2038,7 +2038,7 @@ bool ApplicationContext::saveStateAiWu(const char *filepath)
     auto &sys = app.system();
     if(!sys.hasContent())
         return false;
-    return app.saveState(filepath);
+    return app.saveState(FS::PathString{filepath});
 }
 bool ApplicationContext::loadStateAiWu(const char *filepath)
 {
@@ -2046,7 +2046,7 @@ bool ApplicationContext::loadStateAiWu(const char *filepath)
     auto &sys = app.system();
     if(!sys.hasContent())
         return false;
-    return app.loadState(filepath);
+    return app.loadState(FS::PathString{filepath});
 }
 void ApplicationContext::setCheatListAiWu(std::list<std::string> cheats)
 {
