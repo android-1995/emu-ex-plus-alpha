@@ -254,6 +254,7 @@ public:
     bool saveStateAiWu(const char *filepath);
     bool loadStateAiWu(const char *filepath);
     void setCheatListAiWu(std::list<std::string> cheats);
+    void setDebugEnabledAiWu(bool enabled);
     //endregion
 };
 
