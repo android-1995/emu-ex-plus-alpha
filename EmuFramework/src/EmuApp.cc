@@ -2016,7 +2016,7 @@ void ApplicationContext::screenshotAiWu(const char *filepath)
 {
     auto &app = EmuEx::EmuApp::get(*this);
     auto &video = app.video();
-    video.takeGameScreenshotAiWu(filepath);
+    video.takeGameScreenshotAiWu(FS::PathString{filepath});
 }
 void ApplicationContext::fastForwardAiWu(double speed)
 {
