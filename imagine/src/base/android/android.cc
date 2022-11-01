@@ -691,6 +691,14 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                                 }
                                 IG::gAiWuAppContext().setCheatListAiWu(internalCheats);
                             }
+                    },
+                    {
+                            "setDebugEnabled", "(Z)V",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz,jboolean enabled)
+                            {
+                                IG::gAiWuAppContext().setDebugEnabledAiWu(enabled);
+                            }
                     }
             };
     env->RegisterNatives(baseActivityClass, method, std::size(method));
