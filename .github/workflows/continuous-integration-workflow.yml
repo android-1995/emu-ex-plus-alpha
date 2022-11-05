@@ -13,7 +13,7 @@ jobs:
  
     steps:
     - name: Checkout emu-ex-plus-alpha repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -77,14 +77,14 @@ jobs:
         cp Snes9x/target/android-release/build/outputs/apk/release/Snes9xEXPlus-release.apk EX-Emulators/Snes9xEXPlus-release.apk
      
     - name: Upload Snes9x artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ matrix.image == 'Snes9x' }}
       with: 
         name: Snes9x
         path: ${{ github.workspace }}/Snes9x/target/android-release/build/outputs/apk/release/Snes9xEXPlus-release.apk
 
     - name: Upload EX-Emulators artifacts
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with: 
         name: EX-Emulators
         path: EX-Emulators/

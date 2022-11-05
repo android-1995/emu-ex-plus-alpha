@@ -67,14 +67,14 @@ public:
 	void runFrame(EmuVideo *video, EmuAudio *audio, int8_t frames, bool skipForward, bool runSync);
 	void sendVideoFormatChangedReply(EmuVideo &video, std::binary_semaphore *frameFinishedSemPtr);
 	void sendFrameFinishedReply(EmuVideo &video, std::binary_semaphore *frameFinishedSemPtr);
-	void sendScreenshotReply(int num, bool success);
+	void sendScreenshotReply(bool success);
 	EmuApp &app() const;
 	bool resetVideoFormatChanged() { return std::exchange(videoFormatChanged, false); }
 
 private:
 	EmuApp *appPtr{};
 	IG::MessagePort<CommandMessage> commandPort{"EmuSystemTask Command"};
-	std::thread taskThread{};
+	std::thread taskThread;
 	bool videoFormatChanged{};
 };
 

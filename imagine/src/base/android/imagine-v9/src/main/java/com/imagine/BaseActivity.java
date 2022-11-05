@@ -55,6 +55,8 @@ import java.io.InputStream;
 import java.io.File;
 import android.util.Log;
 import android.provider.DocumentsContract;
+import java.util.Date;
+import java.text.DateFormat;
 
 // This class is also named BaseActivity to prevent shortcuts from breaking with previous SDK < 9 APKs
 
@@ -575,6 +577,11 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 		}
 	}
 
+	static String formatDateTime(long time)
+	{
+		return DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM).format(new Date(time));
+	}
+
 	// Storage Access Framework support
 
 	boolean openDocumentTree(long nativeUserData)
@@ -651,6 +658,13 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 		if(android.os.Build.VERSION.SDK_INT < 19)
 			return null;
 		return ContentResolverUtils.uriLastModified(getContentResolver(), uriStr);
+	}
+
+	long uriLastModifiedTime(String uriStr)
+	{
+		if(android.os.Build.VERSION.SDK_INT < 19)
+			return 0;
+		return ContentResolverUtils.uriLastModifiedTime(getContentResolver(), uriStr);
 	}
 
 	String uriDisplayName(String uriStr)

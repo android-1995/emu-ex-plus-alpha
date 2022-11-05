@@ -20,8 +20,6 @@ import android.net.Uri;
 import android.provider.DocumentsContract;
 import android.database.Cursor;
 import android.util.Log;
-import java.util.Date;
-import java.text.DateFormat;
 import java.io.File;
 
 final class ContentResolverUtils
@@ -123,10 +121,15 @@ final class ContentResolverUtils
 
 	static String uriLastModified(ContentResolver resolver, String uriStr)
 	{
-		final long mTime = queryLong(resolver, Uri.parse(uriStr), DocumentsContract.Document.COLUMN_LAST_MODIFIED, 0);
+		final long mTime = uriLastModifiedTime(resolver, uriStr);
 		if(mTime == 0)
 			return "";
-		return DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(new Date(mTime));
+		return BaseActivity.formatDateTime(mTime);
+	}
+
+	static long uriLastModifiedTime(ContentResolver resolver, String uriStr)
+	{
+		return queryLong(resolver, Uri.parse(uriStr), DocumentsContract.Document.COLUMN_LAST_MODIFIED, 0);
 	}
 
 	static String uriDisplayName(ContentResolver resolver, Uri uri)

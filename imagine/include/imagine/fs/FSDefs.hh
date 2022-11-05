@@ -19,7 +19,9 @@
 #include <imagine/util/utility.h>
 #include <imagine/util/DelegateFunc.hh>
 #include <imagine/util/string/StaticString.hh>
-#include <ctime>
+#include <imagine/util/bitset.hh>
+#include <imagine/util/enum.hh>
+#include <chrono>
 #include <array>
 #include <unistd.h>
 #include <limits.h>
@@ -27,7 +29,7 @@
 namespace IG::FS
 {
 
-using file_time_type = std::time_t;
+using file_time_type = std::chrono::seconds;
 
 static constexpr size_t FILE_STRING_SIZE = std::max(512, NAME_MAX + 1);
 using FileStringImpl = IG::StaticString<FILE_STRING_SIZE - 1>;
@@ -52,19 +54,18 @@ using PathStringArray = std::array<char, PATH_STRING_SIZE>;
 
 struct RootPathInfo
 {
-	size_t length = 0;
-	FileString name{};
+	size_t length{};
+	FileString name;
 
 	constexpr RootPathInfo() = default;
 	constexpr RootPathInfo(auto &&name, size_t length):
-		length{length}, name{IG_forward(name)}
-	{}
+		length{length}, name{IG_forward(name)} {}
 };
 
 struct RootedPath
 {
-	PathString path{};
-	RootPathInfo info{};
+	PathString path;
+	RootPathInfo info;
 
 	constexpr bool pathIsRoot() const
 	{
@@ -74,8 +75,8 @@ struct RootedPath
 
 struct PathLocation
 {
-	RootedPath root{};
-	FileString description{};
+	RootedPath root;
+	FileString description;
 
 	constexpr PathLocation() = default;
 	constexpr PathLocation(auto &&path, auto &&description, auto &&rootName):
@@ -124,13 +125,20 @@ public:
 	constexpr file_type type() const { return type_; }
 	constexpr std::uintmax_t size() const { return size_; }
 	constexpr file_time_type lastWriteTime() const { return lastWriteTime_; }
-	std::tm lastWriteTimeLocal() const;
 
 protected:
 	std::uintmax_t size_{};
 	file_time_type lastWriteTime_{};
 	file_type type_ = file_type::none;
 };
+
+enum class DirOpenFlagsMask: uint8_t
+{
+	// return from constructor without throwing exception if opening fails
+	Test = bit(0),
+};
+
+IG_DEFINE_ENUM_BIT_FLAG_FUNCTIONS(DirOpenFlagsMask);
 
 class directory_entry;
 class AssetDirectoryIterator;

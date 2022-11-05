@@ -49,7 +49,7 @@ PathString dirname(IG::CStringView path)
 
 FileString displayName(IG::CStringView path)
 {
-	if(!FS::exists(path))
+	if(path.empty() || !FS::exists(path))
 		return {};
 	else
 		return basename(path);
@@ -57,6 +57,8 @@ FileString displayName(IG::CStringView path)
 
 PathString dirnameUri(IG::CStringView pathOrUri)
 {
+	if(pathOrUri.empty())
+		return {};
 	if(!isUri(pathOrUri))
 		return dirname(pathOrUri);
 	if(auto [treePath, treePos] = FS::uriPathSegment(pathOrUri, FS::uriPathSegmentTreeName);
@@ -103,13 +105,21 @@ size_t directoryItems(IG::CStringView path)
 	return items;
 }
 
-void forEachInDirectory(IG::CStringView path, DirectoryEntryDelegate del)
+bool forEachInDirectory(IG::CStringView path, DirectoryEntryDelegate del, DirOpenFlagsMask flags)
 {
-	for(FS::DirectoryStream dirStream{path}; dirStream.hasEntry(); dirStream.readNextDir())
+	bool entriesRead{};
+	for(FS::DirectoryStream dirStream{path, flags}; dirStream.hasEntry(); dirStream.readNextDir())
 	{
+		entriesRead = true;
 		if(!del(dirStream.entry()))
 			break;
 	}
+	return entriesRead;
+}
+
+std::string formatLastWriteTimeLocal(ApplicationContext ctx, CStringView path)
+{
+	return ctx.formatDateAndTime(status(path).lastWriteTime());
 }
 
 }

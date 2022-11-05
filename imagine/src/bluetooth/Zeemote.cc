@@ -26,8 +26,6 @@
 namespace IG
 {
 
-const uint8_t Zeemote::btClass[3] = { 0x84, 0x05, 0x00 };
-
 static const Input::Key sysKeyMap[4]
 {
 	Input::Keycode::GAME_A,
@@ -148,13 +146,14 @@ bool Zeemote::dataHandler(const char *packet, size_t size)
 			logMsg("report id 0x%X, %s", rID, reportIDToStr(rID));
 			switch(rID)
 			{
-				bcase RID_BTN_REPORT:
+				case RID_BTN_REPORT:
 				{
 					const uint8_t *key = &inputBuffer[3];
 					//logMsg("got button report %X %X %X %X %X %X", key[0], key[1], key[2], key[3], key[4], key[5]);
 					processBtnReport(key, time);
+					break;
 				}
-				bcase RID_8BA_2A_JS_REPORT:
+				case RID_8BA_2A_JS_REPORT:
 					//logMsg("got analog report %d %d", (int8_t)inputBuffer[4], (int8_t)inputBuffer[5]);
 				for(auto i : iotaCount(2))
 					{
@@ -209,9 +208,9 @@ void Zeemote::processBtnReport(const uint8_t *btnData, Input::Time time)
 	memcpy(prevBtnPush, btnPush, sizeof(prevBtnPush));
 }
 
-bool Zeemote::isSupportedClass(const uint8_t devClass[3])
+bool Zeemote::isSupportedClass(std::array<uint8_t, 3> devClass)
 {
-	return IG::equal_n(devClass, 3, btClass);
+	return devClass == btClass;
 }
 
 std::span<Input::Axis> Zeemote::motionAxes()
