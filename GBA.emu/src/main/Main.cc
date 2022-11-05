@@ -89,7 +89,12 @@ void GbaSystem::loadState(EmuApp &app, IG::CStringView path)
 		return throwFileReadError();
 }
 
-void GbaSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
+void GbaSystem::loadBackupMemory(EmuApp &app)
+{
+	CPUReadBatteryFile(appContext(), gGba, app.contentSaveFilePath(".sav").c_str());
+}
+
+void GbaSystem::onFlushBackupMemory(EmuApp &app, BackupMemoryDirtyFlags)
 {
 	if(!hasContent() || saveType == GBA_SAVE_NONE)
 		return;
@@ -102,9 +107,13 @@ void GbaSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
 	else
 	{
 		logMsg("saving backup memory");
-		auto saveStr = EmuSystem::contentSaveFilePath(".sav");
-		CPUWriteBatteryFile(appContext(), gGba, saveStr.data());
+		CPUWriteBatteryFile(appContext(), gGba, app.contentSaveFilePath(".sav").c_str());
 	}
+}
+
+IG::Time GbaSystem::backupMemoryLastWriteTime(const EmuApp &app) const
+{
+	return appContext().fileUriLastWriteTime(app.contentSaveFilePath(".sav").c_str());
 }
 
 void GbaSystem::closeSystem()
@@ -122,31 +131,31 @@ void GbaSystem::applyGamePatches(uint8_t *rom, int &romSize)
 {
 	auto ctx = appContext();
 	// The patchApply* functions are responsible for closing the FILE
-	if(auto f = IG::FileUtils::fopenUri(ctx, contentSaveFilePath(".ips"), "rb");
+	if(auto f = IG::FileUtils::fopenUri(ctx, userFilePath(patchesDir, ".ips"), "rb");
 		f)
 	{
-		logMsg("applying IPS patch");
+		logMsg("applying IPS patch:%s", userFilePath(patchesDir, ".ips").data());
 		if(!patchApplyIPS(f, &rom, &romSize))
 		{
-			throw std::runtime_error(fmt::format("Error applying IPS patch in:\n{}", contentSaveDirectory()));
+			throw std::runtime_error(fmt::format("Error applying IPS patch in:\n{}", patchesDir));
 		}
 	}
-	else if(auto f = IG::FileUtils::fopenUri(ctx, contentSaveFilePath(".ups"), "rb");
+	else if(auto f = IG::FileUtils::fopenUri(ctx, userFilePath(patchesDir, ".ups"), "rb");
 		f)
 	{
-		logMsg("applying UPS patch");
+		logMsg("applying UPS patch:%s", userFilePath(patchesDir, ".ups").data());
 		if(!patchApplyUPS(f, &rom, &romSize))
 		{
-			throw std::runtime_error(fmt::format("Error applying UPS patch in:\n{}", contentSaveDirectory()));
+			throw std::runtime_error(fmt::format("Error applying UPS patch in:\n{}", patchesDir));
 		}
 	}
-	else if(auto f = IG::FileUtils::fopenUri(ctx, contentSaveFilePath(".ppf"), "rb");
+	else if(auto f = IG::FileUtils::fopenUri(ctx, userFilePath(patchesDir, ".ppf"), "rb");
 		f)
 	{
-		logMsg("applying UPS patch");
+		logMsg("applying UPS patch:%s", userFilePath(patchesDir, ".ppf").data());
 		if(!patchApplyPPF(f, &rom, &romSize))
 		{
-			throw std::runtime_error(fmt::format("Error applying PPF patch in:\n{}", contentSaveDirectory()));
+			throw std::runtime_error(fmt::format("Error applying PPF patch in:\n{}", patchesDir));
 		}
 	}
 }
@@ -162,8 +171,6 @@ void GbaSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 	applyGamePatches(gGba.mem.rom, size);
 	CPUInit(gGba, 0, 0);
 	CPUReset(gGba);
-	auto saveStr = EmuSystem::contentSaveFilePath(".sav");
-	CPUReadBatteryFile(appContext(), gGba, saveStr.data());
 	readCheatFile(*this);
 }
 

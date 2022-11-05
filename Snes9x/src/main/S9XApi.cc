@@ -1,7 +1,9 @@
 #define LOGTAG "main"
 #include <imagine/logger/logger.h>
 #include <imagine/fs/FS.hh>
+#include <imagine/fs/ArchiveFS.hh>
 #include <imagine/io/FileIO.hh>
+#include <imagine/io/IO.hh>
 #include <imagine/util/format.hh>
 #include <imagine/util/string.h>
 #include <emuframework/EmuSystem.hh>
@@ -79,6 +81,24 @@ const char * S9xGetFilenameInc(const char *ex, enum s9x_getdirtype dirtype)
 
 #else
 
+enum s9x_getdirtype
+{
+	DEFAULT_DIR = 0,
+	HOME_DIR,
+	ROMFILENAME_DIR,
+	ROM_DIR,
+	SRAM_DIR,
+	SNAPSHOT_DIR,
+	SCREENSHOT_DIR,
+	SPC_DIR,
+	CHEAT_DIR,
+	PATCH_DIR,
+	BIOS_DIR,
+	LOG_DIR,
+	SAT_DIR,
+	LAST_DIR
+};
+
 /*bool8 S9xOpenSoundDevice(int mode, bool8 stereo, int buffer_size)
 {
 	return TRUE;
@@ -128,6 +148,16 @@ extern "C" char* osd_GetPackDir()
 	return globalPath.data();
 }
 
+static s9x_getdirtype toDirType(std::string_view ext)
+{
+	if(ext == ".cht")
+		return CHEAT_DIR;
+	else if(ext == ".ips")
+		return PATCH_DIR;
+	else
+		return SRAM_DIR;
+}
+
 #endif
 
 #ifndef SNES9X_VERSION_1_4
@@ -136,16 +166,18 @@ const char *S9xGetFilename(const char *ex, enum s9x_getdirtype dirtype)
 const char *S9xGetFilename(const char *ex)
 #endif
 {
-	bool isRomDir{};
-	auto &sys = EmuEx::gSystem();
-	#ifndef SNES9X_VERSION_1_4
-	if(dirtype == ROMFILENAME_DIR)
-	{
-		isRomDir = true;
-	}
+	auto &sys = static_cast<Snes9xSystem&>(EmuEx::gSystem());
+	#ifdef SNES9X_VERSION_1_4
+	s9x_getdirtype dirtype = toDirType(ex);
 	#endif
-	if(isRomDir)
-		globalPath = sys.contentSaveFilePath(ex);
+	if(dirtype == ROMFILENAME_DIR)
+		globalPath = sys.contentFilePath(ex);
+	else if(dirtype == CHEAT_DIR)
+		globalPath = sys.userFilePath(sys.cheatsDir, ex);
+	else if(dirtype == PATCH_DIR)
+		globalPath = sys.userFilePath(sys.patchesDir, ex);
+	else if(dirtype == SAT_DIR)
+		globalPath = sys.userFilePath(sys.satDir, ex);
 	else
 		globalPath = sys.contentSaveFilePath(ex);
 	//logMsg("built s9x path:%s", globalPath.c_str());
@@ -154,25 +186,60 @@ const char *S9xGetFilename(const char *ex)
 
 #ifndef SNES9X_VERSION_1_4
 const char *S9xGetFullFilename(const char *name, enum s9x_getdirtype dirtype)
-#else
-const char *S9xGetFullFilename(const char *name)
-#endif
 {
-	bool isRomDir{};
-	auto &sys = EmuEx::gSystem();
-	#ifndef SNES9X_VERSION_1_4
+	auto &sys = static_cast<Snes9xSystem&>(EmuEx::gSystem());
 	if(dirtype == ROMFILENAME_DIR)
-	{
-		isRomDir = true;
-	}
-	#endif
-	if(isRomDir)
 		globalPath = sys.contentDirectory(name);
+	else if(dirtype == CHEAT_DIR)
+		globalPath = sys.userPath(sys.cheatsDir, name);
+	else if(dirtype == PATCH_DIR)
+		globalPath = sys.userPath(sys.patchesDir, name);
+	else if(dirtype == SAT_DIR)
+		globalPath = sys.userPath(sys.satDir, name);
 	else
 		globalPath = sys.contentSavePath(name);
 	//logMsg("built s9x path:%s", globalPath.c_str());
 	return globalPath.c_str();
 }
+
+constexpr size_t BsxBiosSize = 0x100000;
+
+static bool isBsxBios(uint8 *data, ssize_t size)
+{
+	return size == BsxBiosSize && std::string_view{(char*)data + 0x7FC0, 21} == "Satellaview BS-X     ";
+}
+
+void S9xReadBSXBios(uint8 *data)
+{
+	auto &sys = static_cast<Snes9xSystem&>(EmuEx::gSystem());
+	auto appCtx = sys.appContext();
+	auto &bsxBiosPath = sys.bsxBiosPath;
+	if(bsxBiosPath.empty())
+		throw std::runtime_error{"No BS-X BIOS set"};
+	logMsg("loading BS-X BIOS:%s", bsxBiosPath.data());
+	if(EmuApp::hasArchiveExtension(appCtx.fileUriDisplayName(bsxBiosPath)))
+	{
+		for(auto &entry : FS::ArchiveIterator{appCtx.openFileUri(bsxBiosPath)})
+		{
+			if(entry.type() == FS::file_type::directory || !Snes9xSystem::hasBiosExtension(entry.name()))
+				continue;
+			auto io = entry.moveIO();
+			auto size = io.read(data, BsxBiosSize);
+			if(!isBsxBios(data, size))
+				throw std::runtime_error{"Incompatible BS-X BIOS"};
+			return;
+		}
+		throw std::runtime_error{"BS-X BIOS not in archive, must end in .bin or .bios"};
+	}
+	else
+	{
+		auto io = appCtx.openFileUri(bsxBiosPath, IOAccessHint::ALL);
+		auto size = io.read(data, BsxBiosSize);
+		if(!isBsxBios(data, size))
+			throw std::runtime_error{"Incompatible BS-X BIOS"};
+	}
+}
+#endif
 
 bool S9xPollAxis(uint32 id, int16 *value)
 {
@@ -305,9 +372,6 @@ gzFile gzopenHelper(const char *filename, const char *mode)
 	auto openFlags = std::string_view{mode}.contains('w') ? IG::OpenFlagsMask::NEW : IG::OpenFlagsMask{};
 	return gzdopen(gAppContext().openFileUriFd(filename, openFlags | IG::OpenFlagsMask::TEST).release(), mode);
 }
-
-// from logger.h
-void S9xResetLogger() {}
 
 // from screenshot.h
 bool8 S9xDoScreenshot(int, int) { return 1; }

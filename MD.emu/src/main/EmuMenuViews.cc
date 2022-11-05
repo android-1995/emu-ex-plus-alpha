@@ -13,8 +13,11 @@
 	You should have received a copy of the GNU General Public License
 	along with MD.emu.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <emuframework/OptionView.hh>
+#include <emuframework/SystemOptionView.hh>
 #include <emuframework/AudioOptionView.hh>
+#include <emuframework/FilePathOptionView.hh>
+#include <emuframework/DataPathSelectView.hh>
+#include <emuframework/UserPathSelectView.hh>
 #include <emuframework/EmuSystemActionsView.hh>
 #include "EmuCheatViews.hh"
 #include "MainApp.hh"
@@ -269,7 +272,23 @@ public:
 
 class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper<CustomFilePathOptionView>
 {
+	using MainAppHelper<CustomFilePathOptionView>::app;
 	using MainAppHelper<CustomFilePathOptionView>::system;
+
+	TextMenuItem cheatsPath
+	{
+		cheatsMenuName(appContext(), system().cheatsDir), &defaultFace(),
+		[this](const Input::Event &e)
+		{
+			pushAndShow(makeViewWithName<UserPathSelectView>("Cheats", system().userPath(system().cheatsDir),
+				[this](CStringView path)
+				{
+					logMsg("set cheats path:%s", path.data());
+					system().cheatsDir = path;
+					cheatsPath.compile(cheatsMenuName(appContext(), path), renderer(), projP);
+				}), e);
+		}
+	};
 
 	#ifndef NO_SCD
 	static constexpr std::string_view biosHeadingStr[3]
@@ -279,7 +298,7 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 		"Europe CD BIOS"
 	};
 
-	static int regionCodeToIdx(int region)
+	static int8_t regionCodeToIdx(uint8_t region)
 	{
 		switch(region)
 		{
@@ -289,7 +308,7 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 		}
 	}
 
-	FS::PathString &regionCodeToStrBuffer(int region)
+	FS::PathString &pathFromRegion(uint8_t region)
 	{
 		switch(region)
 		{
@@ -301,39 +320,32 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 
 	TextMenuItem cdBiosPath[3]
 	{
-		{u"", &defaultFace(), [this](Input::Event e){ cdBiosPathHandler(e, REGION_USA); }},
-		{u"", &defaultFace(), [this](Input::Event e){ cdBiosPathHandler(e, REGION_JAPAN_NTSC); }},
-		{u"", &defaultFace(), [this](Input::Event e){ cdBiosPathHandler(e, REGION_EUROPE); }}
+		{biosMenuEntryStr(REGION_USA, pathFromRegion(REGION_USA)), &defaultFace(), setCDBiosPathDel(REGION_USA)},
+		{biosMenuEntryStr(REGION_JAPAN_NTSC, pathFromRegion(REGION_JAPAN_NTSC)), &defaultFace(), setCDBiosPathDel(REGION_JAPAN_NTSC)},
+		{biosMenuEntryStr(REGION_EUROPE, pathFromRegion(REGION_EUROPE)), &defaultFace(), setCDBiosPathDel(REGION_EUROPE)}
 	};
 
-	auto biosMenuEntryStr(int region, std::string_view displayName) const
+	std::string biosMenuEntryStr(uint8_t region, IG::CStringView path) const
 	{
 		auto regionStr = biosHeadingStr[regionCodeToIdx(region)];
-		return fmt::format("{}: {}", regionStr, displayName);
+		return fmt::format("{}: {}", regionStr, appContext().fileUriDisplayName(path));
 	}
 
-	void cdBiosPathHandler(Input::Event e, int region)
+	TextMenuItem::SelectDelegate setCDBiosPathDel(uint8_t region)
 	{
-		auto biosSelectMenu = makeViewWithName<BiosSelectMenu>(biosHeadingStr[regionCodeToIdx(region)], &regionCodeToStrBuffer(region),
-			[this, region](std::string_view displayName)
-			{
-				auto idx = regionCodeToIdx(region);
-				logMsg("set bios at idx %d to %s", idx, regionCodeToStrBuffer(region).data());
-				cdBiosPath[idx].compile(biosMenuEntryStr(region, displayName), renderer(), projP);
-			},
-			hasMDExtension);
-		pushAndShow(std::move(biosSelectMenu), e);
-	}
-
-	void cdBiosPathInit()
-	{
-		static constexpr int regions[3]{REGION_USA, REGION_JAPAN_NTSC, REGION_EUROPE};
-		for(int i = 0; auto r : regions)
+		return [this, region](const Input::Event &e)
 		{
-			cdBiosPath[i].setName(biosMenuEntryStr(r, appContext().fileUriDisplayName(regionCodeToStrBuffer(r))));
-			item.emplace_back(&cdBiosPath[i]);
-			i++;
-		}
+			pushAndShow(makeViewWithName<DataFileSelectView>(biosHeadingStr[regionCodeToIdx(region)],
+				app().validSearchPath(pathFromRegion(region)),
+				[this, region](CStringView path, FS::file_type type)
+				{
+					auto idx = regionCodeToIdx(region);
+					pathFromRegion(region) = path;
+					logMsg("set bios:%d to path:%s", idx, pathFromRegion(region).data());
+					cdBiosPath[idx].compile(biosMenuEntryStr(region, path), renderer(), projP);
+					return true;
+				}, hasMDExtension), e);
+		};
 	}
 	#endif
 
@@ -341,8 +353,12 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 	CustomFilePathOptionView(ViewAttachParams attach): FilePathOptionView{attach, true}
 	{
 		loadStockItems();
+		item.emplace_back(&cheatsPath);
 		#ifndef NO_SCD
-		cdBiosPathInit();
+		for(auto i : iotaCount(3))
+		{
+			item.emplace_back(&cdBiosPath[i]);
+		}
 		#endif
 	}
 };

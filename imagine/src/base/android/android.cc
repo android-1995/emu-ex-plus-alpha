@@ -305,6 +305,18 @@ bool ApplicationContext::fileUriExists(IG::CStringView uri) const
 	return application().fileUriExists(thisThreadJniEnv(), baseActivityObject(), uri);
 }
 
+Seconds AndroidApplication::fileUriLastWriteTime(JNIEnv *env, jobject baseActivity, CStringView uri) const
+{
+	return std::chrono::duration_cast<Seconds>(Milliseconds{uriLastModifiedTime(env, baseActivity, env->NewStringUTF(uri))});
+}
+
+Seconds ApplicationContext::fileUriLastWriteTime(CStringView uri) const
+{
+	if(androidSDK() < 19 || !IG::isUri(uri))
+		return FS::status(uri).lastWriteTime();
+	return application().fileUriLastWriteTime(thisThreadJniEnv(), baseActivityObject(), uri);
+}
+
 std::string AndroidApplication::fileUriFormatLastWriteTimeLocal(JNIEnv *env, jobject baseActivity, IG::CStringView uri) const
 {
 	//logMsg("getting modification time for URI:%s", uri.data());
@@ -314,7 +326,7 @@ std::string AndroidApplication::fileUriFormatLastWriteTimeLocal(JNIEnv *env, job
 std::string ApplicationContext::fileUriFormatLastWriteTimeLocal(IG::CStringView uri) const
 {
 	if(androidSDK() < 19 || !IG::isUri(uri))
-		return FS::formatLastWriteTimeLocal(uri);
+		return FS::formatLastWriteTimeLocal(*this, uri);
 	return application().fileUriFormatLastWriteTimeLocal(thisThreadJniEnv(), baseActivityObject(), uri);
 }
 
@@ -377,22 +389,28 @@ bool ApplicationContext::removeDirectoryUri(IG::CStringView uri) const
 	return application().removeFileUri(thisThreadJniEnv(), baseActivityObject(), uri, true);
 }
 
-void AndroidApplication::forEachInDirectoryUri(JNIEnv *env, jobject baseActivity, CStringView uri, DirectoryEntryDelegate del) const
+bool AndroidApplication::forEachInDirectoryUri(JNIEnv *env, jobject baseActivity,
+	CStringView uri, DirectoryEntryDelegate del, FS::DirOpenFlagsMask flags) const
 {
 	logMsg("listing directory URI:%s", uri.data());
 	if(!listUriFiles(env, baseActivity, (jlong)&del, env->NewStringUTF(uri)))
 	{
-		throw std::system_error{ENOENT, std::system_category(), uri};
+		if(to_underlying(flags & FS::DirOpenFlagsMask::Test))
+			return false;
+		else
+			throw std::system_error{ENOENT, std::system_category(), uri};
 	}
+	return true;
 }
 
-void ApplicationContext::forEachInDirectoryUri(CStringView uri, DirectoryEntryDelegate del) const
+bool ApplicationContext::forEachInDirectoryUri(CStringView uri, DirectoryEntryDelegate del,
+	FS::DirOpenFlagsMask flags) const
 {
 	if(androidSDK() < 21 || !IG::isUri(uri))
 	{
-		return forEachInDirectory(uri, del);
+		return forEachInDirectory(uri, del, flags);
 	}
-	application().forEachInDirectoryUri(thisThreadJniEnv(), baseActivityObject(), uri, del);
+	return application().forEachInDirectoryUri(thisThreadJniEnv(), baseActivityObject(), uri, del, flags);
 }
 
 static FS::PathString mainSOPath(ApplicationContext ctx)
@@ -437,6 +455,21 @@ bool ApplicationContext::requestPermission(Permission p)
 	auto baseActivity = baseActivityObject();
 	JNI::InstMethod<jboolean(jstring)> requestPermission{env, baseActivity, "requestPermission", "(Ljava/lang/String;)Z"};
 	return requestPermission(env, baseActivity, permissionJStr);
+}
+
+std::string AndroidApplication::formatDateAndTime(JNIEnv *env, jclass baseActivityClass, WallClockTime time)
+{
+	if(!time.count())
+		return {};
+	return std::string{JNI::StringChars{env, jFormatDateTime(env, baseActivityClass,
+		std::chrono::duration_cast<Milliseconds>(time).count())}};
+}
+
+std::string ApplicationContext::formatDateAndTime(WallClockTime time)
+{
+	auto env = thisThreadJniEnv();
+	return application().formatDateAndTime(env,
+		(jclass)env->GetObjectClass(baseActivityObject()), time);
 }
 
 JNIEnv *AndroidApplicationContext::mainThreadJniEnv() const
@@ -723,9 +756,34 @@ void AndroidApplication::initActivity(JNIEnv *env, jobject baseActivity, jclass 
 	// BaseActivity JNI functions
 	jSetRequestedOrientation = {env, baseActivityClass, "setRequestedOrientation", "(I)V"};
 	jMainDisplayRotation = {env, baseActivityClass, "mainDisplayRotation", "()I"};
+	jFormatDateTime = {env, baseActivityClass, "formatDateTime", "(J)Ljava/lang/String;"};
 	jNewFontRenderer = {env, baseActivityClass, "newFontRenderer", "()Lcom/imagine/FontRenderer;"};
+	jSetWinFlags = {env, baseActivityClass, "setWinFlags", "(II)V"};
+	jWinFlags = {env, baseActivityClass, "winFlags", "()I"};
+	if(androidSDK >= 11) { jSetUIVisibility = {env, baseActivityClass, "setUIVisibility", "(I)V"}; }
+	jRecycle = {env, env->FindClass("android/graphics/Bitmap"), "recycle", "()V"};
+
+	if(androidSDK >= 19) // Storage Access Framework support
 	{
-		JNINativeMethod method[]
+		openUriFd = {env, baseActivity, "openUriFd", "(Ljava/lang/String;I)I"};
+		uriExists = {env, baseActivity, "uriExists", "(Ljava/lang/String;)Z"};
+		uriLastModified = {env, baseActivity, "uriLastModified", "(Ljava/lang/String;)Ljava/lang/String;"};
+		uriLastModifiedTime = {env, baseActivity, "uriLastModifiedTime", "(Ljava/lang/String;)J"};
+		uriDisplayName = {env, baseActivity, "uriDisplayName", "(Ljava/lang/String;)Ljava/lang/String;"};
+		deleteUri = {env, baseActivity, "deleteUri", "(Ljava/lang/String;Z)Z"};
+		if(androidSDK >= 21)
+		{
+			listUriFiles = {env, baseActivity, "listUriFiles", "(JLjava/lang/String;)Z"};
+			createDirUri = {env, baseActivity, "createDirUri", "(Ljava/lang/String;)Z"};
+		}
+		if(androidSDK >= 24)
+		{
+			renameUri = {env, baseActivity, "renameUri", "(Ljava/lang/String;Ljava/lang/String;)Z"};
+		}
+	}
+
+	{
+		static constexpr JNINativeMethod method[]
 		{
 			{
 				"onContentRectChanged", "(JIIIIII)V",
@@ -838,34 +896,6 @@ void AndroidApplication::initActivity(JNIEnv *env, jobject baseActivity, jclass 
 		if(!mainLibHandle)
 			logWarn("unable to get native lib handle");
 	}*/
-
-	jSetWinFlags = {env, baseActivityClass, "setWinFlags", "(II)V"};
-	jWinFlags = {env, baseActivityClass, "winFlags", "()I"};
-
-	if(androidSDK >= 11)
-	{
-		jSetUIVisibility = {env, baseActivityClass, "setUIVisibility", "(I)V"};
-	}
-
-	jRecycle = {env, env->FindClass("android/graphics/Bitmap"), "recycle", "()V"};
-
-	if(androidSDK >= 19) // Storage Access Framework support
-	{
-		openUriFd = {env, baseActivity, "openUriFd", "(Ljava/lang/String;I)I"};
-		uriExists = {env, baseActivity, "uriExists", "(Ljava/lang/String;)Z"};
-		uriLastModified = {env, baseActivity, "uriLastModified", "(Ljava/lang/String;)Ljava/lang/String;"};
-		uriDisplayName = {env, baseActivity, "uriDisplayName", "(Ljava/lang/String;)Ljava/lang/String;"};
-		deleteUri = {env, baseActivity, "deleteUri", "(Ljava/lang/String;Z)Z"};
-		if(androidSDK >= 21)
-		{
-			listUriFiles = {env, baseActivity, "listUriFiles", "(JLjava/lang/String;)Z"};
-			createDirUri = {env, baseActivity, "createDirUri", "(Ljava/lang/String;)Z"};
-		}
-		if(androidSDK >= 24)
-		{
-			renameUri = {env, baseActivity, "renameUri", "(Ljava/lang/String;Ljava/lang/String;)Z"};
-		}
-	}
 }
 
 JNIEnv* AndroidApplication::thisThreadJniEnv() const

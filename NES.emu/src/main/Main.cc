@@ -33,6 +33,7 @@
 
 void ApplyDeemphasisComplete(pal* pal512);
 void FCEU_setDefaultPalettePtr(pal *ptr);
+void ApplyIPS(FILE *ips, FCEUFILE* fp);
 
 static uint8 XBufData[256 * 256 + 16]{};
 // Separate front & back buffers not needed for our video implementation
@@ -125,7 +126,21 @@ void NesSystem::loadState(EmuApp &app, IG::CStringView path)
 		EmuSystem::throwFileReadError();
 }
 
-void NesSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
+void NesSystem::loadBackupMemory(EmuApp &app)
+{
+	if(!hasContent())
+		return;
+	if(isFDS)
+	{
+		FCEU_FDSReadModifiedDisk();
+	}
+	else
+	{
+		FCEU_LoadGameSave(currCartInfo);
+	}
+}
+
+void NesSystem::onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags)
 {
 	if(!hasContent())
 		return;
@@ -137,6 +152,12 @@ void NesSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
 	{
 		FCEU_SaveGameSave(currCartInfo);
 	}
+}
+
+IG::Time NesSystem::backupMemoryLastWriteTime(const EmuApp &app) const
+{
+	return appContext().fileUriLastWriteTime(
+		app.contentSaveFilePath(isFDS ? ".fds.sav" : ".sav").c_str());
 }
 
 void NesSystem::closeSystem()
@@ -333,6 +354,11 @@ void NesSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 	file->archiveIndex = -1;
 	file->stream = ioStream;
 	file->size = ioStream->size();
+	if(auto ipsFile = FileUtils::fopenUri(appContext(), userFilePath(patchesDir, ".ips"), "r");
+		ipsFile)
+	{
+		ApplyIPS(ipsFile, file);
+	}
 	if(!FCEUI_LoadGameWithFile(file, contentFileName().data(), 0))
 	{
 		throw std::runtime_error("Error loading game");

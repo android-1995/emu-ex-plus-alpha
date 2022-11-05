@@ -162,24 +162,35 @@ void NeoSystem::loadState(EmuApp &app, IG::CStringView path)
 		return EmuSystem::throwFileReadError();
 }
 
-static auto nvramPath(EmuSystem &sys)
+static auto nvramPath(EmuApp &app)
 {
-	return sys.contentSaveFilePath(".nv");
+	return app.contentSaveFilePath(".nv");
 }
 
-static auto memcardPath(EmuSystem &sys)
+static auto memcardPath(EmuApp &app)
 {
-	return sys.contentSavePath("memcard");
+	return app.contentSaveFilePath(".memcard");
 }
 
-void NeoSystem::onFlushBackupMemory(BackupMemoryDirtyFlags flags)
+void NeoSystem::loadBackupMemory(EmuApp &app)
+{
+	FileUtils::readFromUri(appContext(), nvramPath(app), {memory.sram, 0x10000});
+	FileUtils::readFromUri(appContext(), memcardPath(app), {memory.memcard, 0x800});
+}
+
+void NeoSystem::onFlushBackupMemory(EmuApp &app, BackupMemoryDirtyFlags flags)
 {
 	if(!hasContent())
 		return;
 	if(flags & SRAM_DIRTY_BIT)
-		FileUtils::writeToUri(appContext(), nvramPath(*this), {memory.sram, 0x10000});
+		FileUtils::writeToUri(appContext(), nvramPath(app), {memory.sram, 0x10000});
 	if(flags & MEMCARD_DIRTY_BIT)
-		FileUtils::writeToUri(appContext(), memcardPath(*this), {memory.memcard, 0x800});
+		FileUtils::writeToUri(appContext(), memcardPath(app), {memory.memcard, 0x800});
+}
+
+IG::Time NeoSystem::backupMemoryLastWriteTime(const EmuApp &app) const
+{
+	return appContext().fileUriLastWriteTime(app.contentSavePath("memcard").c_str());
 }
 
 void NeoSystem::closeSystem()
@@ -245,6 +256,14 @@ void NeoSystem::loadContent(IO &, EmuSystemCreateParams, OnLoadProgressDelegate 
 	// clear excess bits from universe bios region/system settings
 	memory.memcard[2] = memory.memcard[2] & 0x80;
 	memory.memcard[3] = memory.memcard[3] & 0x3;
+	auto &app = EmuApp::get(ctx);
+	if(auto memcardPath = app.contentSaveFilePath(".memcard"), sharedMemcardPath = app.contentSavePath("memcard");
+		!ctx.fileUriExists(memcardPath) && ctx.fileUriExists(sharedMemcardPath))
+	{
+		logMsg("copying shared memcard");
+		FileUtils::readFromUri(ctx, sharedMemcardPath, {memory.memcard, 0x800});
+		FileUtils::writeToUri(ctx, memcardPath, {memory.memcard, 0x800});
+	}
 }
 
 void NeoSystem::configAudioRate(IG::FloatSeconds frameTime, int rate)
@@ -266,7 +285,7 @@ void NeoSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 {
 	//logMsg("run frame %d", (int)processGfx);
 	if(video)
-		IG::fill(screenBuff, (uint16_t)current_pc_pal[4095]);
+		std::ranges::fill(screenBuff, (uint16_t)current_pc_pal[4095]);
 	main_frame(&taskCtx, this, video);
 	auto audioFrames = updateAudioFramesPerVideoFrame();
 	Uint16 audioBuff[audioFrames * 2];
@@ -369,20 +388,6 @@ CLINK void screen_update(void *emuTaskCtxPtr, void *neoSystemPtr, void *emuVideo
 	{
 		//logMsg("skipping render");
 	}
-}
-
-void open_nvram(void *contextPtr, char *name)
-{
-	auto &ctx = *((IG::ApplicationContext*)contextPtr);
-	auto &sys = EmuEx::EmuApp::get(ctx).system();
-	IG::FileUtils::readFromUri(ctx, EmuEx::nvramPath(sys), {memory.sram, 0x10000});
-}
-
-void open_memcard(void *contextPtr, char *name)
-{
-	auto &ctx = *((IG::ApplicationContext*)contextPtr);
-	auto &sys = EmuEx::EmuApp::get(ctx).system();
-	IG::FileUtils::readFromUri(ctx, EmuEx::memcardPath(sys), {memory.memcard, 0x800});
 }
 
 void sramWritten()

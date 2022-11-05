@@ -39,30 +39,6 @@
 namespace EmuEx
 {
 
-class AutoStateConfirmAlertView : public YesNoAlertView, public EmuAppHelper<AutoStateConfirmAlertView>
-{
-public:
-	AutoStateConfirmAlertView(ViewAttachParams attach, std::string_view dateStr):
-		YesNoAlertView
-		{
-			attach,
-			"",
-			"继续上次进度",
-			"重头开始",
-			[this]()
-			{
-				app().launchSystem(true);
-			},
-			[this]()
-			{
-				app().launchSystem(false);
-			}
-		}
-	{
-		setLabel(fmt::format("自动存档存在:\n{}", dateStr));
-	}
-};
-
 EmuViewController::EmuViewController(ViewAttachParams viewAttach,
 	VController &vCtrl, EmuVideoLayer &videoLayer, EmuSystem &sys):
 	emuView{viewAttach, &videoLayer, sys},
@@ -276,20 +252,6 @@ void EmuViewController::showMenuView(bool updateTopView)
 
     //回调一下C层
     appContext().showEmulationCallbackAiWu(false);
-}
-
-bool EmuViewController::showAutoStateConfirm(const Input::Event &e)
-{
-	auto ctx = appContext();
-	auto saveStr = system().statePath(-1);
-	auto modTimeStr = ctx.fileUriFormatLastWriteTimeLocal(saveStr);
-	if(modTimeStr.size())
-	{
-		pushAndShowModal(std::make_unique<AutoStateConfirmAlertView>(viewStack.top().attachParams(),
-			modTimeStr), e, false);
-		return true;
-	}
-	return false;
 }
 
 void EmuViewController::placeEmuViews()

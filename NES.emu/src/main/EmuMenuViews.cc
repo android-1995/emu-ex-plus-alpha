@@ -16,7 +16,10 @@
 #include <emuframework/EmuApp.hh>
 #include <emuframework/AudioOptionView.hh>
 #include <emuframework/VideoOptionView.hh>
-#include <emuframework/OptionView.hh>
+#include <emuframework/FilePathOptionView.hh>
+#include <emuframework/DataPathSelectView.hh>
+#include <emuframework/UserPathSelectView.hh>
+#include <emuframework/SystemOptionView.hh>
 #include <emuframework/EmuSystemActionsView.hh>
 #include <emuframework/FilePicker.hh>
 #include "EmuCheatViews.hh"
@@ -499,34 +502,86 @@ public:
 	}
 };
 
-class CustomFilePathOptionView : public FilePathOptionView
+class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper<CustomFilePathOptionView>
 {
-	TextMenuItem fdsBiosPath
+	using MainAppHelper<CustomFilePathOptionView>::app;
+	using MainAppHelper<CustomFilePathOptionView>::system;
+
+	TextMenuItem cheatsPath
 	{
-		biosMenuEntryStr(appContext().fileUriDisplayName(EmuEx::fdsBiosPath)), &defaultFace(),
-		[this](TextMenuItem &, View &, Input::Event e)
+		cheatsMenuName(appContext(), system().cheatsDir), &defaultFace(),
+		[this](const Input::Event &e)
 		{
-			auto biosSelectMenu = makeViewWithName<BiosSelectMenu>("Disk System BIOS", &EmuEx::fdsBiosPath,
-				[this](std::string_view displayName)
+			pushAndShow(makeViewWithName<UserPathSelectView>("Cheats", system().userPath(system().cheatsDir),
+				[this](CStringView path)
 				{
-					logMsg("set fds bios %s", EmuEx::fdsBiosPath.data());
-					fdsBiosPath.compile(biosMenuEntryStr(displayName), renderer(), projP);
-				},
-				hasFDSBIOSExtension);
-			pushAndShow(std::move(biosSelectMenu), e);
+					logMsg("set cheats path:%s", path.data());
+					system().cheatsDir = path;
+					cheatsPath.compile(cheatsMenuName(appContext(), path), renderer(), projP);
+				}), e);
 		}
 	};
 
-	std::string biosMenuEntryStr(std::string_view displayName) const
+	TextMenuItem patchesPath
 	{
-		return fmt::format("Disk System BIOS: {}", displayName);
+		patchesMenuName(appContext(), system().patchesDir), &defaultFace(),
+		[this](const Input::Event &e)
+		{
+			pushAndShow(makeViewWithName<UserPathSelectView>("Patches", system().userPath(system().patchesDir),
+				[this](CStringView path)
+				{
+					logMsg("set patches path:%s", path.data());
+					system().patchesDir = path;
+					patchesPath.compile(patchesMenuName(appContext(), path), renderer(), projP);
+				}), e);
+		}
+	};
+
+	TextMenuItem palettesPath
+	{
+		palettesMenuName(appContext(), system().palettesDir), &defaultFace(),
+		[this](const Input::Event &e)
+		{
+			pushAndShow(makeViewWithName<UserPathSelectView>("Palettes", system().userPath(system().palettesDir),
+				[this](CStringView path)
+				{
+					logMsg("set palettes path:%s", path.data());
+					system().palettesDir = path;
+					palettesPath.compile(palettesMenuName(appContext(), path), renderer(), projP);
+				}), e);
+		}
+	};
+
+	TextMenuItem fdsBios
+	{
+		biosMenuEntryStr(fdsBiosPath), &defaultFace(),
+		[this](TextMenuItem &, View &, Input::Event e)
+		{
+			pushAndShow(makeViewWithName<DataFileSelectView>("Disk System BIOS",
+				app().validSearchPath(FS::dirnameUri(fdsBiosPath)),
+				[this](CStringView path, FS::file_type type)
+				{
+					fdsBiosPath = path;
+					logMsg("set fds bios:%s", path.data());
+					fdsBios.compile(biosMenuEntryStr(path), renderer(), projP);
+					return true;
+				}, hasFDSBIOSExtension), e);
+		}
+	};
+
+	std::string biosMenuEntryStr(CStringView path) const
+	{
+		return fmt::format("Disk System BIOS: {}", appContext().fileUriDisplayName(path));
 	}
 
 public:
 	CustomFilePathOptionView(ViewAttachParams attach): FilePathOptionView{attach, true}
 	{
 		loadStockItems();
-		item.emplace_back(&fdsBiosPath);
+		item.emplace_back(&cheatsPath);
+		item.emplace_back(&patchesPath);
+		item.emplace_back(&palettesPath);
+		item.emplace_back(&fdsBios);
 	}
 };
 

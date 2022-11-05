@@ -37,10 +37,11 @@ class MsxSystem final: public EmuSystem
 {
 public:
 	unsigned activeBoardType = BOARD_MSX;
-	FS::FileString cartName[2]{};
-	FS::FileString diskName[2]{};
+	FS::FileString cartName[2];
+	FS::FileString diskName[2];
 	IG::StaticString<128> optionDefaultMachineNameStr{optionMachineNameDefault};
-	IG::StaticString<128> optionSessionMachineNameStr{};
+	IG::StaticString<128> optionSessionMachineNameStr;
+	FS::PathString firmwarePath;
 
 	MsxSystem(ApplicationContext ctx):
 		EmuSystem{ctx}
@@ -79,6 +80,7 @@ public:
 	void loadContent(IO &, EmuSystemCreateParams, OnLoadProgressDelegate);
 	[[gnu::hot]] void runFrame(EmuSystemTaskContext task, EmuVideo *video, EmuAudio *audio);
 	FS::FileString stateFilename(int slot, std::string_view name) const;
+	std::string_view stateFilenameExt() const { return ".sta"; }
 	void loadState(EmuApp &, CStringView uri);
 	void saveState(CStringView path);
 	bool readConfig(ConfigType, MapIO &, unsigned key, size_t readSize);
@@ -113,7 +115,7 @@ bool hasMSXDiskExtension(std::string_view name);
 bool hasMSXROMExtension(std::string_view name);
 bool insertROM(EmuApp &, const char *name, unsigned slot = 0);
 bool insertDisk(EmuApp &, const char *name, unsigned slot = 0);
-FS::PathString machineBasePath(EmuSystem &);
+FS::PathString machineBasePath(MsxSystem &);
 void setupVKeyboardMap(EmuApp &, unsigned boardType);
 const char *currentMachineName();
 bool mixerEnableOption(MixerAudioType type);

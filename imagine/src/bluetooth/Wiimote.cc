@@ -26,9 +26,6 @@
 namespace IG
 {
 
-const uint8_t Wiimote::btClass[3] = { 0x04, 0x25, 0x00 };
-const uint8_t Wiimote::btClassDevOnly[3] = { 0x04, 0x05, 0x00 };
-const uint8_t Wiimote::btClassRemotePlus[3] = { 0x08, 0x05, 0x00 };
 static constexpr char ccDataBytes = 6;
 static constexpr char nunchuckDataBytes = 6;
 static constexpr char proDataBytes = 10;
@@ -295,13 +292,13 @@ void Wiimote::sendDataModeByExtension()
 {
 	switch(extension)
 	{
-		bcase EXT_CC:
+		case EXT_CC:
 		case EXT_NUNCHUK:
-			sendDataMode(0x32);
-		bcase EXT_WIIU_PRO:
-			sendDataMode(0x34);
-		bdefault:
-			sendDataMode(0x30);
+			return sendDataMode(0x32);
+		case EXT_WIIU_PRO:
+			return sendDataMode(0x34);
+		default:
+			return sendDataMode(0x30);
 	}
 }
 
@@ -317,35 +314,38 @@ bool Wiimote::dataHandler(const char *packetPtr, size_t size)
 	auto time = IG::steadyClockTimestamp();
 	switch(packet[1])
 	{
-		bcase 0x30:
+		case 0x30:
 		{
 			//logMsg("got core report");
 			//assert(device);
 			processCoreButtons(packet, time);
+			break;
 		}
 
-		bcase 0x32:
+		case 0x32:
 		{
 			//logMsg("got core+extension report");
 			//assert(device);
 			processCoreButtons(packet, time);
 			switch(extension)
 			{
-				bcase EXT_CC:
-					processClassicButtons(packet, time);
-				bcase EXT_NUNCHUK:
-					processNunchukButtons(packet, time);
+				case EXT_CC:
+					processClassicButtons(packet, time); break;
+				case EXT_NUNCHUK:
+					processNunchukButtons(packet, time); break;
 			}
+			break;
 		}
 
-		bcase 0x34:
+		case 0x34:
 		{
 			//logMsg("got core+extension19 report");
 			//assert(device);
 			processProButtons(packet, time);
+			break;
 		}
 
-		bcase 0x20:
+		case 0x20:
 		{
 			logMsg("got status report, bits 0x%X", packet[4]);
 			if(extension && !(packet[4] & bit(1)))
@@ -371,14 +371,15 @@ bool Wiimote::dataHandler(const char *packetPtr, size_t size)
 					identifiedType = 1;
 				}
 			}
+			break;
 		}
 
-		bcase 0x21:
+		case 0x21:
 		{
 			logMsg("got read report from addr %X %X", packet[5], packet[6]);
 			switch(function)
 			{
-				bcase FUNC_GET_EXT_TYPE:
+				case FUNC_GET_EXT_TYPE:
 				{
 					// CCs can have 0 or 1 in first byte, check only last 5 bytes
 					const uint8_t ccType[5] {/*0x00,*/ 0x00, 0xA4, 0x20, 0x01, 0x01};
@@ -391,7 +392,7 @@ bool Wiimote::dataHandler(const char *packetPtr, size_t size)
 						logMsg("extension is CC");
 						extension = EXT_CC;
 						sendDataModeByExtension();
-						IG::fill(prevExtData, 0xFF);
+						std::ranges::fill(prevExtData, 0xFF);
 						static constexpr float axisClassicLScaler = 1./31.;
 						static constexpr float axisClassicRScaler = 1./15.;
 						axis[0] = {*this, Input::AxisId::X, axisClassicLScaler};
@@ -407,7 +408,7 @@ bool Wiimote::dataHandler(const char *packetPtr, size_t size)
 						logMsg("extension is Nunchuk");
 						extension = EXT_NUNCHUK;
 						sendDataModeByExtension();
-						IG::fill(prevExtData, 0xFF);
+						std::ranges::fill(prevExtData, 0xFF);
 						static constexpr float axisNunchukScaler = 1./127.;
 						axis[0] = {*this, Input::AxisId::X, axisNunchukScaler};
 						axis[1] = {*this, Input::AxisId::Y, axisNunchukScaler};
@@ -417,7 +418,7 @@ bool Wiimote::dataHandler(const char *packetPtr, size_t size)
 						logMsg("extension is Wii U Pro");
 						extension = EXT_WIIU_PRO;
 						sendDataModeByExtension();
-						IG::fill(prevExtData, 0xFF);
+						std::ranges::fill(prevExtData, 0xFF);
 						static constexpr float axisClassicProScaler = 1./2047.;
 						axis[0] = {*this, Input::AxisId::X, axisClassicProScaler};
 						axis[1] = {*this, Input::AxisId::Y, axisClassicProScaler};
@@ -441,22 +442,26 @@ bool Wiimote::dataHandler(const char *packetPtr, size_t size)
 					}
 				}
 			}
+			break;
 		}
 
-		bcase 0x22:
+		case 0x22:
 		{
 			logMsg("ack output report, %X %X", packet[4], packet[5]);
 			switch(function)
 			{
-				bcase FUNC_INIT_EXT: initExtensionPart2();
-				bcase FUNC_INIT_EXT_DONE:
+				case FUNC_INIT_EXT:
+					initExtensionPart2(); break;
+				case FUNC_INIT_EXT_DONE:
 					readReg(0xa400fa, 6);
 					function = FUNC_GET_EXT_TYPE;
 					logMsg("done extension init, getting type");
+					break;
 			}
+			break;
 		}
 
-		bdefault:
+		default:
 		{
 			logMsg("unhandled packet type %d from wiimote", packet[1]);
 		}
@@ -586,11 +591,11 @@ void Wiimote::processNunchukButtons(const uint8_t *packet, Input::Time time)
 	memcpy(prevExtData, nunData, nunchuckDataBytes);
 }
 
-bool Wiimote::isSupportedClass(const uint8_t devClass[3])
+bool Wiimote::isSupportedClass(std::array<uint8_t, 3> devClass)
 {
-	return IG::equal_n(devClass, 3, btClass)
-		|| IG::equal_n(devClass, 3, btClassDevOnly)
-		|| IG::equal_n(devClass, 3, btClassRemotePlus);
+	return devClass == btClass
+		|| devClass == btClassDevOnly
+		|| devClass == btClassRemotePlus;
 }
 
 void Wiimote::removeExtendedDevice()
