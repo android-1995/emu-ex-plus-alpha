@@ -44,9 +44,9 @@ SystemOptionView::SystemOptionView(ViewAttachParams attach, bool customMenu):
 	autosaveTimerItem
 	{
 		{"只在退出时存档",    &defaultFace(), setAutosaveTimerDel(), 0},
-		{"5分钟和退出时",  &defaultFace(), setAutosaveTimerDel(), 5},
-		{"10分钟和退出时", &defaultFace(), setAutosaveTimerDel(), 10},
-		{"15分钟和退出时", &defaultFace(), setAutosaveTimerDel(), 15},
+		{"5分钟和退出时都存档",  &defaultFace(), setAutosaveTimerDel(), 5},
+		{"10分钟和退出时都存档", &defaultFace(), setAutosaveTimerDel(), 10},
+		{"15分钟和退出时都存档", &defaultFace(), setAutosaveTimerDel(), 15},
 	},
 	autosaveTimer
 	{
