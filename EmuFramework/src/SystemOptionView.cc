@@ -57,8 +57,9 @@ SystemOptionView::SystemOptionView(ViewAttachParams attach, bool customMenu):
 	autosaveLaunchItem
 	{
 		{"加载即时存档",            &defaultFace(), setAutosaveLaunchDel(), to_underlying(AutosaveLaunchMode::Load)},
-		{"不加载即时存档)", &defaultFace(), setAutosaveLaunchDel(), to_underlying(AutosaveLaunchMode::LoadNoState)},
-		{"询问",             &defaultFace(), setAutosaveLaunchDel(), to_underlying(AutosaveLaunchMode::Ask)},
+		{"不加载即时存档", &defaultFace(), setAutosaveLaunchDel(), to_underlying(AutosaveLaunchMode::LoadNoState)},
+		//去掉询问的逻辑
+//		{"询问",             &defaultFace(), setAutosaveLaunchDel(), to_underlying(AutosaveLaunchMode::Ask)},
 	},
 	autosaveLaunch
 	{

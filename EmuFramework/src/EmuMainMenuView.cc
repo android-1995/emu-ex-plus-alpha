@@ -434,14 +434,14 @@ OptionCategoryView::OptionCategoryView(ViewAttachParams attach, EmuAudio &audio,
 			{
 				pushAndShow(EmuApp::makeView(attachParams(), EmuApp::ViewID::GUI_OPTIONS), e);
 			}
-		},
-		{
-			"Online Documentation", &defaultFace(),
-			[this]
-			{
-				appContext().openURL("https://www.explusalpha.com/contents/emuex/documentation");
-			}
 		}
+//		,{
+//			"Online Documentation", &defaultFace(),
+//			[this]
+//			{
+//				appContext().openURL("https://www.explusalpha.com/contents/emuex/documentation");
+//			}
+//		}
 	}
 {
 	if(EmuApp::hasGooglePlayStoreFeatures())
