@@ -49,7 +49,7 @@ public:
 	OptionCategoryView(ViewAttachParams attach, EmuAudio &audio, EmuVideoLayer &videoLayer);
 
 protected:
-	TextMenuItem subConfig[7];
+	TextMenuItem subConfig[6];
 };
 
 #ifdef CONFIG_BLUETOOTH
