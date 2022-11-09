@@ -74,15 +74,15 @@ public:
 	constexpr void setState(VControllerState state) { state_ = state; }
 
 protected:
-	Gfx::Sprite spr{};
-	Gfx::Sprite mapSpr{};
-	Gfx::Texture mapImg{};
-	Gfx::GCRect padBase{};
-	IG::WindowRect padBaseArea{}, padArea{};
+	Gfx::Sprite spr;
+	Gfx::Sprite mapSpr;
+	Gfx::Texture mapImg;
+	Gfx::GCRect padBase;
+	IG::WindowRect padBaseArea, padArea;
 	int deadzone{};
 	float diagonalSensitivity = 1.;
 	int btnSizePixels{};
-	VControllerState state_ = VControllerState::SHOWN;
+	VControllerState state_{VControllerState::SHOWN};
 	bool visualizeBounds{};
 
 	void updateBoundingAreaGfx(Gfx::Renderer &, Gfx::ProjectionPlane);
@@ -332,7 +332,7 @@ public:
 	bool updateAutoOnScreenControlVisible();
 	bool readConfig(MapIO &, unsigned key, size_t size);
 	void writeConfig(FileIO &) const;
-	void readSerializedLayoutPositions(MapIO &, size_t size);
+	bool readSerializedLayoutPositions(MapIO &, size_t size);
 	size_t serializedLayoutPositionsSize() const;
 	void configure(IG::Window &, Gfx::Renderer &, const Gfx::GlyphTextureSet &face);
 	static VControllerLayoutPosition pixelToLayoutPos(IG::WP pos, IG::WP size, IG::WindowRect viewBounds);

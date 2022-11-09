@@ -23,7 +23,7 @@ enum
 	CFGKEY_MD_CD_BIOS_JPN_PATH = 282, CFGKEY_MD_CD_BIOS_EUR_PATH = 283,
 	CFGKEY_MD_REGION = 284, CFGKEY_VIDEO_SYSTEM = 285,
 	CFGKEY_INPUT_PORT_1 = 286, CFGKEY_INPUT_PORT_2 = 287,
-	CFGKEY_MULTITAP = 288
+	CFGKEY_MULTITAP = 288, CFGKEY_CHEATS_PATH = 289,
 };
 
 bool hasMDExtension(std::string_view name);
@@ -31,6 +31,7 @@ bool hasMDExtension(std::string_view name);
 class MdSystem final: public EmuSystem
 {
 public:
+	std::string cheatsDir;
 	int playerIdxMap[4]{};
 	int gunDevIdx{};
 	int8_t mdInputPortDev[2]{-1, -1};
@@ -56,6 +57,7 @@ public:
 	void loadContent(IO &, EmuSystemCreateParams, OnLoadProgressDelegate);
 	[[gnu::hot]] void runFrame(EmuSystemTaskContext task, EmuVideo *video, EmuAudio *audio);
 	FS::FileString stateFilename(int slot, std::string_view name) const;
+	std::string_view stateFilenameExt() const { return ".gp"; }
 	void loadState(EmuApp &, CStringView uri);
 	void saveState(CStringView path);
 	bool readConfig(ConfigType, MapIO &, unsigned key, size_t readSize);
@@ -69,7 +71,9 @@ public:
 	static std::span<const AspectRatioInfo> aspectRatioInfos();
 
 	// optional API functions
-	void onFlushBackupMemory(BackupMemoryDirtyFlags);
+	void loadBackupMemory(EmuApp &);
+	void onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags);
+	IG::Time backupMemoryLastWriteTime(const EmuApp &) const;
 	void closeSystem();
 	bool resetSessionOptions(EmuApp &);
 	bool onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat);

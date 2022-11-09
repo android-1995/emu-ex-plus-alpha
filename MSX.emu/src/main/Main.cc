@@ -72,9 +72,9 @@ static const char saveStateVersion[] = "blueMSX - state  v 8";
 
 CLINK Int16 *mixerGetBuffer(Mixer* mixer, UInt32 *samplesOut);
 
-FS::PathString machineBasePath(EmuSystem &sys)
+FS::PathString machineBasePath(MsxSystem &sys)
 {
-	if(sys.firmwarePath().empty())
+	if(sys.firmwarePath.empty())
 	{
 		if constexpr(Config::envIsLinux && !Config::MACHINE_IS_PANDORA)
 			return sys.appContext().assetPath();
@@ -83,7 +83,7 @@ FS::PathString machineBasePath(EmuSystem &sys)
 	}
 	else
 	{
-		return sys.firmwarePath();
+		return sys.firmwarePath;
 	}
 }
 
@@ -126,15 +126,22 @@ void MsxSystem::insertMedia(EmuApp &app)
 	{
 		switch(currentRomType[i])
 		{
-			bcase ROM_SCC: logMsg("loading SCC"); boardChangeCartridge(i, ROM_SCC, "", 0);
-			bcase ROM_SCCPLUS: logMsg("loading SCC+"); boardChangeCartridge(i, ROM_SCCPLUS, "", 0);
-			bcase ROM_SUNRISEIDE:
+			case ROM_SCC:
+				logMsg("loading SCC");
+				boardChangeCartridge(i, ROM_SCC, "", 0);
+				break;
+			case ROM_SCCPLUS:
+				logMsg("loading SCC+");
+				boardChangeCartridge(i, ROM_SCCPLUS, "", 0);
+				break;
+			case ROM_SUNRISEIDE:
 				logMsg("loading Sunrise IDE");
 				if(!boardChangeCartridge(i, ROM_SUNRISEIDE, "Sunrise IDE", 0))
 				{
 					throw std::runtime_error("Error loading Sunrise IDE device");
 				}
-			bdefault:
+				break;
+			default:
 			{
 				if(cartName[i].empty())
 					continue;
@@ -438,7 +445,7 @@ void MsxSystem::reset(EmuApp &app, ResetMode mode)
 		if(!createBoard(app))
 		{
 			app.postMessage(true, "Error during MSX reset");
-			app.closeSystem(false);
+			app.closeSystemWithoutSave();
 		}
 		try
 		{
@@ -550,7 +557,7 @@ void MsxSystem::loadBlueMSXState(EmuApp &app, const char *filename)
 	if(!createBoardFromLoadGame(app))
 	{
 		auto err = fmt::format("Can't initialize machine:{} from save-state", machine->name);
-		app.closeSystem(false);
+		app.closeSystemWithoutSave();
 		throw std::runtime_error{err};
 	}
 
@@ -574,7 +581,7 @@ void MsxSystem::loadBlueMSXState(EmuApp &app, const char *filename)
 	}
 	catch(...)
 	{
-		app.closeSystem(false);
+		app.closeSystemWithoutSave();
 		throw;
 	}
 
