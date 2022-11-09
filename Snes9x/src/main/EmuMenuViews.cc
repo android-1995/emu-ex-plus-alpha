@@ -303,7 +303,7 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 
 	static std::string satMenuName(IG::ApplicationContext ctx, std::string_view userPath)
 	{
-		return fmt::format("Satellaview Files: {}", userPathToDisplayName(ctx, userPath));
+		return fmt::format("Satellaview文件: {}", userPathToDisplayName(ctx, userPath));
 	}
 
 	TextMenuItem satPath
@@ -311,7 +311,7 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 		satMenuName(appContext(), system().satDir), &defaultFace(),
 		[this](const Input::Event &e)
 		{
-			pushAndShow(makeViewWithName<UserPathSelectView>("Satellaview Files", system().userPath(system().satDir),
+			pushAndShow(makeViewWithName<UserPathSelectView>("Satellaview文件", system().userPath(system().satDir),
 				[this](CStringView path)
 				{
 					logMsg("set satellaview files path:%s", path.data());
@@ -369,8 +369,8 @@ public:
 	CustomFilePathOptionView(ViewAttachParams attach): FilePathOptionView{attach, true}
 	{
 		loadStockItems();
-		item.emplace_back(&cheatsPath);
-		item.emplace_back(&patchesPath);
+//		item.emplace_back(&cheatsPath);
+//		item.emplace_back(&patchesPath);
 		item.emplace_back(&satPath);
 		item.emplace_back(&bsxBios);
 		item.emplace_back(&sufamiBios);

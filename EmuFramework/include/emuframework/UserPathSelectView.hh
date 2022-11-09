@@ -34,7 +34,7 @@ public:
 		TableView{IG_forward(name), attach, item},
 		selectFolder
 		{
-			"Select Folder", &defaultFace(),
+			"选择文件夹", &defaultFace(),
 			[=](View &view, const Input::Event &e)
 			{
 				auto fPicker = view.makeView<EmuFilePicker>(FSPicker::Mode::DIR, EmuSystem::NameFilterFunc{}, e);
@@ -52,7 +52,7 @@ public:
 		},
 		sameAsContent
 		{
-			"Same As Content", &defaultFace(),
+			"游戏同级文件夹", &defaultFace(),
 			[=](View &view)
 			{
 				onPathChange(optionUserPathContentToken);
@@ -72,7 +72,7 @@ public:
 	{
 		item.emplace_back(&selectFolder);
 		item.emplace_back(&sameAsContent);
-		item.emplace_back(&sameAsSaves);
+//		item.emplace_back(&sameAsSaves);
 	};
 
 	void appendItem(TextMenuItem &i) { item.emplace_back(&i); }
@@ -92,13 +92,13 @@ inline FS::FileString userPathToDisplayName(IG::ApplicationContext ctx, std::str
 	if(userPathStr.size())
 	{
 		if(userPathStr == optionUserPathContentToken)
-			return "Content Folder";
+			return "游戏文件夹";
 		else
 			return ctx.fileUriDisplayName(userPathStr);
 	}
 	else
 	{
-		return "Saves Folder";
+		return "存档文件夹";
 	}
 }
 
