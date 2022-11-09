@@ -24,10 +24,9 @@
 #include <mednafen/state-driver.h>
 #include <mednafen/hash/md5.h>
 #include <mednafen/MemoryStream.h>
-#include <mednafen/pce_fast/pce.h>
+#include <mednafen/pce/huc.h>
 #include <mednafen/pce_fast/huc.h>
 #include <mednafen/pce_fast/vdc.h>
-#include <mednafen/pce_fast/pcecd_drive.h>
 #include <mednafen-emuex/MDFNUtils.hh>
 
 namespace EmuEx
@@ -67,12 +66,29 @@ const char *EmuSystem::systemName() const
 EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter = hasPCEWithCDExtension;
 EmuSystem::NameFilterFunc EmuSystem::defaultBenchmarkFsFilter = hasHuCardExtension;
 
-void PceSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
+void PceSystem::loadBackupMemory(EmuApp &)
+{
+	logMsg("loading backup memory");
+	if(isUsingAccurateCore())
+		MDFN_IEN_PCE::HuC_LoadNV();
+	else
+		MDFN_IEN_PCE_FAST::HuC_LoadNV();
+}
+
+void PceSystem::onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags)
 {
 	if(!hasContent())
 		return;
 	logMsg("saving backup memory");
-	MDFN_IEN_PCE_FAST::HuC_SaveNV();
+	if(isUsingAccurateCore())
+		MDFN_IEN_PCE::HuC_SaveNV();
+	else
+		MDFN_IEN_PCE_FAST::HuC_SaveNV();
+}
+
+IG::Time PceSystem::backupMemoryLastWriteTime(const EmuApp &app) const
+{
+	return appContext().fileUriLastWriteTime(savePathMDFN(app, 0, "sav").c_str());
 }
 
 FS::FileString PceSystem::stateFilename(int slot, std::string_view name) const
@@ -120,6 +136,8 @@ WP PceSystem::multiresVideoBaseSize() const { return {512, 0}; }
 
 void PceSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegate)
 {
+	mdfnGameInfo = resolvedCore() == EmuCore::Accurate ? EmulatedPCE : EmulatedPCE_Fast;
+	logMsg("using emulator core module:%s", asModuleString(resolvedCore()).data());
 	mdfnGameInfo.name = std::string{EmuSystem::contentName()};
 	auto unloadCD = IG::scopeGuard(
 		[&]()
@@ -145,7 +163,10 @@ void PceSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 		CDInterfaces.push_back(CDInterface::Open(&NVFS, contentLocation().data(), false, 0));
 		writeCDMD5(mdfnGameInfo, *CDInterfaces[0]);
 		mdfnGameInfo.LoadCD(&CDInterfaces);
-		PCECD_Drive_SetDisc(false, CDInterfaces[0]);
+		if(isUsingAccurateCore())
+			Mednafen::SCSICD_SetDisc(false, CDInterfaces[0]);
+		else
+			MDFN_IEN_PCE_FAST::PCECD_Drive_SetDisc(false, CDInterfaces[0]);
 	}
 	else
 	{
@@ -161,29 +182,44 @@ void PceSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 			std::string{contentName()}};
 		mdfnGameInfo.Load(&gf);
 	}
+	unloadCD.cancel();
 	//logMsg("%d input ports", MDFNGameInfo->InputInfo->InputPorts);
 	for(auto i : iotaCount(5))
 	{
 		mdfnGameInfo.SetInput(i, "gamepad", (uint8*)&inputBuff[i]);
 	}
-	unloadCD.cancel();
+	updatePixmap(mSurfacePix.format());
 }
 
 bool PceSystem::onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat fmt)
 {
-	mSurfacePix = {{{vidBufferX, vidBufferY}, fmt}, pixBuff};
-	MDFN_IEN_PCE_FAST::VDC_SetPixelFormat(pixmapToMDFNSurface(mSurfacePix).format, nullptr, 0);
+	updatePixmap(fmt);
 	return false;
+}
+
+void PceSystem::updatePixmap(IG::PixelFormat fmt)
+{
+	mSurfacePix = {{{mdfnGameInfo.fb_width, mdfnGameInfo.fb_height}, fmt}, pixBuff};
+	if(!hasContent())
+		return;
+	if(isUsingAccurateCore())
+		MDFN_IEN_PCE::vce->SetPixelFormat(toMDFNSurface(mSurfacePix).format, nullptr, 0);
+	else
+		MDFN_IEN_PCE_FAST::VDC_SetPixelFormat(toMDFNSurface(mSurfacePix).format, nullptr, 0);
+	return;
 }
 
 void PceSystem::configAudioRate(IG::FloatSeconds frameTime, int rate)
 {
-	const bool using263Lines = vce.CR & 0x04;
+	const bool using263Lines = isUsing263Lines();
 	prevUsing263Lines = using263Lines;
 	auto systemFrameTime = using263Lines ? staticFrameTime : staticFrameTimeWith262Lines;
 	auto soundRate = std::round(rate / systemFrameTime * frameTime.count());
 	logMsg("emu sound rate:%f, 263 lines:%d", soundRate, using263Lines);
-	MDFN_IEN_PCE_FAST::applySoundFormat(soundRate);
+	if(isUsingAccurateCore())
+		MDFN_IEN_PCE::applySoundFormat(soundRate);
+	else
+		MDFN_IEN_PCE_FAST::applySoundFormat(soundRate);
 }
 
 void PceSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio *audio)
@@ -195,8 +231,7 @@ void PceSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	{
 		espec.SoundBuf = audioBuff;
 		espec.SoundBufMaxSize = maxFrames;
-		const bool using263Lines = vce.CR & 0x04;
-		if(prevUsing263Lines != using263Lines) [[unlikely]]
+		if(prevUsing263Lines != isUsing263Lines()) [[unlikely]]
 		{
 			configFrameTime(audio->format().rate);
 		}
@@ -205,22 +240,20 @@ void PceSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	espec.sys = this;
 	espec.video = video;
 	espec.skip = !video;
-	auto mSurface = pixmapToMDFNSurface(mSurfacePix);
+	espec.audio = audio;
+	auto mSurface = toMDFNSurface(mSurfacePix);
 	espec.surface = &mSurface;
-	int32 lineWidth[242];
+	int32 lineWidth[264];
 	espec.LineWidths = lineWidth;
 	mdfnGameInfo.Emulate(&espec);
 	if(audio)
-	{
-		assert((unsigned)espec.SoundBufSize <= audio->format().bytesToFrames(sizeof(audioBuff)));
-		audio->writeFrames((uint8_t*)audioBuff, espec.SoundBufSize);
-	}
+		audio->writeFrames(audioBuff, espec.SoundBufSize);
 }
 
 void PceSystem::reset(EmuApp &, ResetMode mode)
 {
 	assert(hasContent());
-	MDFN_IEN_PCE_FAST::PCE_Power();
+	mdfnGameInfo.DoSimpleCommand(MDFN_MSC_RESET);
 }
 
 void PceSystem::saveState(IG::CStringView path)
@@ -261,6 +294,13 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 namespace Mednafen
 {
 
+void MDFN_MidSync(EmulateSpecStruct *espec, const unsigned flags)
+{
+	if(!espec->audio)
+		return;
+	espec->audio->writeFrames(espec->SoundBuf, std::exchange(espec->SoundBufSize, 0));
+}
+
 template <class Pixel>
 static void renderMultiresOutput(EmulateSpecStruct spec, IG::PixmapView srcPix, int multiResOutputWidth)
 {
@@ -277,9 +317,9 @@ static void renderMultiresOutput(EmulateSpecStruct spec, IG::PixmapView srcPix, 
 			int width = lineWidth[h];
 			switch(width)
 			{
-				bdefault:
+				default:
 					bug_unreachable("width == %d", width);
-				bcase 256:
+				case 256:
 				{
 					for(auto w : IG::iotaCount(256))
 					{
@@ -288,8 +328,9 @@ static void renderMultiresOutput(EmulateSpecStruct spec, IG::PixmapView srcPix, 
 						*destPixAddr++ = *srcPixAddr;
 						*destPixAddr++ = *srcPixAddr++;
 					}
+					break;
 				}
-				bcase 341:
+				case 341:
 				{
 					for(auto w : IG::iotaCount(340))
 					{
@@ -301,14 +342,16 @@ static void renderMultiresOutput(EmulateSpecStruct spec, IG::PixmapView srcPix, 
 					*destPixAddr++ = *srcPixAddr;
 					*destPixAddr++ = *srcPixAddr;
 					*destPixAddr++ = *srcPixAddr++;
+					break;
 				}
-				bcase 512:
+				case 512:
 				{
 					for(auto w : IG::iotaCount(512))
 					{
 						*destPixAddr++ = *srcPixAddr;
 						*destPixAddr++ = *srcPixAddr++;
 					}
+					break;
 				}
 			}
 			destPixAddr += img.pixmap().paddingPixels();
@@ -322,21 +365,23 @@ static void renderMultiresOutput(EmulateSpecStruct spec, IG::PixmapView srcPix, 
 			int width = lineWidth[h];
 			switch(width)
 			{
-				bdefault:
+				default:
 					bug_unreachable("width == %d", width);
-				bcase 256:
+				case 256:
 				{
 					for(auto w : IG::iotaCount(256))
 					{
 						*destPixAddr++ = *srcPixAddr;
 						*destPixAddr++ = *srcPixAddr++;
 					}
+					break;
 				}
-				bcase 512:
+				case 512:
 				{
 					memcpy(destPixAddr, srcPixAddr, 512 * sizeof(Pixel));
 					destPixAddr += 512;
 					srcPixAddr += 512;
+					break;
 				}
 			}
 			destPixAddr += img.pixmap().paddingPixels();
@@ -358,9 +403,9 @@ void MDFND_commitVideoFrame(EmulateSpecStruct *espec)
 		assumeExpr(w == 256 || w == 341 || w == 512);
 		switch(w)
 		{
-			bcase 256: uses256 = true;
-			bcase 341: uses341 = true;
-			bcase 512: uses512 = true;
+			case 256: uses256 = true; break;
+			case 341: uses341 = true; break;
+			case 512: uses512 = true; break;
 		}
 	}
 	int pixWidth = 256;
@@ -402,3 +447,13 @@ void MDFND_commitVideoFrame(EmulateSpecStruct *espec)
 }
 
 }
+
+namespace MDFN_IEN_PCE_FAST
+{
+// dummy HES functions
+int PCE_HESLoad(const uint8 *buf, uint32 size) { return 0; };
+void HES_Draw(MDFN_Surface *surface, MDFN_Rect *DisplayRect, int16 *SoundBuf, int32 SoundBufSize) {}
+void HES_Close(void) {}
+void HES_Reset(void) {}
+uint8 ReadIBP(unsigned int A) { return 0; }
+};

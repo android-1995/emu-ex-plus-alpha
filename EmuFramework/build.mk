@@ -5,6 +5,7 @@ ifneq ($(filter linux ios android,$(ENV)),)
 endif
 
 SRC += AudioOptionView.cc \
+AutosaveSlotView.cc \
 BundledGamesView.cc \
 ButtonConfigView.cc \
 Cheats.cc \
@@ -25,6 +26,7 @@ EmuVideo.cc \
 EmuVideoLayer.cc \
 EmuView.cc \
 EmuViewController.cc \
+FilePathOptionView.cc \
 FilePicker.cc \
 GUIOptionView.cc \
 InputManagerView.cc \

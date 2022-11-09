@@ -28,10 +28,19 @@ class StateSlotView : public TableView, public EmuAppHelper<StateSlotView>
 {
 public:
 	StateSlotView(ViewAttachParams attach);
+	void onShow() final;
 
 private:
-	static constexpr int stateSlots = 11;
-	TextMenuItem stateSlot[stateSlots]{};
+	static constexpr int stateSlots = 10;
+	TextMenuItem load;
+	TextMenuItem save;
+	TextHeadingMenuItem slotHeading;
+	TextMenuItem stateSlot[stateSlots];
+	std::array<MenuItem*, 13> menuItems;
+
+	void refreshSlot(int slot);
+	void refreshSlots();
+	void doSaveState();
 };
 
 }

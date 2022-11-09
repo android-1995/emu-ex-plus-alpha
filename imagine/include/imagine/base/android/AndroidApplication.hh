@@ -19,6 +19,7 @@
 #include <imagine/base/BaseApplication.hh>
 #include <imagine/base/Timer.hh>
 #include <imagine/base/android/Choreographer.hh>
+#include <imagine/time/Time.hh>
 #include <imagine/util/jni.hh>
 #include <pthread.h>
 #include <optional>
@@ -38,6 +39,7 @@ namespace IG::FS
 {
 class PathString;
 class FileString;
+enum class DirOpenFlagsMask: uint8_t;
 }
 
 namespace IG
@@ -88,12 +90,15 @@ public:
 	bool requestPermission(ApplicationContext, Permission);
 	UniqueFileDescriptor openFileUriFd(JNIEnv *, jobject baseActivity, CStringView uri, OpenFlagsMask oFlags = {}) const;
 	bool fileUriExists(JNIEnv *, jobject baseActivity, IG::CStringView uri) const;
-	std::string fileUriFormatLastWriteTimeLocal(JNIEnv *, jobject baseActivity, IG::CStringView uri) const;
+	Seconds fileUriLastWriteTime(JNIEnv *, jobject baseActivity, CStringView uri) const;
+	std::string fileUriFormatLastWriteTimeLocal(JNIEnv *, jobject baseActivity, CStringView uri) const;
 	FS::FileString fileUriDisplayName(JNIEnv *, jobject baseActivity, IG::CStringView uri) const;
 	bool removeFileUri(JNIEnv *, jobject baseActivity, IG::CStringView uri, bool isDir) const;
 	bool renameFileUri(JNIEnv *, jobject baseActivity, IG::CStringView oldUri, IG::CStringView newUri) const;
 	bool createDirectoryUri(JNIEnv *, jobject baseActivity, IG::CStringView uri) const;
-	void forEachInDirectoryUri(JNIEnv *, jobject baseActivity, CStringView uri, DirectoryEntryDelegate) const;
+	bool forEachInDirectoryUri(JNIEnv *, jobject baseActivity, CStringView uri, DirectoryEntryDelegate,
+		FS::DirOpenFlagsMask) const;
+	std::string formatDateAndTime(JNIEnv *, jclass baseActivityClass, WallClockTime timeSinceEpoch);
 
 	// Input system functions
 	void onInputQueueCreated(ApplicationContext, AInputQueue *);
@@ -119,26 +124,28 @@ private:
 	static constexpr DeviceFlags DISPLAY_CUTOUT_BIT = bit(1);
 	static constexpr DeviceFlags HANDLE_ROTATION_ANIMATION_BIT = bit(2);
 
-	JNI::UniqueGlobalRef displayListenerHelper{};
-	JNI::InstMethod<void()> jRecycle{};
-	JNI::InstMethod<void(jint)> jSetUIVisibility{};
-	JNI::InstMethod<jobject()> jNewFontRenderer{};
-	JNI::InstMethod<void(jint)> jSetRequestedOrientation{};
-	JNI::InstMethod<jint()> jMainDisplayRotation{};
-	JNI::InstMethod<void(jint, jint)> jSetWinFlags{};
-	JNI::InstMethod<jint()> jWinFlags{};
-	JNI::InstMethod<void(jstring, jstring, jstring)> jAddNotification{};
-	JNI::InstMethod<void(jlong)> jEnumInputDevices{};
-	JNI::InstMethod<jint(jstring, jint)> openUriFd{};
-	JNI::InstMethod<jboolean(jstring)> uriExists{};
-	JNI::InstMethod<jstring(jstring)> uriLastModified{};
-	JNI::InstMethod<jstring(jstring)> uriDisplayName{};
-	JNI::InstMethod<jboolean(jstring, jboolean)> deleteUri{};
-	JNI::InstMethod<jboolean(jlong, jstring)> listUriFiles{};
-	JNI::InstMethod<jboolean(jstring)> createDirUri{};
-	JNI::InstMethod<jboolean(jstring, jstring)> renameUri{};
-	SystemDocumentPickerDelegate onSystemDocumentPicker{};
-	SystemOrientationChangedDelegate onSystemOrientationChanged{};
+	JNI::UniqueGlobalRef displayListenerHelper;
+	JNI::InstMethod<void()> jRecycle;
+	JNI::InstMethod<void(jint)> jSetUIVisibility;
+	JNI::InstMethod<jobject()> jNewFontRenderer;
+	JNI::InstMethod<void(jint)> jSetRequestedOrientation;
+	JNI::InstMethod<jint()> jMainDisplayRotation;
+	JNI::InstMethod<void(jint, jint)> jSetWinFlags;
+	JNI::InstMethod<jint()> jWinFlags;
+	JNI::InstMethod<void(jstring, jstring, jstring)> jAddNotification;
+	JNI::InstMethod<void(jlong)> jEnumInputDevices;
+	JNI::InstMethod<jint(jstring, jint)> openUriFd;
+	JNI::InstMethod<jboolean(jstring)> uriExists;
+	JNI::InstMethod<jstring(jstring)> uriLastModified;
+	JNI::InstMethod<jlong(jstring)> uriLastModifiedTime;
+	JNI::InstMethod<jstring(jstring)> uriDisplayName;
+	JNI::InstMethod<jboolean(jstring, jboolean)> deleteUri;
+	JNI::InstMethod<jboolean(jlong, jstring)> listUriFiles;
+	JNI::InstMethod<jboolean(jstring)> createDirUri;
+	JNI::InstMethod<jboolean(jstring, jstring)> renameUri;
+	JNI::ClassMethod<jstring(jlong)> jFormatDateTime;
+	SystemDocumentPickerDelegate onSystemDocumentPicker;
+	SystemOrientationChangedDelegate onSystemOrientationChanged;
 	Timer userActivityCallback{"userActivityCallback"};
 	using ProcessInputFunc = void (AndroidApplication::*)(AInputQueue *);
 	IG_UseMemberIf(Config::ENV_ANDROID_MIN_SDK < 12, ProcessInputFunc, processInput_){&AndroidApplication::processInputWithHasEvents};

@@ -15,7 +15,7 @@
 	You should have received a copy of the GNU General Public License
 	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <imagine/fs/FSDefs.hh>
+#include <imagine/fs/FSUtils.hh>
 #include <imagine/base/baseDefs.hh>
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/time/Time.hh>
@@ -95,6 +95,8 @@ enum class VideoSystem: uint8_t
 	NATIVE_NTSC, PAL
 };
 
+constexpr const char *optionUserPathContentToken = ":CONTENT:";
+
 class EmuSystem
 {
 public:
@@ -169,6 +171,7 @@ public:
 	void loadContent(IO &, EmuSystemCreateParams, OnLoadProgressDelegate);
 	[[gnu::hot]] void runFrame(EmuSystemTaskContext task, EmuVideo *video, EmuAudio *audio);
 	FS::FileString stateFilename(int slot, std::string_view name) const;
+	std::string_view stateFilenameExt() const;
 	void loadState(EmuApp &, CStringView uri);
 	void saveState(CStringView path);
 	bool readConfig(ConfigType, MapIO &io, unsigned key, size_t readSize);
@@ -195,7 +198,9 @@ public:
 	WP multiresVideoBaseSize() const;
 	double videoAspectRatioScale() const;
 	bool onVideoRenderFormatChange(EmuVideo &, PixelFormat);
-	void onFlushBackupMemory(BackupMemoryDirtyFlags);
+	void loadBackupMemory(EmuApp &);
+	void onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags);
+	IG::Time backupMemoryLastWriteTime(const EmuApp &) const;
 	FS::FileString configName() const;
 	void onOptionsLoaded();
 	void onSessionOptionsLoaded(EmuApp &);
@@ -214,41 +219,76 @@ public:
 	std::string_view stateSlotName() { return stateSlotName(stateSlot()); }
 	int stateSlot() const { return saveStateSlot; }
 	void setStateSlot(int slot) { saveStateSlot = slot; }
-	void decStateSlot() { if(--saveStateSlot < -1) saveStateSlot = 9; }
-	void incStateSlot() { if(++saveStateSlot > 9) saveStateSlot = -1; }
+	void decStateSlot() { if(--saveStateSlot < 0) saveStateSlot = 9; }
+	void incStateSlot() { if(++saveStateSlot > 9) saveStateSlot = 0; }
 	const char *systemName() const;
 	const char *shortSystemName() const;
 	const BundledGameInfo &bundledGameInfo(int idx) const;
-	auto contentDirectory() const { return contentDirectory_; }
+	const auto &contentDirectory() const { return contentDirectory_; }
 	FS::PathString contentDirectory(std::string_view name) const;
-	auto contentLocation() const { return contentLocation_; }
+	FS::PathString contentFilePath(std::string_view ext) const;
+	const auto &contentLocation() const { return contentLocation_; }
 	const char *contentLocationPtr() { return contentLocation_.data(); }
-	FS::FileString contentName() const { return contentName_; }
+	const auto &contentName() const { return contentName_; }
 	FS::FileString contentFileName() const;
 	std::string contentDisplayName() const;
 	void setContentDisplayName(std::string_view name);
 	FS::FileString contentDisplayNameForPathDefaultImpl(IG::CStringView path) const;
 	void setInitialLoadPath(IG::CStringView path);
 	FS::PathString fallbackSaveDirectory(bool create = false);
-	FS::PathString contentSaveDirectory() const;
+	const auto &contentSaveDirectory() const { return contentSaveDirectory_; }
+
+	FS::PathString contentLocalSaveDirectory(auto &&...components) const
+	{
+		return contentLocalDirectory(contentSaveDirectory_, "saves", IG_forward(components)...);
+	}
+
+	bool createContentLocalSaveDirectory(auto &&...components)
+	{
+		return createContentLocalDirectory(contentSaveDirectory_, "saves", IG_forward(components)...);
+	}
+
+	FS::PathString contentLocalDirectory(std::string_view basePath, std::string_view name, auto &&...components) const
+	{
+		assert(!contentName_.empty());
+		return FS::uriString(basePath, contentName_, name, IG_forward(components)...);
+	}
+
+	bool createContentLocalDirectory(std::string_view basePath, std::string_view name, auto &&...components)
+	{
+		assert(!contentName_.empty());
+		try
+		{
+			FS::createDirectoryUriSegments(appContext(), basePath, contentName_, name, IG_forward(components)...);
+		}
+		catch(...)
+		{
+			return false;
+		}
+		return true;
+	}
+
 	FS::PathString contentSavePath(std::string_view name) const;
 	const char *contentSaveDirectoryPtr() { return contentSaveDirectory_.data(); }
 	FS::PathString contentSaveFilePath(std::string_view ext) const;
-	FS::PathString userSaveDirectory() const;
+	const auto &userSaveDirectory() const { return userSaveDirectory_; }
 	void setUserSaveDirectory(IG::CStringView path);
-	FS::PathString firmwarePath() const;
-	void setFirmwarePath(std::string_view path);
 	FS::FileString stateFilename(int slot) const { return stateFilename(slot, contentName_); }
+	FS::FileString stateFilename(std::string_view name) const;
 	FS::PathString statePath(std::string_view filename, std::string_view basePath) const;
 	FS::PathString statePath(std::string_view filename) const;
 	FS::PathString statePath(int slot, std::string_view basePath) const;
 	FS::PathString statePath(int slot) const;
+	FS::PathString userPath(std::string_view userDir, std::string_view filename) const;
+	FS::PathString userPath(std::string_view userDir) const;
+	FS::PathString userFilePath(std::string_view userDir, std::string_view ext) const;
 	void clearGamePaths();
 	char saveSlotChar(int slot) const;
 	char saveSlotCharUpper(int slot) const;
-	void flushBackupMemory(BackupMemoryDirtyFlags flags = 0xFF);
+	void flushBackupMemory(EmuApp &, BackupMemoryDirtyFlags flags = 0xFF);
 	void onBackupMemoryWritten(BackupMemoryDirtyFlags flags = 0xFF);
 	bool updateBackupMemoryCounter();
+	bool usesBackupMemory() const;
 	void sessionOptionSet();
 	void resetSessionOptionsSet() { sessionOptionsSet = false; }
 	bool sessionOptionsAreSet() const { return sessionOptionsSet; }
@@ -278,7 +318,7 @@ public:
 	void resetFrameTime();
 	void pause(EmuApp &);
 	void start(EmuApp &);
-	void closeRuntimeSystem(EmuApp &, bool allowAutosaveState = 1);
+	void closeRuntimeSystem(EmuApp &);
 	static void throwFileReadError();
 	static void throwFileWriteError();
 	static void throwMissingContentDirError();
@@ -295,7 +335,7 @@ public:
 
 protected:
 	IG::ApplicationContext appCtx{};
-	EmuTiming emuTiming{};
+	EmuTiming emuTiming;
 	IG::FloatSeconds frameTimeNative{1./60.};
 	IG::FloatSeconds frameTimePAL{1./50.};
 	double audioFramesPerVideoFrameFloat{};
@@ -306,14 +346,13 @@ protected:
 	bool sessionOptionsSet{};
 	BackupMemoryDirtyFlags backupMemoryDirtyFlags{};
 	int8_t backupMemoryCounter{};
-	FS::PathString contentDirectory_{}; // full directory path of content on disk, if any
-	FS::PathString contentLocation_{}; // full path or URI to content
-	FS::FileString contentFileName_{}; // name + extension of content, inside archive if any
-	FS::FileString contentName_{}; // name of content from the original location without extension
-	std::string contentDisplayName_{}; // more descriptive content name set by system
-	FS::PathString contentSaveDirectory_{};
-	FS::PathString userSaveDirectory_{};
-	FS::PathString firmwarePath_{};
+	FS::PathString contentDirectory_; // full directory path of content on disk, if any
+	FS::PathString contentLocation_; // full path or URI to content
+	FS::FileString contentFileName_; // name + extension of content, inside archive if any
+	FS::FileString contentName_; // name of content from the original location without extension
+	std::string contentDisplayName_; // more descriptive content name set by system
+	FS::PathString contentSaveDirectory_;
+	FS::PathString userSaveDirectory_;
 
 	void setupContentUriPaths(IG::CStringView uri, std::string_view displayName);
 	void setupContentFilePaths(IG::CStringView filePath, std::string_view displayName);
@@ -333,7 +372,7 @@ protected:
 	auto &frameTimeVar(VideoSystem system) const { return frameTimeVar(*this, system); }
 
 public:
-	IG::OnFrameDelegate onFrameUpdate{};
+	IG::OnFrameDelegate onFrameUpdate;
 	double targetSpeed{1.};
 };
 

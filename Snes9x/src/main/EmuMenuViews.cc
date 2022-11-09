@@ -4,8 +4,10 @@
 #include <ppu.h>
 #endif
 #include <emuframework/EmuApp.hh>
-#include <emuframework/OptionView.hh>
 #include <emuframework/AudioOptionView.hh>
+#include <emuframework/FilePathOptionView.hh>
+#include <emuframework/DataPathSelectView.hh>
+#include <emuframework/UserPathSelectView.hh>
 #include <emuframework/EmuSystemActionsView.hh>
 #include "EmuCheatViews.hh"
 #include "MainApp.hh"
@@ -264,6 +266,117 @@ public:
 	}
 };
 
+class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper<CustomFilePathOptionView>
+{
+	using MainAppHelper<CustomFilePathOptionView>::system;
+	using MainAppHelper<CustomFilePathOptionView>::app;
+
+	TextMenuItem cheatsPath
+	{
+		cheatsMenuName(appContext(), system().cheatsDir), &defaultFace(),
+		[this](const Input::Event &e)
+		{
+			pushAndShow(makeViewWithName<UserPathSelectView>("Cheats", system().userPath(system().cheatsDir),
+				[this](CStringView path)
+				{
+					logMsg("set cheats path:%s", path.data());
+					system().cheatsDir = path;
+					cheatsPath.compile(cheatsMenuName(appContext(), path), renderer(), projP);
+				}), e);
+		}
+	};
+
+	TextMenuItem patchesPath
+	{
+		patchesMenuName(appContext(), system().patchesDir), &defaultFace(),
+		[this](const Input::Event &e)
+		{
+			pushAndShow(makeViewWithName<UserPathSelectView>("Patches", system().userPath(system().patchesDir),
+				[this](CStringView path)
+				{
+					logMsg("set patches path:%s", path.data());
+					system().patchesDir = path;
+					patchesPath.compile(patchesMenuName(appContext(), path), renderer(), projP);
+				}), e);
+		}
+	};
+
+	static std::string satMenuName(IG::ApplicationContext ctx, std::string_view userPath)
+	{
+		return fmt::format("Satellaview Files: {}", userPathToDisplayName(ctx, userPath));
+	}
+
+	TextMenuItem satPath
+	{
+		satMenuName(appContext(), system().satDir), &defaultFace(),
+		[this](const Input::Event &e)
+		{
+			pushAndShow(makeViewWithName<UserPathSelectView>("Satellaview Files", system().userPath(system().satDir),
+				[this](CStringView path)
+				{
+					logMsg("set satellaview files path:%s", path.data());
+					system().satDir = path;
+					satPath.compile(satMenuName(appContext(), path), renderer(), projP);
+				}), e);
+		}
+	};
+
+	TextMenuItem bsxBios
+	{
+		bsxMenuName(system().bsxBiosPath), &defaultFace(),
+		[this](const Input::Event &e)
+		{
+			pushAndShow(makeViewWithName<DataFileSelectView>("BS-X BIOS",
+				app().validSearchPath(FS::dirnameUri(system().bsxBiosPath)),
+				[this](CStringView path, FS::file_type type)
+				{
+					system().bsxBiosPath = path;
+					logMsg("set BS-X bios:%s", path.data());
+					bsxBios.compile(bsxMenuName(path), renderer(), projP);
+					return true;
+				}, Snes9xSystem::hasBiosExtension), e);
+		}
+	};
+
+	std::string bsxMenuName(CStringView path) const
+	{
+		return fmt::format("BS-X BIOS: {}", appContext().fileUriDisplayName(path));
+	}
+
+	TextMenuItem sufamiBios
+	{
+		sufamiMenuName(system().sufamiBiosPath), &defaultFace(),
+		[this](const Input::Event &e)
+		{
+			pushAndShow(makeViewWithName<DataFileSelectView>("Sufami Turbo BIOS",
+				app().validSearchPath(FS::dirnameUri(system().sufamiBiosPath)),
+				[this](CStringView path, FS::file_type type)
+				{
+					system().sufamiBiosPath = path;
+					logMsg("set Sufami Turbo bios:%s", path.data());
+					sufamiBios.compile(sufamiMenuName(path), renderer(), projP);
+					return true;
+				}, Snes9xSystem::hasBiosExtension), e);
+		}
+	};
+
+	std::string sufamiMenuName(CStringView path) const
+	{
+		return fmt::format("Sufami Turbo BIOS: {}", appContext().fileUriDisplayName(path));
+	}
+
+public:
+	CustomFilePathOptionView(ViewAttachParams attach): FilePathOptionView{attach, true}
+	{
+		loadStockItems();
+		item.emplace_back(&cheatsPath);
+		item.emplace_back(&patchesPath);
+		item.emplace_back(&satPath);
+		item.emplace_back(&bsxBios);
+		item.emplace_back(&sufamiBios);
+	}
+};
+
 std::unique_ptr<View> EmuApp::makeCustomView(ViewAttachParams attach, ViewID id)
 {
 	switch(id)
@@ -271,6 +384,7 @@ std::unique_ptr<View> EmuApp::makeCustomView(ViewAttachParams attach, ViewID id)
 		#ifndef SNES9X_VERSION_1_4
 		case ViewID::AUDIO_OPTIONS: return std::make_unique<CustomAudioOptionView>(attach);
 		#endif
+		case ViewID::FILE_PATH_OPTIONS: return std::make_unique<CustomFilePathOptionView>(attach);
 		case ViewID::SYSTEM_ACTIONS: return std::make_unique<CustomSystemActionsView>(attach);
 		case ViewID::EDIT_CHEATS: return std::make_unique<EmuEditCheatListView>(attach);
 		case ViewID::LIST_CHEATS: return std::make_unique<EmuCheatsView>(attach);

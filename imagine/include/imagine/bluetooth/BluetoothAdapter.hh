@@ -21,7 +21,6 @@
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/input/Device.hh>
 #include <array>
-#include <compare>
 
 namespace IG
 {
@@ -67,7 +66,7 @@ public:
 	#endif
 	using OnStateChangeDelegate = DelegateFunc<void (BluetoothAdapter &bta, State newState)>;
 	using OnStatusDelegate = DelegateFunc<void (BluetoothAdapter &bta, uint32_t statusCode, int arg)>;
-	using OnScanDeviceClassDelegate = DelegateFunc<bool (BluetoothAdapter &bta, const uint8_t devClass[3])>;
+	using OnScanDeviceClassDelegate = DelegateFunc<bool (BluetoothAdapter &bta, std::array<uint8_t, 3> devClass)>;
 	using OnScanDeviceNameDelegate = DelegateFunc<void (BluetoothAdapter &bta, const char *name, BluetoothAddr addr)>;
 	using OnIncomingL2capConnectionDelegate = DelegateFunc<void (BluetoothAdapter &bta, BluetoothPendingSocket &pending)>;
 

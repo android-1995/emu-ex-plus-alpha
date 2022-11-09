@@ -2,6 +2,7 @@
 #include <emuframework/EmuSystemInlines.hh>
 #include <emuframework/EmuAppInlines.hh>
 #include <imagine/fs/FS.hh>
+#include <imagine/fs/ArchiveFS.hh>
 #include <imagine/util/format.hh>
 #include <imagine/util/string.h>
 
@@ -98,11 +99,13 @@ FS::FileString Snes9xSystem::stateFilename(int slot, std::string_view name) cons
 	return IG::format<FS::FileString>("{}.0{}." FREEZE_EXT, name, saveSlotCharUpper(slot));
 }
 
+std::string_view Snes9xSystem::stateFilenameExt() const { return "." FREEZE_EXT; }
+
 #undef FREEZE_EXT
 
-static FS::PathString sramFilename(EmuSystem &sys)
+static FS::PathString sramFilename(EmuApp &app)
 {
-	return sys.contentSaveFilePath(".srm");
+	return app.contentSaveFilePath(".srm");
 }
 
 void Snes9xSystem::saveState(IG::CStringView path)
@@ -121,20 +124,73 @@ void Snes9xSystem::loadState(EmuApp &, IG::CStringView path)
 		return throwFileReadError();
 }
 
-void Snes9xSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
+void Snes9xSystem::loadBackupMemory(EmuApp &app)
 {
-	if(!hasContent())
+	if(!Memory.SRAMSize)
 		return;
-	if(Memory.SRAMSize)
-	{
-		logMsg("saving backup memory");
-		auto saveStr = sramFilename(*this);
-		Memory.SaveSRAM(saveStr.data());
-	}
+	logMsg("loading backup memory");
+	Memory.LoadSRAM(sramFilename(app).c_str());
+}
+
+void Snes9xSystem::onFlushBackupMemory(EmuApp &app, BackupMemoryDirtyFlags)
+{
+	if(!Memory.SRAMSize)
+		return;
+	logMsg("saving backup memory");
+	Memory.SaveSRAM(sramFilename(app).c_str());
+}
+
+IG::Time Snes9xSystem::backupMemoryLastWriteTime(const EmuApp &app) const
+{
+	return appContext().fileUriLastWriteTime(app.contentSaveFilePath(".srm").c_str());
 }
 
 VideoSystem Snes9xSystem::videoSystem() const { return Settings.PAL ? VideoSystem::PAL : VideoSystem::NATIVE_NTSC; }
 WP Snes9xSystem::multiresVideoBaseSize() const { return {256, 239}; }
+
+static bool isSufamiTurboCart(const IOBuffer &buff)
+{
+	return buff.size() >= 0x80000 && buff.size() <= 0x100000 &&
+		buff.stringView(0, 14) == "BANDAI SFC-ADX" && buff.stringView(0x10, 14) != "SFC-ADX BACKUP";
+}
+
+static bool isSufamiTurboBios(const IOBuffer &buff)
+{
+	return buff.size() == 0x40000 &&
+		buff.stringView(0, 14) == "BANDAI SFC-ADX" && buff.stringView(0x10, 14) == "SFC-ADX BACKUP";
+}
+
+bool Snes9xSystem::hasBiosExtension(std::string_view name)
+{
+	return IG::stringEndsWithAny(name, ".bin", ".bios", ".BIN", ".BIOS");
+}
+
+IOBuffer Snes9xSystem::readSufamiTurboBios() const
+{
+	if(sufamiBiosPath.empty())
+		throw std::runtime_error{"No Sufami Turbo BIOS set"};
+	logMsg("loading Sufami Turbo BIOS:%s", sufamiBiosPath.data());
+	if(EmuApp::hasArchiveExtension(appCtx.fileUriDisplayName(sufamiBiosPath)))
+	{
+		for(auto &entry : FS::ArchiveIterator{appCtx.openFileUri(sufamiBiosPath)})
+		{
+			if(entry.type() == FS::file_type::directory || !hasBiosExtension(entry.name()))
+				continue;
+			auto buff = entry.moveIO().buffer(IOBufferMode::RELEASE);
+			if(!isSufamiTurboBios(buff))
+				throw std::runtime_error{"Incompatible Sufami Turbo BIOS"};
+			return buff;
+		}
+		throw std::runtime_error{"Sufami Turbo BIOS not in archive, must end in .bin or .bios"};
+	}
+	else
+	{
+		auto buff = appCtx.openFileUri(sufamiBiosPath, IOAccessHint::ALL).releaseBuffer();
+		if(!isSufamiTurboBios(buff))
+			throw std::runtime_error{"Incompatible Sufami Turbo BIOS"};
+		return buff;
+	}
+}
 
 void Snes9xSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegate)
 {
@@ -165,13 +221,27 @@ void Snes9xSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDele
 	{
 		throwFileReadError();
 	}
-	if(!Memory.LoadROMMem((const uint8*)buff.data(), buff.size()))
+	#ifndef SNES9X_VERSION_1_4
+	if(isSufamiTurboCart(buff)) // TODO: loading dual carts
 	{
-		throw std::runtime_error("Error loading game");
+		logMsg("detected Sufami Turbo cart");
+		auto biosBuff = readSufamiTurboBios();
+		if(!Memory.LoadMultiCartMem((const uint8*)buff.data(), buff.size(),
+			nullptr, 0,
+			biosBuff.data(), biosBuff.size()))
+		{
+			throw std::runtime_error("Error loading ROM");
+		}
+	}
+	else
+	#endif
+	{
+		if(!Memory.LoadROMMem((const uint8*)buff.data(), buff.size()))
+		{
+			throw std::runtime_error("Error loading ROM");
+		}
 	}
 	setupSNESInput(EmuApp::get(appContext()).defaultVController());
-	auto saveStr = sramFilename(*this);
-	Memory.LoadSRAM(saveStr.data());
 	IPPU.RenderThisFrame = TRUE;
 }
 
