@@ -31,7 +31,6 @@
 #include <imagine/base/glDefs.hh>
 #include <imagine/util/concepts.hh>
 #include <optional>
-#include <compare>
 
 namespace IG
 {
@@ -78,6 +77,7 @@ class GLDrawableAttributes
 public:
 	GLBufferConfig bufferConfig{};
 	GLColorSpace colorSpace{};
+	int wantedRenderBuffers{};
 
 	constexpr GLDrawableAttributes() = default;
 	constexpr GLDrawableAttributes(GLBufferConfig config): bufferConfig{config} {}

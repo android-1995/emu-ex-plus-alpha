@@ -118,7 +118,12 @@ void GbcSystem::loadState(EmuApp &app, IG::CStringView path)
 		throwFileReadError();
 }
 
-void GbcSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
+void GbcSystem::loadBackupMemory(EmuApp &)
+{
+	gbEmu.loadSavedata();
+}
+
+void GbcSystem::onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags)
 {
 	if(!hasContent())
 		return;
@@ -126,10 +131,9 @@ void GbcSystem::onFlushBackupMemory(BackupMemoryDirtyFlags)
 	gbEmu.saveSavedata();
 }
 
-void GbcSystem::savePathChanged()
+IG::Time GbcSystem::backupMemoryLastWriteTime(const EmuApp &app) const
 {
-	if(hasContent())
-		gbEmu.setSaveDir(std::string{contentSaveDirectory()});
+	return appContext().fileUriLastWriteTime(app.contentSaveFilePath(".sav").c_str());
 }
 
 void GbcSystem::closeSystem()

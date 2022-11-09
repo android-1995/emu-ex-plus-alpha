@@ -43,7 +43,7 @@ class TextEntry
 		public TextEntryPopupWindow(Activity act, String initialText, String promptText,
 			int x, int y, int width, int height, int fontSize, long nativeUserData)
 		{
-			super(act/*, 0x7f030000*/);
+			super(act);
 			this.nativeUserData = nativeUserData;
 			editBox = new EditText(act);
 			editBox.setId(PROCESS_TEXT_ON_DISMISS);
@@ -70,9 +70,10 @@ class TextEntry
 			WindowManager.LayoutParams p = getWindow().getAttributes();
 			p.x = x;
 			p.y = y;
+			editBox.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
 			ViewGroup.LayoutParams vp = editBox.getLayoutParams();
 			vp.width = width;
-			vp.height = height;
+			vp.height = height + editBox.getExtendedPaddingTop() + editBox.getExtendedPaddingBottom();
 			getWindow().setAttributes(p);
 		}
 

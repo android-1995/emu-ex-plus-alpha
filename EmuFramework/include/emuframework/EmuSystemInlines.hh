@@ -37,16 +37,39 @@ FS::FileString EmuSystem::stateFilename(int slot, std::string_view name) const
 	return static_cast<const MainSystem*>(this)->stateFilename(slot, name);
 }
 
+std::string_view EmuSystem::stateFilenameExt() const
+{
+	return static_cast<const MainSystem*>(this)->stateFilenameExt();
+}
+
 void EmuSystem::onOptionsLoaded()
 {
 	if(&MainSystem::onOptionsLoaded != &EmuSystem::onOptionsLoaded)
 		static_cast<MainSystem*>(this)->onOptionsLoaded();
 }
 
-void EmuSystem::onFlushBackupMemory(BackupMemoryDirtyFlags flags)
+void EmuSystem::loadBackupMemory(EmuApp &app)
+{
+	if(&MainSystem::loadBackupMemory != &EmuSystem::loadBackupMemory)
+		static_cast<MainSystem*>(this)->loadBackupMemory(app);
+}
+
+void EmuSystem::onFlushBackupMemory(EmuApp &app, BackupMemoryDirtyFlags flags)
 {
 	if(&MainSystem::onFlushBackupMemory != &EmuSystem::onFlushBackupMemory)
-		static_cast<MainSystem*>(this)->onFlushBackupMemory(flags);
+		static_cast<MainSystem*>(this)->onFlushBackupMemory(app, flags);
+}
+
+IG::Time EmuSystem::backupMemoryLastWriteTime(const EmuApp &app) const
+{
+	if(&MainSystem::backupMemoryLastWriteTime != &EmuSystem::backupMemoryLastWriteTime)
+		return static_cast<const MainSystem*>(this)->backupMemoryLastWriteTime(app);
+	return {};
+}
+
+bool EmuSystem::usesBackupMemory() const
+{
+	return &MainSystem::loadBackupMemory != &EmuSystem::loadBackupMemory;
 }
 
 void EmuSystem::savePathChanged()

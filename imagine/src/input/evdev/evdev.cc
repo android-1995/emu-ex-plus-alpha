@@ -15,7 +15,6 @@
 
 #define LOGTAG "Evdev"
 #include "EvdevInputDevice.hh"
-#include <imagine/util/algorithm.h>
 #include <imagine/util/bitset.hh>
 #include <imagine/util/math/int.hh>
 #include <imagine/util/fd-utils.h>
@@ -30,6 +29,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <vector>
+#include <algorithm>
 
 #define DEV_NODE_PATH "/dev/input"
 static constexpr uint32_t MAX_STICK_AXES = 6; // 6 possible axes defined in key codes
@@ -134,16 +134,17 @@ void EvdevInputDevice::processInputEvents(LinuxApplication &app, std::span<const
 		Time time = IG::Seconds{ev.time.tv_sec} + IG::Microseconds{ev.time.tv_usec};
 		switch(ev.type)
 		{
-			bcase EV_KEY:
+			case EV_KEY:
 			{
 				//logMsg("got key event code:0x%X value:%d", ev.code, ev.value);
 				auto key = toSysKey(ev.code);
 				KeyEvent event{Map::SYSTEM, key, key, ev.value ? Action::PUSHED : Action::RELEASED, 0, 0, Source::GAMEPAD, time, this};
 				app.dispatchRepeatableKeyInputEvent(event);
+				break;
 			}
-			bcase EV_ABS:
+			case EV_ABS:
 			{
-				auto axisIt = IG::find_if(axis, [&](auto &axis){ return ev.code == (uint8_t)axis.id(); });
+				auto axisIt = std::ranges::find_if(axis, [&](auto &axis){ return ev.code == (uint8_t)axis.id(); });
 				if(axisIt == axis.end())
 				{
 					//logMsg("event from unused axis:%d", ev.code);

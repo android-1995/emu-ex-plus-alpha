@@ -62,6 +62,11 @@ bool Snes9xSystem::readConfig(ConfigType type, MapIO &io, unsigned key, size_t r
 			#ifndef SNES9X_VERSION_1_4
 			case CFGKEY_AUDIO_DSP_INTERPOLATON: return optionAudioDSPInterpolation.readFromIO(io, readSize);
 			#endif
+			case CFGKEY_CHEATS_PATH: return readStringOptionValue(io, readSize, cheatsDir);
+			case CFGKEY_PATCHES_PATH: return readStringOptionValue(io, readSize, patchesDir);
+			case CFGKEY_SATELLAVIEW_PATH: return readStringOptionValue(io, readSize, satDir);
+			case CFGKEY_SUFAMI_BIOS_PATH: return readStringOptionValue(io, readSize, sufamiBiosPath);
+			case CFGKEY_BSX_BIOS_PATH: return readStringOptionValue(io, readSize, bsxBiosPath);
 		}
 	}
 	else if(type == ConfigType::SESSION)
@@ -89,6 +94,11 @@ void Snes9xSystem::writeConfig(ConfigType type, FileIO &io)
 		#ifndef SNES9X_VERSION_1_4
 		optionAudioDSPInterpolation.writeWithKeyIfNotDefault(io);
 		#endif
+		writeStringOptionValue(io, CFGKEY_CHEATS_PATH, cheatsDir);
+		writeStringOptionValue(io, CFGKEY_PATCHES_PATH, patchesDir);
+		writeStringOptionValueIfNotDefault(io, CFGKEY_SATELLAVIEW_PATH, satDir, optionUserPathContentToken);
+		writeStringOptionValue(io, CFGKEY_SUFAMI_BIOS_PATH, sufamiBiosPath);
+		writeStringOptionValue(io, CFGKEY_BSX_BIOS_PATH, bsxBiosPath);
 	}
 	else if(type == ConfigType::SESSION)
 	{

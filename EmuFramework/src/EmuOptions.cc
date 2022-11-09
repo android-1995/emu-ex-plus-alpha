@@ -68,12 +68,6 @@ void EmuApp::initOptions(IG::ApplicationContext ctx)
 	{
 		optionShowOnSecondScreen.isConst = true;
 	}
-	else if(FS::exists(FS::pathString(ctx.sharedStoragePath(), "emuex_disable_presentation_displays")))
-	{
-		logMsg("force-disabling presentation display support");
-		optionShowOnSecondScreen.initDefault(false);
-		optionShowOnSecondScreen.isConst = true;
-	}
 	else
 	{
 		#ifdef CONFIG_BLUETOOTH
@@ -102,11 +96,6 @@ void EmuApp::initOptions(IG::ApplicationContext ctx)
 	if(!ctx.mainScreen().frameRateIsReliable())
 	{
 		optionFrameRate.initDefault(60);
-	}
-
-	if(!EmuApp::autoSaveStateDefault)
-	{
-		optionAutoSaveState.initDefault(false);
 	}
 
 	if(!EmuApp::hasIcon)
@@ -164,7 +153,7 @@ void EmuApp::writeRecentContent(FileIO &io)
 	}
 }
 
-void EmuApp::readRecentContent(IG::ApplicationContext ctx, MapIO &io, size_t readSize_)
+bool EmuApp::readRecentContent(IG::ApplicationContext ctx, MapIO &io, size_t readSize_)
 {
 	auto readSize = readSize_;
 	while(readSize && !recentContentList.isFull())
@@ -172,7 +161,7 @@ void EmuApp::readRecentContent(IG::ApplicationContext ctx, MapIO &io, size_t rea
 		if(readSize < 2)
 		{
 			logMsg("expected string length but only %zu bytes left", readSize);
-			break;
+			return false;
 		}
 
 		auto len = io.get<uint16_t>();
@@ -181,7 +170,7 @@ void EmuApp::readRecentContent(IG::ApplicationContext ctx, MapIO &io, size_t rea
 		if(len > readSize)
 		{
 			logMsg("string length %d longer than %zu bytes left", len, readSize);
-			break;
+			return false;
 		}
 
 		FS::PathString path{};
@@ -189,7 +178,7 @@ void EmuApp::readRecentContent(IG::ApplicationContext ctx, MapIO &io, size_t rea
 		if(bytesRead == -1)
 		{
 			logErr("error reading string option");
-			return;
+			return false;
 		}
 		if(!bytesRead)
 			continue; // don't add empty paths
@@ -204,11 +193,7 @@ void EmuApp::readRecentContent(IG::ApplicationContext ctx, MapIO &io, size_t rea
 		const auto &added = recentContentList.emplace_back(info);
 		logMsg("added game to recent list:%s, name:%s", added.path.data(), added.name.data());
 	}
-
-	if(readSize)
-	{
-		logMsg("skipping excess %zu bytes", readSize);
-	}
+	return true;
 }
 
 std::pair<IG::FloatSeconds, bool> EmuApp::setFrameTime(VideoSystem vidSys, IG::FloatSeconds time)

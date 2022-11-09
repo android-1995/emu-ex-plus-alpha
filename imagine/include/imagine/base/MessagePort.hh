@@ -21,6 +21,7 @@
 #include <imagine/util/concepts.hh>
 #include <imagine/util/utility.h>
 #include <cstring>
+#include <span>
 
 namespace IG
 {
@@ -36,10 +37,12 @@ public:
 	class Messages
 	{
 	public:
+		struct Sentinel {};
+
 		class Iterator
 		{
 		public:
-			constexpr Iterator(PosixIO *io): io{io}
+			constexpr Iterator(PosixIO &io): io{&io}
 			{
 				this->operator++();
 			}
@@ -57,9 +60,9 @@ public:
 				return *this;
 			}
 
-			bool operator!=(const Iterator &rhs) const
+			bool operator==(Sentinel) const
 			{
-				return io != rhs.io;
+				return !io;
 			}
 
 			const MsgType &operator*() const
@@ -73,9 +76,8 @@ public:
 		};
 
 		constexpr Messages(PosixIO &io): io{io} {}
-
-		Iterator begin() { return Iterator{&io}; }
-		Iterator end() { return Iterator{nullptr}; }
+		auto begin() const { return Iterator{io}; }
+		auto end() const { return Sentinel{}; }
 
 		template <class T>
 		T getExtraData()
@@ -83,9 +85,10 @@ public:
 			return io.get<T>();
 		}
 
-		bool getExtraData(auto *obj, size_t size)
+		template <class T>
+		bool getExtraData(std::span<T> span)
 		{
-			return io.read(obj, size) != -1;
+			return io.read(span.data(), span.size_bytes()) != -1;
 		}
 
 	protected:
@@ -175,16 +178,19 @@ public:
 	bool sendWithExtraData(MsgType msg, auto &&obj)
 	{
 		static_assert(MSG_SIZE + sizeof(obj) < PIPE_BUF, "size of data too big for atomic writes");
-		return sendWithExtraData(msg, &obj, sizeof(obj));
+		return sendWithExtraData(msg, std::span<std::remove_reference_t<decltype(obj)>>{&obj, 1});
 	}
 
-	bool sendWithExtraData(MsgType msg, auto *obj, size_t size)
+	template <class T>
+	bool sendWithExtraData(MsgType msg, std::span<T> span)
 	{
-		const auto bufferSize = MSG_SIZE + size;
+		if(span.empty())
+			return send(msg);
+		const auto bufferSize = MSG_SIZE + span.size_bytes();
 		assumeExpr(bufferSize < PIPE_BUF);
-		char buffer[bufferSize];
+		char buffer[PIPE_BUF];
 		memcpy(buffer, &msg, MSG_SIZE);
-		memcpy(buffer + MSG_SIZE, obj, size);
+		memcpy(buffer + MSG_SIZE, span.data(), span.size_bytes());
 		return pipe.sink().write(buffer, bufferSize) != -1;
 	}
 

@@ -32,14 +32,15 @@ public:
 	void onShow() override;
 	void loadStandardItems();
 
-	static constexpr int STANDARD_ITEMS = 9;
+	static constexpr int STANDARD_ITEMS = 10;
 	static constexpr int MAX_SYSTEM_ITEMS = 6;
 
 protected:
 	TextMenuItem cheats;
 	TextMenuItem reset;
-	TextMenuItem loadState;
-	TextMenuItem saveState;
+	TextMenuItem autosaveSlot;
+	TextMenuItem autosaveNow;
+	TextMenuItem revertAutosave;
 	TextMenuItem stateSlot;
 	IG_UseMemberIf(Config::envIsAndroid, TextMenuItem, addLauncherIcon);
 	TextMenuItem screenshot;
