@@ -24,14 +24,13 @@ class EmuApp;
 class EmuSystem;
 
 // Easier access to the EmuApp object for any class that provides an appContext() function
-template <class T, class App = EmuApp>
+template<class T, class App = EmuApp>
 class EmuAppHelper
 {
 public:
 	App &app() const
 	{
-		auto &application = static_cast<const T*>(this)->appContext().application();
-		return static_cast<App&>(application);
+		return static_cast<const T*>(this)->appContext().template applicationAs<App>();
 	}
 
 	auto &system() const

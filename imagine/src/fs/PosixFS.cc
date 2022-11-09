@@ -49,14 +49,17 @@ static bool isDotName(std::string_view name)
 	return name == "." || name == "..";
 }
 
-DirectoryStream::DirectoryStream(IG::CStringView path):
+DirectoryStream::DirectoryStream(CStringView path, DirOpenFlagsMask flags):
 	dir{opendir(path)}
 {
 	if(!dir)
 	{
 		if(Config::DEBUG_BUILD)
 			logErr("opendir(%s) error:%s", path.data(), strerror(errno));
-		throw std::system_error{errno, std::system_category(), path};
+		if(to_underlying(flags & FS::DirOpenFlagsMask::Test))
+			return;
+		else
+			throw std::system_error{errno, std::system_category(), path};
 	}
 	logMsg("opened directory:%s", path.data());
 	basePath = path;
@@ -98,9 +101,10 @@ bool DirectoryStream::hasEntry() const
 void DirectoryStream::closeDirectoryStream(DIR *dir)
 {
 	//logDMsg("closing dir:%p", dir);
+	auto dirAddr = (size_t)dir;
 	if(::closedir(dir) == -1 && Config::DEBUG_BUILD) [[unlikely]]
 	{
-		logErr("closedir(%p) error: %s", dir, strerror(errno));
+		logErr("closedir(0x%zX) error: %s", dirAddr, strerror(errno));
 	}
 }
 
@@ -193,35 +197,6 @@ static file_type makeFileType(struct stat s)
 	if(S_ISLNK(s.st_mode))
 		return file_type::symlink;
 	return file_type::unknown;
-}
-
-static std::string formatDateAndTime(std::tm time)
-{
-	if(!time.tm_year)
-		return {};
-	std::array<char, 64> str{};
-	static constexpr const char *strftimeFormat = "%x  %r";
-	std::strftime(str.data(), str.size(), strftimeFormat, &time);
-	return str.data();
-}
-
-std::tm file_status::lastWriteTimeLocal() const
-{
-	std::time_t mTime = lastWriteTime();
-	if(!mTime)
-		return {};
-	std::tm localMTime;
-	if(!localtime_r(&mTime, &localMTime)) [[unlikely]]
-	{
-		logErr("localtime_r failed");
-		return {};
-	}
-	return localMTime;
-}
-
-std::string formatLastWriteTimeLocal(IG::CStringView path)
-{
-	return formatDateAndTime(status(path).lastWriteTimeLocal());
 }
 
 PathString current_path()

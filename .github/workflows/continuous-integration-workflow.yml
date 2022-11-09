@@ -13,7 +13,7 @@ jobs:
  
     steps:
     - name: Checkout emu-ex-plus-alpha repo
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
@@ -51,7 +51,7 @@ jobs:
         echo "EMUFRAMEWORK_PATH=${{ github.workspace }}/EmuFramework" >> $GITHUB_ENV
         echo "IMAGINE_PATH=${{ github.workspace }}/imagine" >> $GITHUB_ENV
         echo "IMAGINE_SDK_PATH=${{ github.workspace }}/imagine-sdk" >> $GITHUB_ENV
-
+        
     - name: Run script
       run: |
         cd imagine/bundle/all
@@ -77,14 +77,14 @@ jobs:
         cp NES.emu/target/android-release/build/outputs/apk/release/NesEmu-release.apk EX-Emulators/NesEmu-release.apk
 
     - name: Upload NES.emu artifact
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       if: ${{ matrix.image == 'NES.emu' }}
       with: 
         name: NESemu
         path: ${{ github.workspace }}/NES.emu/target/android-release/build/outputs/apk/release/NesEmu-release.apk 
 
     - name: Upload EX-Emulators artifacts
-      uses: actions/upload-artifact@v2
+      uses: actions/upload-artifact@v3
       with: 
         name: EX-Emulators
         path: EX-Emulators/

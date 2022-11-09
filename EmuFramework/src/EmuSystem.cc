@@ -21,7 +21,7 @@
 #include <emuframework/EmuVideo.hh>
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/fs/ArchiveFS.hh>
-#include <imagine/fs/FS.hh>
+#include <imagine/fs/FSUtils.hh>
 #include <imagine/io/IO.hh>
 #include <imagine/input/DragTracker.hh>
 #include <imagine/util/utility.h>
@@ -61,9 +61,9 @@ bool EmuSystem::stateExists(int slot) const
 
 std::string_view EmuSystem::stateSlotName(int slot)
 {
-	assert(slot >= -1 && slot < 10);
-	static constexpr std::string_view str[]{"Auto", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
-	return str[slot+1];
+	assert(slot >= 0 && slot < 10);
+	static constexpr std::string_view str[]{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+	return str[slot];
 }
 
 bool EmuApp::shouldOverwriteExistingState() const
@@ -165,25 +165,16 @@ void EmuSystem::clearGamePaths()
 	contentSaveDirectory_ = {};
 }
 
-FS::PathString EmuSystem::contentSaveDirectory() const
-{
-	assert(!contentName_.empty());
-	return contentSaveDirectory_;
-}
-
 FS::PathString EmuSystem::contentSavePath(std::string_view name) const
 {
+	assert(!contentName_.empty());
 	return FS::uriString(contentSaveDirectory(), name);
 }
 
 FS::PathString EmuSystem::contentSaveFilePath(std::string_view ext) const
 {
-	return FS::uriString(contentSaveDirectory(), contentName().append(ext));
-}
-
-FS::PathString EmuSystem::userSaveDirectory() const
-{
-	return userSaveDirectory_;
+	assert(!contentName_.empty());
+	return FS::uriString(contentSaveDirectory(), FS::FileString{contentName()}.append(ext));
 }
 
 void EmuSystem::setUserSaveDirectory(IG::CStringView path)
@@ -194,14 +185,11 @@ void EmuSystem::setUserSaveDirectory(IG::CStringView path)
 	savePathChanged();
 }
 
-FS::PathString EmuSystem::firmwarePath() const
+FS::FileString EmuSystem::stateFilename(std::string_view name) const
 {
-	return firmwarePath_;
-}
-
-void EmuSystem::setFirmwarePath(std::string_view path)
-{
-	firmwarePath_ = path;
+	FS::FileString filename{name};
+	filename += stateFilenameExt();
+	return filename;
 }
 
 FS::PathString EmuSystem::statePath(std::string_view filename, std::string_view basePath) const
@@ -224,19 +212,44 @@ FS::PathString EmuSystem::statePath(int slot) const
 	return statePath(slot, contentSaveDirectory());
 }
 
-void EmuSystem::closeRuntimeSystem(EmuApp &app, bool allowAutosaveState)
+FS::PathString EmuSystem::userPath(std::string_view userDir, std::string_view filename) const
+{
+	return FS::uriString(userPath(userDir), filename);
+}
+
+FS::PathString EmuSystem::userPath(std::string_view userDir) const
+{
+	if(userDir.size())
+	{
+		if(userDir == optionUserPathContentToken)
+			return contentDirectory();
+		else
+			return FS::PathString{userDir};
+	}
+	else
+	{
+		return contentSaveDirectory();
+	}
+}
+
+FS::PathString EmuSystem::userFilePath(std::string_view userDir, std::string_view ext) const
+{
+	assert(!contentName_.empty());
+	return userPath(userDir, FS::FileString{contentName()}.append(ext));
+}
+
+void EmuSystem::closeRuntimeSystem(EmuApp &app)
 {
 	if(hasContent())
 	{
 		app.video().clear();
 		app.audio().flush();
-		if(allowAutosaveState)
-			app.saveAutoState();
+		app.saveAutosave();
 		app.saveSessionOptions();
 		logMsg("closing game:%s", contentName_.data());
-		flushBackupMemory();
+		flushBackupMemory(app);
 		closeSystem();
-		app.cancelAutoSaveStateTimer();
+		app.cancelAutosaveStateTimer();
 		state = State::OFF;
 	}
 	clearGamePaths();
@@ -257,7 +270,7 @@ void EmuSystem::pause(EmuApp &app)
 	if(isActive())
 		state = State::PAUSED;
 	app.audio().stop();
-	app.cancelAutoSaveStateTimer();
+	app.pauseAutosaveStateTimer();
 	onStop();
 }
 
@@ -270,7 +283,7 @@ void EmuSystem::start(EmuApp &app)
 	resetFrameTime();
 	onStart();
 	app.startAudio();
-	app.startAutoSaveStateTimer();
+	app.startAutosaveStateTimer();
 }
 
 IG::Time EmuSystem::benchmark(EmuVideo &video)
@@ -367,7 +380,7 @@ bool EmuSystem::setFrameTime(VideoSystem system, IG::FloatSeconds time)
 void EmuSystem::closeAndSetupNew(IG::CStringView path, std::string_view displayName)
 {
 	auto &app = EmuApp::get(appContext());
-	closeRuntimeSystem(app, true);
+	closeRuntimeSystem(app);
 	if(!IG::isUri(path))
 		setupContentFilePaths(path, displayName);
 	else
@@ -455,6 +468,12 @@ FS::PathString EmuSystem::contentDirectory(std::string_view name) const
 	return FS::uriString(contentDirectory(), name);
 }
 
+FS::PathString EmuSystem::contentFilePath(std::string_view ext) const
+{
+	assert(!contentName_.empty());
+	return contentDirectory(FS::FileString{contentName()}.append(ext));
+}
+
 std::string EmuSystem::contentDisplayName() const
 {
 	if(contentDisplayName_.size())
@@ -517,9 +536,9 @@ bool EmuSystem::inputHasTriggers()
 	return inputLTriggerIndex != -1 && inputRTriggerIndex != -1;
 }
 
-void EmuSystem::flushBackupMemory(BackupMemoryDirtyFlags flags)
+void EmuSystem::flushBackupMemory(EmuApp &app, BackupMemoryDirtyFlags flags)
 {
-	onFlushBackupMemory(flags);
+	onFlushBackupMemory(app, flags);
 	backupMemoryDirtyFlags = 0;
 	backupMemoryCounter = 0;
 }
@@ -537,7 +556,7 @@ bool EmuSystem::updateBackupMemoryCounter()
 		backupMemoryCounter--;
 		if(!backupMemoryCounter)
 		{
-			flushBackupMemory(backupMemoryDirtyFlags);
+			flushBackupMemory(EmuApp::get(appContext()), backupMemoryDirtyFlags);
 			return true;
 		}
 	}
