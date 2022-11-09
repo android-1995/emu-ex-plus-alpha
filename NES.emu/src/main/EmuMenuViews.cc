@@ -541,7 +541,7 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 		palettesMenuName(appContext(), system().palettesDir), &defaultFace(),
 		[this](const Input::Event &e)
 		{
-			pushAndShow(makeViewWithName<UserPathSelectView>("Palettes", system().userPath(system().palettesDir),
+			pushAndShow(makeViewWithName<UserPathSelectView>("调色板", system().userPath(system().palettesDir),
 				[this](CStringView path)
 				{
 					logMsg("set palettes path:%s", path.data());
