@@ -13,15 +13,17 @@
 	You should have received a copy of the GNU General Public License
 	along with PCE.emu.  If not, see <http://www.gnu.org/licenses/> */
 
-#include <emuframework/OptionView.hh>
+#include <emuframework/SystemOptionView.hh>
 #include <emuframework/AudioOptionView.hh>
 #include <emuframework/VideoOptionView.hh>
+#include <emuframework/FilePathOptionView.hh>
+#include <emuframework/DataPathSelectView.hh>
 #include <emuframework/EmuSystemActionsView.hh>
 #include <emuframework/EmuInput.hh>
 #include "MainApp.hh"
 #include <imagine/fs/FS.hh>
+#include <imagine/gui/AlertView.hh>
 #include <imagine/util/format.hh>
-#include <mednafen/pce_fast/vdc.h>
 
 namespace EmuEx
 {
@@ -29,13 +31,17 @@ namespace EmuEx
 template <class T>
 using MainAppHelper = EmuAppHelper<T, MainApp>;
 
+constexpr std::string_view pceFastText{"pce_fast (Default for general use)"};
+constexpr std::string_view pceText{"pce (Better accuracy, higher power usage)"};
+constexpr std::string_view changeEmuCoreText{"Really change emulation core? Note that save states from different cores aren't compatible."};
+
 class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionView>
 {
 	BoolMenuItem sixButtonPad
 	{
 		"6按键模式", &defaultFace(),
 		(bool)system().option6BtnPad,
-		[this](BoolMenuItem &item, View &, Input::Event e)
+		[this](BoolMenuItem &item, const Input::Event &e)
 		{
 			system().sessionOptionSet();
 			system().option6BtnPad = item.flipBoolValue(*this);
@@ -47,7 +53,7 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 	{
 		"街机卡", &defaultFace(),
 		(bool)system().optionArcadeCard,
-		[this](BoolMenuItem &item, View &, Input::Event e)
+		[this](BoolMenuItem &item, const Input::Event &e)
 		{
 			system().sessionOptionSet();
 			system().optionArcadeCard = item.flipBoolValue(*this);
@@ -55,7 +61,7 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 		}
 	};
 
-	TextHeadingMenuItem videoHeading{"Video", &defaultBoldFace()};
+	TextHeadingMenuItem videoHeading{"视频", &defaultBoldFace()};
 
 	TextMenuItem visibleVideoLinesItem[5]
 	{
@@ -68,7 +74,7 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 
 	MultiChoiceMenuItem visibleVideoLines
 	{
-		"Visible Lines", &defaultFace(),
+		"可见视频线", &defaultFace(),
 		[this]()
 		{
 			switch(system().visibleLines.first)
@@ -88,10 +94,52 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 		return [=, this]() { system().setVisibleLines({startLine, endLine}); };
 	}
 
-	std::array<MenuItem*, 4> menuItem
+	TextMenuItem emuCoreItems[3]
+	{
+		{"自动",      &defaultFace(), setEmuCoreDel(), to_underlying(EmuCore::Auto)},
+		{pceFastText, &defaultFace(), setEmuCoreDel(), to_underlying(EmuCore::Fast)},
+		{pceText,     &defaultFace(), setEmuCoreDel(), to_underlying(EmuCore::Accurate)},
+	};
+
+	MultiChoiceMenuItem emuCore
+	{
+		"模拟核心", &defaultFace(),
+		[this](size_t idx, Gfx::Text &t)
+		{
+			t.resetString(asModuleString(system().resolvedCore()));
+			return true;
+		},
+		(MenuItem::Id)system().core,
+		emuCoreItems
+	};
+
+	TextMenuItem::SelectDelegate setEmuCoreDel()
+	{
+		return [this](TextMenuItem &item, const Input::Event &e)
+		{
+			auto c = EmuCore(item.id());
+			if(c == system().core)
+				return true;
+			auto ynAlertView = makeView<YesNoAlertView>(changeEmuCoreText);
+			ynAlertView->setOnYes(
+				[this, c](const Input::Event &e)
+				{
+					system().sessionOptionSet();
+					system().core = c;
+					emuCore.setSelected((MenuItem::Id)c);
+					dismissPrevious();
+					app().promptSystemReloadDueToSetOption(attachParams(), e);
+				});
+			pushAndShowModal(std::move(ynAlertView), e, false);
+			return false;
+		};
+	}
+
+	std::array<MenuItem*, 5> menuItem
 	{
 		&sixButtonPad,
 		&arcadeCard,
+		&emuCore,
 		&videoHeading,
 		&visibleVideoLines,
 	};
@@ -126,27 +174,29 @@ public:
 
 class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper<CustomFilePathOptionView>
 {
+	using MainAppHelper<CustomFilePathOptionView>::app;
 	using MainAppHelper<CustomFilePathOptionView>::system;
 
 	TextMenuItem sysCardPath
 	{
-		biosMenuEntryStr(appContext().fileUriDisplayName(system().sysCardPath)), &defaultFace(),
+		biosMenuEntryStr(system().sysCardPath), &defaultFace(),
 		[this](Input::Event e)
 		{
-			auto biosSelectMenu = makeViewWithName<BiosSelectMenu>("系统卡", &system().sysCardPath,
-				[this](std::string_view displayName)
+			pushAndShow(makeViewWithName<DataFileSelectView>("系统卡",
+				app().validSearchPath(FS::dirnameUri(system().sysCardPath)),
+				[this](CStringView path, FS::file_type type)
 				{
-					logMsg("set bios %s", system().sysCardPath.data());
-					sysCardPath.compile(biosMenuEntryStr(displayName), renderer(), projP);
-				},
-				hasHuCardExtension);
-			pushAndShow(std::move(biosSelectMenu), e);
+					system().sysCardPath = path;
+					logMsg("set system card:%s", system().sysCardPath.data());
+					sysCardPath.compile(biosMenuEntryStr(path), renderer(), projP);
+					return true;
+				}, hasHuCardExtension), e);
 		}
 	};
 
-	std::string biosMenuEntryStr(std::string_view displayName) const
+	std::string biosMenuEntryStr(std::string_view path) const
 	{
-		return fmt::format("系统卡: {}", displayName);
+		return fmt::format("系统卡: {}", appContext().fileUriDisplayName(path));
 	}
 
 public:
@@ -246,10 +296,50 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper<Cus
 		return [this](TextMenuItem &item) { system().setCdSpeed(item.id()); };
 	}
 
+	TextMenuItem emuCoreItems[3]
+	{
+		{"自动",      &defaultFace(), setEmuCoreDel(), to_underlying(EmuCore::Auto)},
+		{pceFastText, &defaultFace(), setEmuCoreDel(), to_underlying(EmuCore::Fast)},
+		{pceText,     &defaultFace(), setEmuCoreDel(), to_underlying(EmuCore::Accurate)},
+	};
+
+	MultiChoiceMenuItem emuCore
+	{
+		"模拟核心", &defaultFace(),
+		[this](size_t idx, Gfx::Text &t)
+		{
+			t.resetString(asModuleString(system().resolvedDefaultCore()));
+			return true;
+		},
+		(MenuItem::Id)system().defaultCore,
+		emuCoreItems
+	};
+
+	TextMenuItem::SelectDelegate setEmuCoreDel()
+	{
+		return [this](TextMenuItem &item, const Input::Event &e)
+		{
+			auto c = EmuCore(item.id());
+			if(c == system().defaultCore)
+				return true;
+			auto ynAlertView = makeView<YesNoAlertView>(changeEmuCoreText);
+			ynAlertView->setOnYes(
+				[this, c]
+				{
+					system().defaultCore = c;
+					emuCore.setSelected((MenuItem::Id)c);
+					dismissPrevious();
+				});
+			pushAndShowModal(std::move(ynAlertView), e, false);
+			return false;
+		};
+	}
+
 public:
 	CustomSystemOptionView(ViewAttachParams attach): SystemOptionView{attach, true}
 	{
 		loadStockItems();
+		item.emplace_back(&emuCore);
 		item.emplace_back(&cdSpeed);
 	}
 };

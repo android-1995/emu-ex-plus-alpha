@@ -29,6 +29,9 @@ enum
 	CFGKEY_VIDEO_SYSTEM = 278, CFGKEY_INPUT_PORT = 279,
 	CFGKEY_AUDIO_DSP_INTERPOLATON = 280, CFGKEY_SEPARATE_ECHO_BUFFER = 281,
 	CFGKEY_SUPERFX_CLOCK_MULTIPLIER = 282, CFGKEY_ALLOW_EXTENDED_VIDEO_LINES = 283,
+	CFGKEY_CHEATS_PATH = 284, CFGKEY_PATCHES_PATH = 285,
+	CFGKEY_SATELLAVIEW_PATH = 286, CFGKEY_SUFAMI_BIOS_PATH = 287,
+	CFGKEY_BSX_BIOS_PATH = 288,
 };
 
 #ifdef SNES9X_VERSION_1_4
@@ -50,6 +53,11 @@ constexpr int SNES_JUSTIFIER = CTL_JUSTIFIER;
 class Snes9xSystem final: public EmuSystem
 {
 public:
+	std::string cheatsDir;
+	std::string patchesDir;
+	std::string satDir{optionUserPathContentToken};
+	std::string sufamiBiosPath;
+	std::string bsxBiosPath;
 	#ifndef SNES9X_VERSION_1_4
 	int snesInputPort = SNES_AUTO_INPUT;
 	int snesActiveInputPort = SNES_JOYPAD;
@@ -99,11 +107,13 @@ public:
 		#endif
 	}
 	void setupSNESInput(VController &);
+	static bool hasBiosExtension(std::string_view name);
 
 	// required API functions
 	void loadContent(IO &, EmuSystemCreateParams, OnLoadProgressDelegate);
 	[[gnu::hot]] void runFrame(EmuSystemTaskContext task, EmuVideo *video, EmuAudio *audio);
 	FS::FileString stateFilename(int slot, std::string_view name) const;
+	std::string_view stateFilenameExt() const;
 	void loadState(EmuApp &, CStringView uri);
 	void saveState(CStringView path);
 	bool readConfig(ConfigType, MapIO &, unsigned key, size_t readSize);
@@ -117,7 +127,9 @@ public:
 	static std::span<const AspectRatioInfo> aspectRatioInfos();
 
 	// optional API functions
-	void onFlushBackupMemory(BackupMemoryDirtyFlags);
+	void loadBackupMemory(EmuApp &);
+	void onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags);
+	IG::Time backupMemoryLastWriteTime(const EmuApp &) const;
 	void renderFramebuffer(EmuVideo &);
 	WP multiresVideoBaseSize() const;
 	void onOptionsLoaded();
@@ -132,6 +144,7 @@ public:
 protected:
 	void applyInputPortOption(int portVal, VController &vCtrl);
 	WP updateAbsolutePointerPosition(IG::WindowRect gameRect, WP pos);
+	IOBuffer readSufamiTurboBios() const;
 };
 
 using MainSystem = Snes9xSystem;
@@ -139,8 +152,6 @@ using MainSystem = Snes9xSystem;
 inline Snes9xSystem &gSnes9xSystem() { return static_cast<Snes9xSystem&>(gSystem()); }
 
 void setSuperFXSpeedMultiplier(unsigned val);
-
-uint32_t numCheats();
 
 }
 

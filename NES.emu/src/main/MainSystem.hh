@@ -26,7 +26,8 @@ enum
 	CFGKEY_DEFAULT_SOUND_LOW_PASS_FILTER = 280, CFGKEY_SWAP_DUTY_CYCLES = 281,
 	CFGKEY_START_VIDEO_LINE = 282, CFGKEY_VISIBLE_VIDEO_LINES = 283,
 	CFGKEY_HORIZONTAL_VIDEO_CROP = 284, CFGKEY_CORRECT_LINE_ASPECT = 285,
-	CFGKEY_FF_DURING_FDS_ACCESS = 286
+	CFGKEY_FF_DURING_FDS_ACCESS = 286, CFGKEY_CHEATS_PATH = 287,
+	CFGKEY_PATCHES_PATH = 288, CFGKEY_PALETTE_PATH = 289,
 };
 
 extern FS::PathString fdsBiosPath;
@@ -72,6 +73,9 @@ public:
 		uint16_t col16[256];
 		uint32_t col32[256];
 	} nativeCol;
+	std::string cheatsDir;
+	std::string patchesDir;
+	std::string palettesDir;
 	bool fastForwardDuringFdsAccess = true;
 	bool fdsIsAccessing{};
 	Byte1Option optionFourScore{CFGKEY_FOUR_SCORE, 0};
@@ -110,6 +114,7 @@ public:
 	void loadContent(IO &, EmuSystemCreateParams, OnLoadProgressDelegate);
 	[[gnu::hot]] void runFrame(EmuSystemTaskContext task, EmuVideo *video, EmuAudio *audio);
 	FS::FileString stateFilename(int slot, std::string_view name) const;
+	std::string_view stateFilenameExt() const { return ".fcs"; }
 	void loadState(EmuApp &, CStringView uri);
 	void saveState(CStringView path);
 	bool readConfig(ConfigType, MapIO &, unsigned key, size_t readSize);
@@ -128,7 +133,9 @@ public:
 	void onOptionsLoaded();
 	void onSessionOptionsLoaded(EmuApp &);
 	bool resetSessionOptions(EmuApp &);
-	void onFlushBackupMemory(BackupMemoryDirtyFlags);
+	void loadBackupMemory(EmuApp &);
+	void onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags);
+	IG::Time backupMemoryLastWriteTime(const EmuApp &) const;
 	bool onPointerInputStart(const Input::MotionEvent &, Input::DragTrackerState, IG::WindowRect gameRect);
 	bool onPointerInputEnd(const Input::MotionEvent &, Input::DragTrackerState, IG::WindowRect gameRect);
 	VideoSystem videoSystem() const;

@@ -24,9 +24,10 @@ enum
 	CFGKEY_PCM_VOLUME = 258, CFGKEY_GB_APU_VOLUME = 259,
 	CFGKEY_SOUND_FILTERING = 260, CFGKEY_SOUND_INTERPOLATION = 261,
 	CFGKEY_SENSOR_TYPE = 262, CFGKEY_LIGHT_SENSOR_SCALE = 263,
+	CFGKEY_CHEATS_PATH = 264, CFGKEY_PATCHES_PATH = 265,
 };
 
-void readCheatFile(EmuSystem &);
+void readCheatFile(class EmuSystem &);
 void setSaveType(int type, int size);
 const char *saveTypeStr(int type, int size);
 bool saveMemoryHasContent();
@@ -51,7 +52,9 @@ constexpr uint8_t darknessLevelDefault = 0xee;
 class GbaSystem final: public EmuSystem
 {
 public:
-	IG::SensorListener sensorListener{};
+	std::string cheatsDir;
+	std::string patchesDir;
+	[[no_unique_address]] IG::SensorListener sensorListener;
 	Byte1Option optionRtcEmulation{CFGKEY_RTC_EMULATION, std::to_underlying(RtcMode::AUTO), 0, optionIsValidWithMax<2>};
 	Byte4Option optionSaveTypeOverride{CFGKEY_SAVE_TYPE_OVERRIDE, GBA_SAVE_AUTO, 0, optionSaveTypeOverrideIsValid};
 	int detectedSaveSize{};
@@ -77,6 +80,7 @@ public:
 	void loadContent(IO &, EmuSystemCreateParams, OnLoadProgressDelegate);
 	[[gnu::hot]] void runFrame(EmuSystemTaskContext task, EmuVideo *video, EmuAudio *audio);
 	FS::FileString stateFilename(int slot, std::string_view name) const;
+	std::string_view stateFilenameExt() const { return ".gqs"; }
 	void loadState(EmuApp &, CStringView uri);
 	void saveState(CStringView path);
 	bool readConfig(ConfigType, MapIO &, unsigned key, size_t readSize);
@@ -93,7 +97,9 @@ public:
 	void onStart();
 	void onStop();
 	bool resetSessionOptions(EmuApp &);
-	void onFlushBackupMemory(BackupMemoryDirtyFlags);
+	void loadBackupMemory(EmuApp &);
+	void onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags);
+	IG::Time backupMemoryLastWriteTime(const EmuApp &) const;
 	void closeSystem();
 	bool onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat);
 	void renderFramebuffer(EmuVideo &);

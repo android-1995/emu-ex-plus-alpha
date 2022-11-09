@@ -30,7 +30,6 @@ namespace IG
 {
 
 struct XIDeviceInfo : public ::XIDeviceInfo {};
-struct XkbDescRec : public ::XkbDescRec {};
 
 struct XInputDevice : public Input::Device
 {
@@ -240,7 +239,8 @@ void XApplication::initInputSystem()
 	}
 	XIFreeDeviceInfo(device);
 
-	coreKeyboardDesc = static_cast<XkbDescRec*>(XkbGetKeyboard(dpy, XkbAllComponentsMask, XkbUseCoreKbd));
+	im = XOpenIM(dpy, {}, {}, {});
+	ic = XCreateIC(im, XNInputStyle, XIMPreeditNothing | XIMStatusNothing, nullptr);
 }
 
 void XApplication::deinitInputSystem()
@@ -250,8 +250,10 @@ void XApplication::deinitInputSystem()
 		XFreeCursor(dpy, blankCursor);
 	if(normalCursor)
 		XFreeCursor(dpy, normalCursor);
-	if(coreKeyboardDesc)
-		XkbFreeKeyboard(coreKeyboardDesc, XkbAllComponentsMask, true);
+	if(ic)
+		XDestroyIC(ic);
+	if(im)
+		XCloseIM(im);
 }
 
 static uint32_t makePointerButtonState(XIButtonState state)
@@ -366,50 +368,51 @@ bool XApplication::handleXI2GenericEvent(XEvent event)
 			}
 			else
 			{
-				if(!dev->iCadeMode()
-					|| (dev->iCadeMode() && !processICadeKey(k, action, time, *dev, win)))
-				{
-					auto key = keysymToKey(k);
-					auto ev = Input::KeyEvent{Input::Map::SYSTEM, key, key, action, (uint32_t)event.mods.effective,
-						repeated, Input::Source::KEYBOARD, time, dev};
-					ev.setX11RawKey(event.detail);
-					dispatchKeyInputEvent(ev, win);
-				}
+				auto key = keysymToKey(k);
+				auto ev = Input::KeyEvent{Input::Map::SYSTEM, key, key, action, (uint32_t)event.mods.effective,
+					repeated, Input::Source::KEYBOARD, time, dev};
+				ev.setX11RawKey(event.detail);
+				dispatchKeyInputEvent(ev, win);
 			}
 		};
 	//logMsg("device %d, event %s", ievent.deviceid, xIEventTypeToStr(ievent.evtype));
 	switch(ievent.evtype)
 	{
-		bcase XI_ButtonPress:
-			updatePointer(win, ievent, Input::Action::PUSHED, time);
-		bcase XI_ButtonRelease:
-			updatePointer(win, ievent, Input::Action::RELEASED, time);
-		bcase XI_Motion:
-			updatePointer(win, ievent, Input::Action::MOVED, time);
-		bcase XI_Enter:
-			updatePointer(win, *((XIEnterEvent*)cookie->data), Input::Action::ENTER_VIEW, time);
-		bcase XI_Leave:
-			updatePointer(win, *((XILeaveEvent*)cookie->data), Input::Action::EXIT_VIEW, time);
-		bcase XI_FocusIn:
-			win.dispatchFocusChange(true);
-		bcase XI_FocusOut:
+		case XI_ButtonPress:
+			updatePointer(win, ievent, Input::Action::PUSHED, time); break;
+		case XI_ButtonRelease:
+			updatePointer(win, ievent, Input::Action::RELEASED, time); break;
+		case XI_Motion:
+			updatePointer(win, ievent, Input::Action::MOVED, time); break;
+		case XI_Enter:
+			updatePointer(win, *((XIEnterEvent*)cookie->data), Input::Action::ENTER_VIEW, time); break;
+		case XI_Leave:
+			updatePointer(win, *((XILeaveEvent*)cookie->data), Input::Action::EXIT_VIEW, time); break;
+		case XI_FocusIn:
+			win.dispatchFocusChange(true); break;
+		case XI_FocusOut:
 			win.dispatchFocusChange(false);
 			deinitKeyRepeatTimer();
-		bcase XI_KeyPress:
-			handleKeyEvent(win, ievent, time, true);
-		bcase XI_KeyRelease:
-			handleKeyEvent(win, ievent, time, false);
+			break;
+		case XI_KeyPress:
+			handleKeyEvent(win, ievent, time, true); break;
+		case XI_KeyRelease:
+			handleKeyEvent(win, ievent, time, false); break;
 	}
 	return true;
 }
 
 std::string XApplication::inputKeyString(Input::Key rawKey, uint32_t modifiers) const
 {
-	KeySym k;
-	XkbTranslateKeyCode(coreKeyboardDesc, rawKey, modifiers, nullptr, &k);
 	std::array<char, 4> str{};
-	XkbTranslateKeySym(dpy, &k, 0, str.data(), sizeof(str), nullptr);
-	return str.data();
+	XKeyPressedEvent event{};
+	event.type = KeyPress;
+	event.display = dpy;
+	event.state = modifiers;
+	event.keycode = rawKey;
+	Status status;
+	size_t size = Xutf8LookupString(ic, &event, str.data(), str.size(), nullptr, &status);
+	return {str.data(), size};
 }
 
 void ApplicationContext::flushSystemInputEvents()
@@ -439,7 +442,7 @@ bool Device::anyTypeBitsPresent(ApplicationContext, TypeBits typeBits)
 
 std::string KeyEvent::keyString(ApplicationContext ctx) const
 {
-	return ctx.application().inputKeyString(rawKey, metaState ? ShiftMask : 0);
+	return ctx.application().inputKeyString(rawKey, metaState);
 }
 
 }
