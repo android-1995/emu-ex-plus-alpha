@@ -52,7 +52,7 @@ public:
 		},
 		sameAsContent
 		{
-			"游戏同级文件夹", &defaultFace(),
+			"游戏文件夹", &defaultFace(),
 			[=](View &view)
 			{
 				onPathChange(optionUserPathContentToken);
