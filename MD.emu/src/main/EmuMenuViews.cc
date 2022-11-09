@@ -353,7 +353,7 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 	CustomFilePathOptionView(ViewAttachParams attach): FilePathOptionView{attach, true}
 	{
 		loadStockItems();
-		item.emplace_back(&cheatsPath);
+//		item.emplace_back(&cheatsPath);
 		#ifndef NO_SCD
 		for(auto i : iotaCount(3))
 		{
