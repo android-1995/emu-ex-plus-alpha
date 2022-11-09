@@ -31,9 +31,9 @@ namespace EmuEx
 template <class T>
 using MainAppHelper = EmuAppHelper<T, MainApp>;
 
-constexpr std::string_view pceFastText{"pce_fast (Default for general use)"};
-constexpr std::string_view pceText{"pce (Better accuracy, higher power usage)"};
-constexpr std::string_view changeEmuCoreText{"Really change emulation core? Note that save states from different cores aren't compatible."};
+constexpr std::string_view pceFastText{"pce_fast (一般默认使用)"};
+constexpr std::string_view pceText{"pce (更好的准确性，更高的功率使用)"};
+constexpr std::string_view changeEmuCoreText{"确定更改模拟核心吗？注意：不同核心的即时存档不兼容！"};
 
 class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionView>
 {
