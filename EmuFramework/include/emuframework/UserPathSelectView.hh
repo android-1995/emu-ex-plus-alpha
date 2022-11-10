@@ -98,7 +98,7 @@ inline FS::FileString userPathToDisplayName(IG::ApplicationContext ctx, std::str
 	}
 	else
 	{
-		return "存档文件夹";
+		return "游戏文件夹";
 	}
 }
 
@@ -114,7 +114,7 @@ inline auto patchesMenuName(IG::ApplicationContext ctx, std::string_view userPat
 
 inline auto palettesMenuName(IG::ApplicationContext ctx, std::string_view userPath)
 {
-	return fmt::format("Palettes: {}", userPathToDisplayName(ctx, userPath));
+	return fmt::format("调色板: {}", userPathToDisplayName(ctx, userPath));
 }
 
 }
