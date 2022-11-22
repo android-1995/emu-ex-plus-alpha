@@ -372,6 +372,9 @@ public:
 	auto &notifyInputDeviceChangeOption() { return optionNotifyInputDeviceChange; }
 	auto &keepBluetoothActiveOption() { return optionKeepBluetoothActive; }
 
+    //region 爱吾
+    IG::WindowRect getGameScreenRectAiWu();
+    //endregion
 	void postMessage(UTF16Convertible auto &&msg)
 	{
 		postMessage(false, IG_forward(msg));
