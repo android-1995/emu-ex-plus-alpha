@@ -732,6 +732,24 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             {
                                 IG::gAiWuAppContext().setDebugEnabledAiWu(enabled);
                             }
+                    },
+                    {
+                            "getGameScreenRect", "()[I",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz)
+                            {
+                                const IG::WindowRect rect = IG::gAiWuAppContext().getGameScreenRectAiWu();
+                                jintArray jarr = env->NewIntArray(4);
+                                int *carr = env->GetIntArrayElements(jarr, JNI_FALSE);
+                                carr[0] = rect.x;
+                                carr[1] = rect.y;
+                                carr[2] = rect.x2;
+                                carr[3] = rect.y2;
+                                // 释放资源并回写
+                                env->ReleaseIntArrayElements(jarr, carr, 0);
+                                // 返回数组
+                                return jarr;
+                            }
                     }
             };
     env->RegisterNatives(baseActivityClass, method, std::size(method));

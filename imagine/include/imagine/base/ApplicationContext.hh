@@ -263,6 +263,7 @@ public:
     bool loadStateAiWu(const char *filepath);
     void setCheatListAiWu(std::list<std::string> cheats);
     void setDebugEnabledAiWu(bool enabled);
+    IG::WindowRect getGameScreenRectAiWu();
     //endregion
 };
 

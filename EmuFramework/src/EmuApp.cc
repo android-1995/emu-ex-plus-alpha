@@ -2043,6 +2043,12 @@ EmuApp &gApp() { return *gAppPtr; }
 
 IG::ApplicationContext gAppContext() { return gApp().appContext(); }
 
+//region
+IG::WindowRect EmuApp::getGameScreenRectAiWu()
+{
+	return emuVideoLayer.contentRect();
+}
+//endregion
 }
 
 namespace IG
@@ -2149,6 +2155,11 @@ void ApplicationContext::setCheatListAiWu(std::list<std::string> cheats)
 void ApplicationContext::setDebugEnabledAiWu(bool enabled)
 {
     logger_setEnabled(enabled);
+}
+IG::WindowRect ApplicationContext::getGameScreenRectAiWu()
+{
+    auto &app = EmuEx::EmuApp::get(*this);
+    return app.getGameScreenRectAiWu();
 }
 //endregion
 }
