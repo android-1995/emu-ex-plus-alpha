@@ -35,6 +35,7 @@
 #include <vector>
 #include <optional>
 #include <list>
+#include <imagine/util/rectangle2.h>
 
 namespace IG::Input
 {
