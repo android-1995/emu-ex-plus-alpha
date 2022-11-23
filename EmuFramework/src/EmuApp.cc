@@ -2053,6 +2053,7 @@ IG::WindowRect EmuApp::getGameScreenRectAiWu()
 
 namespace IG
 {
+std::function<void(const char *screenshotPath)> g_android_screenshot_complete_callback;
 //region 爱吾的方法
 void ApplicationContext::onKeyPressAiWu(uint emuKey)
 {

@@ -215,6 +215,10 @@ void EmuVideo::doScreenshot(EmuSystemTaskContext taskCtx, IG::PixmapView pix)
     //region 爱吾
     if(screenshotPathAiWu != nullptr){
         auto success = app().writeScreenshot(pix, FS::PathString{screenshotPathAiWu});
+        if (IG::g_android_screenshot_complete_callback) {
+            IG::g_android_screenshot_complete_callback(screenshotPathAiWu);
+            IG::g_android_screenshot_complete_callback = nullptr;
+        }
         screenshotPathAiWu = nullptr;
         return;
     }

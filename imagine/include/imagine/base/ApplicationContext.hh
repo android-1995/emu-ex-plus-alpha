@@ -57,6 +57,10 @@ enum class DirOpenFlagsMask: uint8_t;
 namespace IG
 {
 
+//region 爱吾
+extern std::function<void(const char *screenshotPath)> g_android_screenshot_complete_callback;
+//endregion
+
 class PixelFormat;
 
 using DirectoryEntryDelegate = DelegateFuncS<sizeof(void*)*3, bool(const FS::directory_entry &)>;
