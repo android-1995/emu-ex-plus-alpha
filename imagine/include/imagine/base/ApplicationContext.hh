@@ -35,6 +35,7 @@
 #include <vector>
 #include <optional>
 #include <list>
+#include <imagine/util/rectangle2.h>
 
 namespace IG::Input
 {
@@ -55,6 +56,10 @@ enum class DirOpenFlagsMask: uint8_t;
 
 namespace IG
 {
+
+//region 爱吾
+extern std::function<void(const char *screenshotPath)> g_android_screenshot_complete_callback;
+//endregion
 
 class PixelFormat;
 
@@ -263,6 +268,7 @@ public:
     bool loadStateAiWu(const char *filepath);
     void setCheatListAiWu(std::list<std::string> cheats);
     void setDebugEnabledAiWu(bool enabled);
+    IG::WindowRect getGameScreenRectAiWu();
     //endregion
 };
 
