@@ -2043,10 +2043,26 @@ EmuApp &gApp() { return *gAppPtr; }
 
 IG::ApplicationContext gAppContext() { return gApp().appContext(); }
 
+//region
+IG::WindowRect EmuApp::getGameScreenRectAiWu()
+{
+	return emuVideoLayer.contentRect();
+}
+
+FS::PathString EmuApp::getScreenshotPathAiWu()
+{
+    return screenshotPathAiWu;
+}
+void EmuApp::setScreenshotPathAiWu(FS::PathString path)
+{
+    screenshotPathAiWu = std::move(path);
+}
+//endregion
 }
 
 namespace IG
 {
+std::function<void(const char *screenshotPath)> g_android_screenshot_complete_callback;
 //region 爱吾的方法
 void ApplicationContext::onKeyPressAiWu(uint emuKey)
 {
@@ -2102,11 +2118,12 @@ void ApplicationContext::setSoundEnabledAiWu(bool enabled)
     auto &app = EmuEx::EmuApp::get(*this);
     app.setSoundEnabled(enabled);
 }
-void ApplicationContext::screenshotAiWu(const char *filepath)
+void ApplicationContext::screenshotAiWu(FS::PathString filepath)
 {
     auto &app = EmuEx::EmuApp::get(*this);
     auto &video = app.video();
-    video.takeGameScreenshotAiWu(filepath);
+    app.setScreenshotPathAiWu(filepath);
+    video.takeGameScreenshotAiWu();
 }
 void ApplicationContext::fastForwardAiWu(double speed)
 {
@@ -2149,6 +2166,11 @@ void ApplicationContext::setCheatListAiWu(std::list<std::string> cheats)
 void ApplicationContext::setDebugEnabledAiWu(bool enabled)
 {
     logger_setEnabled(enabled);
+}
+IG::WindowRect ApplicationContext::getGameScreenRectAiWu()
+{
+    auto &app = EmuEx::EmuApp::get(*this);
+    return app.getGameScreenRectAiWu();
 }
 //endregion
 }

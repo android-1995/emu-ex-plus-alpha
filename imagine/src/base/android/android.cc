@@ -674,12 +674,25 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             }
                     },
                     {
-                            "screenshot", "(Ljava/lang/String;)V",
+                            "screenshot", "(Ljava/lang/String;Lcom/imagine/OnScreenshotCompleteListener;)V",
                             (void*)
-                            +[](JNIEnv* env, jobject thiz,jstring jPath)
+                            +[](JNIEnv* env, jobject thiz,jstring jPath,jobject listener)
                             {
-                                const char *path = GetJString(env,jPath).c_str();
-                                IG::gAiWuAppContext().screenshotAiWu(path);
+                                if (IG::g_android_screenshot_complete_callback) {
+                                    return;
+                                }
+                                if (listener != NULL){
+                                    jobject listener_ref = env->NewGlobalRef(listener);
+                                    IG::g_android_screenshot_complete_callback = [listener_ref](const char *screenshotPath) {
+                                        auto env = IG::gAiWuAppContext().thisThreadJniEnv();
+                                        jclass listenerClass = env->GetObjectClass(listener_ref);
+                                        jmethodID method = env->GetMethodID(listenerClass, "OnScreenshotComplete", "(Ljava/lang/String;)V");
+                                        env->CallVoidMethod(listener_ref, method, env->NewStringUTF(screenshotPath));
+                                        env->DeleteGlobalRef(listener_ref);
+                                    };
+                                }
+                                auto path = JNI::StringChars{env, jPath};
+                                IG::gAiWuAppContext().screenshotAiWu(FS::PathString{path});
                             }
                     },
                     {
@@ -733,6 +746,24 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                             +[](JNIEnv* env, jobject thiz,jboolean enabled)
                             {
                                 IG::gAiWuAppContext().setDebugEnabledAiWu(enabled);
+                            }
+                    },
+                    {
+                            "getGameScreenRect", "()[I",
+                            (void*)
+                            +[](JNIEnv* env, jobject thiz)
+                            {
+                                const IG::WindowRect rect = IG::gAiWuAppContext().getGameScreenRectAiWu();
+                                jintArray jarr = env->NewIntArray(4);
+                                int *carr = env->GetIntArrayElements(jarr, JNI_FALSE);
+                                carr[0] = rect.x;
+                                carr[1] = rect.y;
+                                carr[2] = rect.x2;
+                                carr[3] = rect.y2;
+                                // 释放资源并回写
+                                env->ReleaseIntArrayElements(jarr, carr, 0);
+                                // 返回数组
+                                return jarr;
                             }
                     }
             };
