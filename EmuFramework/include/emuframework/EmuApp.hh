@@ -373,6 +373,8 @@ public:
 	auto &keepBluetoothActiveOption() { return optionKeepBluetoothActive; }
 
     //region 爱吾
+    FS::PathString getScreenshotPathAiWu();
+    void setScreenshotPathAiWu(FS::PathString path);
     IG::WindowRect getGameScreenRectAiWu();
     //endregion
 	void postMessage(UTF16Convertible auto &&msg)
@@ -569,6 +571,10 @@ protected:
 	IG::WindowFrameTimeSource winFrameTimeSrc{IG::WindowFrameTimeSource::AUTO};
 	IG_UseMemberIf(Config::envIsAndroid, bool, usePresentationTime_){true};
 	IG_UseMemberIf(Config::envIsAndroid, bool, forceMaxScreenFrameRate){};
+
+	//region 爱吾
+    FS::PathString screenshotPathAiWu{};
+	//endregion
 public:
 	AutosaveLaunchMode autosaveLaunchMode{};
 

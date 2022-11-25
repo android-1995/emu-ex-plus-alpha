@@ -70,7 +70,7 @@ public:
 	void clear();
 	void takeGameScreenshot();
     //region 爱吾：增加指定路径的截图
-    void takeGameScreenshotAiWu(const char *filepath);
+    void takeGameScreenshotAiWu();
     //endregion
 	bool isExternalTexture() const;
 	Gfx::PixmapBufferTexture &image();
@@ -104,7 +104,7 @@ protected:
 	Gfx::ColorSpace colSpace{Gfx::ColorSpace::LINEAR};
 	bool useLinearFilter{true};
     //region 爱吾：增加截图路径
-    const char *screenshotPathAiWu{};
+    bool screenshotNextFrameAiWu{};
     //endregion
 
 	void doScreenshot(EmuSystemTaskContext, IG::PixmapView pix);
