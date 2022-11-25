@@ -262,7 +262,7 @@ public:
     bool isSoundEnabledAiWu();
     void setSoundEnabledAiWu(bool enabled);
     void showEmulationCallbackAiWu(bool showEmulation);
-    void screenshotAiWu(const char *filepath);
+    void screenshotAiWu(FS::PathString filepath);
     void fastForwardAiWu(double speed);
     bool saveStateAiWu(const char *filepath);
     bool loadStateAiWu(const char *filepath);
