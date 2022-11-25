@@ -689,8 +689,8 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                                         env->DeleteGlobalRef(listener_ref);
                                     };
                                 }
-                                const char *path = GetJString(env,jPath).c_str();
-                                IG::gAiWuAppContext().screenshotAiWu(path);
+                                auto path = JNI::StringChars{env, jPath};
+                                IG::gAiWuAppContext().screenshotAiWu(FS::PathString{path});
                             }
                     },
                     {
