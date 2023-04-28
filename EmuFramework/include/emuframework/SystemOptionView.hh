@@ -34,7 +34,7 @@ public:
 protected:
 	TextMenuItem autosaveTimerItem[4];
 	MultiChoiceMenuItem autosaveTimer;
-	TextMenuItem autosaveLaunchItem[4];
+	TextMenuItem autosaveLaunchItem[2];//删除了2两个选项
 	MultiChoiceMenuItem autosaveLaunch;
 	BoolMenuItem autosaveContent;
 	BoolMenuItem confirmOverwriteState;
