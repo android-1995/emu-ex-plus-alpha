@@ -50,7 +50,7 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 			{
 				if(idx == 0)
 				{
-				    t.resetString(rtcIsEnabled() ? "On" : "Off");
+				    t.resetString(rtcIsEnabled() ? "开" : "关");
 					return true;
 				}
 				return false;
