@@ -645,14 +645,15 @@ bool VController::readConfig(EmuApp &app, MapIO &io, unsigned key, size_t size)
 		case CFGKEY_VCONTROLLER_UI_BUTTONS:
 		{
 			uiElements.clear();
-			auto configId = io.get<uint8_t>(); // reserved for future use
-			auto elements = io.get<uint8_t>();
-			logMsg("read UI button data (%zu bytes) with %u element(s)", size, elements);
-			for(auto i : iotaCount(elements))
-			{
-				if(!readVControllerElement(app, io, uiElements, true))
-					return false;
-			}
+			//删除所有UI按键
+//			auto configId = io.get<uint8_t>(); // reserved for future use
+//			auto elements = io.get<uint8_t>();
+//			logMsg("read UI button data (%zu bytes) with %u element(s)", size, elements);
+//			for(auto i : iotaCount(elements))
+//			{
+//				if(!readVControllerElement(app, io, uiElements, true))
+//					return false;
+//			}
 			return true;
 		}
 	}
@@ -874,11 +875,12 @@ void VController::resetUIGroups()
 std::vector<VControllerElement> VController::defaultUIGroups() const
 {
 	std::vector<VControllerElement> uiElements;
-	add(uiElements, rightUIComponents);
-	if(Config::Input::TOUCH_DEVICES)
-		add(uiElements, leftUIComponents);
-	if(hasWindow())
-		resetUIPositions(uiElements);
+	//删除所有UI按键
+//	add(uiElements, rightUIComponents);
+//	if(Config::Input::TOUCH_DEVICES)
+//		add(uiElements, leftUIComponents);
+//	if(hasWindow())
+//		resetUIPositions(uiElements);
 	return uiElements;
 }
 

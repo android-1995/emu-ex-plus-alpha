@@ -24,8 +24,8 @@ PlaceVideoView::PlaceVideoView(ViewAttachParams attach, EmuVideoLayer &layer, VC
 	View(attach),
 	layer{layer},
 	vController{vController},
-	exitText{"Exit", &defaultFace()},
-	resetText{"Reset", &defaultFace()}
+	exitText{"退出", &defaultFace()},
+	resetText{"重置", &defaultFace()}
 {
 	app().applyOSNavStyle(appContext(), true);
 	layer.setBrightness(app().videoBrightnessAsRGB());

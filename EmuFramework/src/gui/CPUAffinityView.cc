@@ -23,16 +23,16 @@ namespace EmuEx
 {
 
 CPUAffinityView::CPUAffinityView(ViewAttachParams attach, int cpuCount):
-	TableView{"Configure CPU Affinity", attach, menuItems},
+	TableView{"配置CPU相关性", attach, menuItems},
 	affinityModeItems
 	{
-		{"Auto (Use only performance cores or hints for low latency)", &defaultFace(), to_underlying(CPUAffinityMode::Auto)},
-		{"Any (Use any core even if it increases latency)",            &defaultFace(), to_underlying(CPUAffinityMode::Any)},
-		{"Manual (Use cores set in previous menu)",                    &defaultFace(), to_underlying(CPUAffinityMode::Manual)},
+		{"自动（仅使用大核以实现低延迟）", &defaultFace(), to_underlying(CPUAffinityMode::Auto)},
+		{"任意（使用任意内核，可能增加延迟）",            &defaultFace(), to_underlying(CPUAffinityMode::Any)},
+		{"手动（使用设置的内核）",                    &defaultFace(), to_underlying(CPUAffinityMode::Manual)},
 	},
 	affinityMode
 	{
-		"CPU Affinity Mode", &defaultFace(),
+		"CPU相关性模式", &defaultFace(),
 		{
 			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
 			{
@@ -44,7 +44,7 @@ CPUAffinityView::CPUAffinityView(ViewAttachParams attach, int cpuCount):
 		MenuItem::Id(uint8_t(app().cpuAffinityMode)),
 		affinityModeItems
 	},
-	cpusHeading{"Manual CPU Affinity", &defaultBoldFace()}
+	cpusHeading{"手动配置CPU相关性", &defaultBoldFace()}
 {
 	menuItems.emplace_back(&affinityMode);
 	menuItems.emplace_back(&cpusHeading);
@@ -55,7 +55,7 @@ CPUAffinityView::CPUAffinityView(ViewAttachParams attach, int cpuCount):
 			{
 				auto freq = appContext().maxCPUFrequencyKHz(i);
 				if(!freq)
-					return std::format("{} (Offline)", i);
+					return std::format("{} (离线)", i);
 				return std::format("{} ({}MHz)", i, freq / 1000);
 			}(),
 			&defaultFace(), app().cpuAffinity(i),

@@ -314,8 +314,8 @@ void MainMenuView::loadFileBrowserItems()
 void MainMenuView::loadStandardItems()
 {
 	item.emplace_back(&systemActions);
-	item.emplace_back(&onScreenInputManager);
-	//去掉功能
+//去掉功能
+//	item.emplace_back(&onScreenInputManager);
 //	item.emplace_back(&inputManager);
 	item.emplace_back(&options);
 	if(used(scanWiimotes) && app().showsBluetoothScanItems())

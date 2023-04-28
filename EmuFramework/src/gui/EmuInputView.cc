@@ -79,7 +79,8 @@ bool EmuInputView::inputEvent(const Input::Event &e)
 		{
 			if(!motionEv.isAbsolute())
 				return false;
-			return vController->pointerInputEvent(motionEv, videoLayer->contentRect());
+				//屏蔽虚拟按键事件
+//			return vController->pointerInputEvent(motionEv, videoLayer->contentRect());
 		},
 		[&](const Input::KeyEvent &keyEv)
 		{

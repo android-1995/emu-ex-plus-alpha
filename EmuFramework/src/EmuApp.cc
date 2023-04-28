@@ -2099,16 +2099,15 @@ void ApplicationContext::resetAiWu()
         return;
     sys.reset(app, EmuEx::EmuSystem::ResetMode::SOFT);
 }
-//todo 待修改
 bool ApplicationContext::isSoundEnabledAiWu()
 {
     auto &app = EmuEx::EmuApp::get(*this);
-    return app.soundIsEnabled();
+    return app.audio().isEnabled();
 }
 void ApplicationContext::setSoundEnabledAiWu(bool enabled)
 {
     auto &app = EmuEx::EmuApp::get(*this);
-    app.setSoundEnabled(enabled);
+    app.audio().setEnabled(enabled);
 }
 void ApplicationContext::screenshotAiWu(FS::PathString filepath)
 {
