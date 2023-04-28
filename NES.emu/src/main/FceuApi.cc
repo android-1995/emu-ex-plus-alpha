@@ -36,6 +36,7 @@ bool turbo = 0;
 int closeFinishedMovie = 0;
 int StackAddrBackup = -1;
 int KillFCEUXonFrame = 0;
+int eoptions = 0;
 
 void FCEUI_Emulate(EmuEx::EmuSystemTaskContext taskCtx, EmuEx::NesSystem &sys, EmuEx::EmuVideo *video, int skip, EmuEx::EmuAudio *audio)
 {
@@ -230,7 +231,7 @@ int FCEUD_FDSReadBIOS(void *buff, uint32 size)
 			if(hasFDSBIOSExtension(entry.name()))
 			{
 				logMsg("archive file entry:%s", entry.name().data());
-				auto io = entry.moveIO();
+				auto io = entry.releaseIO();
 				if(io.size() != size)
 				{
 					throw std::runtime_error{"Incompatible FDS BIOS"};
@@ -242,7 +243,7 @@ int FCEUD_FDSReadBIOS(void *buff, uint32 size)
 	}
 	else
 	{
-		auto io = appCtx.openFileUri(fdsBiosPath, IOAccessHint::ALL);
+		auto io = appCtx.openFileUri(fdsBiosPath, IOAccessHint::All);
 		if(io.size() != size)
 		{
 			throw std::runtime_error{"Incompatible FDS BIOS"};

@@ -26,6 +26,7 @@
 #include <imagine/base/baseDefs.hh>
 #include <imagine/util/utility.h>
 #include <concepts>
+#include <chrono>
 
 namespace IG::Gfx
 {
@@ -49,7 +50,7 @@ public:
 	}
 
 	// Run a delegate for drawing on the renderer thread
-	// Returns true if the window's contents were presented synchronously
+	// Returns true if the window's contents were presented asynchronously
 	bool draw(Window &win, WindowDrawParams winParams, DrawParams params,
 		std::invocable<Window &, RendererCommands &> auto &&f)
 	{
@@ -63,6 +64,7 @@ public:
 	SyncFence clientWaitSyncReset(SyncFence fence, int flags = 0, std::chrono::nanoseconds timeout = SyncFence::IGNORE_TIMEOUT);
 	void waitSync(SyncFence fence);
 	void awaitPending();
+	ThreadId threadId() const;
 };
 
 }

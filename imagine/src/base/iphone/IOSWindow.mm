@@ -270,9 +270,11 @@ IG::PixelFormat Window::pixelFormat() const
 	return IG::PIXEL_FMT_RGBA8888;
 }
 
-void Window::setIntendedFrameRate(double rate) {}
+void Window::setIntendedFrameRate(FrameRate rate) {}
 
 void WindowConfig::setFormat(IG::PixelFormat) {}
+
+void Window::setSystemGestureExclusionRects(std::span<const WRect>) {}
 
 }
 

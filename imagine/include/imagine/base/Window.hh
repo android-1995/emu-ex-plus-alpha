@@ -22,6 +22,8 @@
 #include <imagine/util/rectangle2.h>
 #include <imagine/util/DelegateFunc.hh>
 #include <imagine/util/utility.h>
+#include <span>
+#include <memory>
 
 namespace IG::Input
 {
@@ -54,15 +56,17 @@ public:
 	void postFrameReady();
 	void postDrawToMainThread(int8_t priority = 0);
 	void postFrameReadyToMainThread();
+	static constexpr int8_t drawEventPriorityLocked = 127; // max value passed to setDrawEventPriority() also blocks implicit drawing
 	int8_t setDrawEventPriority(int8_t = 0);
 	int8_t drawEventPriority() const;
+	bool isReady() const { return drawPhase == DrawPhase::READY; }
 	void drawNow(bool needsSync = false);
 	Screen *screen() const;
 	NativeWindow nativeObject() const;
-	void setIntendedFrameRate(double rate);
+	void setIntendedFrameRate(FrameRate rate);
 	void setFormat(NativeWindowFormat);
-	void setFormat(IG::PixelFormat);
-	IG::PixelFormat pixelFormat() const;
+	void setFormat(PixelFormat);
+	PixelFormat pixelFormat() const;
 	bool operator ==(Window const &rhs) const;
 	bool addOnFrame(OnFrameDelegate del, FrameTimeSource src = {}, int priority = 0);
 	bool removeOnFrame(OnFrameDelegate del, FrameTimeSource src = {});
@@ -73,6 +77,7 @@ public:
 	ApplicationContext appContext() const;
 	Application &application() const;
 	void setCursorVisible(bool);
+	void setSystemGestureExclusionRects(std::span<const WRect>);
 
 	template <class T>
 	T &makeAppData(auto &&... args)
@@ -100,55 +105,35 @@ public:
 		return static_cast<T*>(rendererDataPtr.get());
 	}
 
-	// Called when the state of the window's drawing surface changes,
-	// such as a re-size or if it becomes the current drawing target
-	void setOnSurfaceChange(SurfaceChangeDelegate del);
-	// Called during a Screen frame callback if the window needs to be drawn
-	void setOnDraw(DrawDelegate del);
-	// Called to process an event from an input device
-	void setOnInputEvent(InputEventDelegate del);
-	// Called when app window enters/exits focus
-	void setOnFocusChange(FocusChangeDelegate del);
-	// Called when a file is dropped into into the app's window
-	// if app enables setAcceptDnd()
-	void setOnDragDrop(DragDropDelegate del);
-	// Called when the user performs an action indicating to
-	// to the window manager they wish to dismiss the window
-	// (clicking the close button for example),
-	// by default it will exit the app
-	void setOnDismissRequest(DismissRequestDelegate del);
-	// Called when the window is dismissed
-	void setOnDismiss(DismissDelegate del);
-
 	int realWidth() const;
 	int realHeight() const;
 	int width() const;
 	int height() const;
-	IG::Point2D<int> realSize() const;
-	IG::Point2D<int> size() const;
+	IP realSize() const;
+	IP size() const;
 	bool isPortrait() const;
 	bool isLandscape() const;
-	IG::Point2D<float> sizeMM() const;
-	IG::Point2D<float> sizeScaledMM() const;
+	FP sizeMM() const;
+	FP sizeScaledMM() const;
 	int widthMMInPixels(float mm) const;
 	int heightMMInPixels(float mm) const;
 	int widthScaledMMInPixels(float mm) const;
 	int heightScaledMMInPixels(float mm) const;
-	IG::WindowRect bounds() const;
-	IG::Point2D<int> transformInputPos(IG::Point2D<int> srcPos) const;
+	WRect bounds() const;
+	IP transformInputPos(IP srcPos) const;
 	Viewport viewport(WindowRect rect) const;
 	Viewport viewport() const;
 
 	// content in these bounds isn't blocked by system overlays and receives pointer input
-	IG::WindowRect contentBounds() const;
+	WRect contentBounds() const;
 
 	Rotation softOrientation() const;
 	bool requestOrientationChange(Rotation o);
 	bool setValidOrientations(OrientationMask);
 
-	bool updateSize(IG::Point2D<int> surfaceSize);
-	bool updatePhysicalSize(IG::Point2D<float> surfaceSizeMM);
-	bool updatePhysicalSize(IG::Point2D<float> surfaceSizeMM, IG::Point2D<float> surfaceSizeSMM);
+	bool updateSize(IP surfaceSize);
+	bool updatePhysicalSize(FP surfaceSizeMM);
+	bool updatePhysicalSize(FP surfaceSizeMM, FP surfaceSizeSMM);
 	bool updatePhysicalSizeWithCurrentSize();
 	bool hasSurface() const;
 	bool dispatchInputEvent(Input::Event event);
@@ -164,8 +149,8 @@ public:
 	void signalSurfaceChanged(uint8_t surfaceChangeFlags);
 
 private:
-	IG::Point2D<float> pixelSizeAsMM(IG::Point2D<int> size);
-	IG::Point2D<float> pixelSizeAsScaledMM(IG::Point2D<int> size);
+	FP pixelSizeAsMM(IP size);
+	FP pixelSizeAsScaledMM(IP size);
 	void draw(bool needsSync = false);
 };
 

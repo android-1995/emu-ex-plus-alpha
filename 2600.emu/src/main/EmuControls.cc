@@ -19,7 +19,7 @@
 namespace EmuEx::Controls
 {
 
-constexpr int joystickKeys = 12;
+constexpr int joystickKeys = 14;
 constexpr int switchKeys = 5;
 constexpr int keyboardKeys = 12;
 const int systemTotalKeys = gameActionKeys + joystickKeys*2 + switchKeys + keyboardKeys*2;
@@ -39,10 +39,12 @@ constexpr std::array<const std::string_view, joystickKeys> gamepadName
 	"Right+Up",
 	"Right+Down",
 	"Left+Down",
-	"Trigger",
-	"Trigger Turbo",
-	"Trigger 2",
-	"Trigger 2 Turbo",
+	"Button 1",
+	"Button 1 Turbo",
+	"Button 2",
+	"Button 2 Turbo",
+	"Button 3",
+	"Button 3 Turbo",
 };
 
 constexpr std::array<const std::string_view, switchKeys> switchName
@@ -80,10 +82,10 @@ constexpr KeyCategory category[]
 {
 	EMU_CONTROLS_IN_GAME_ACTIONS_CATEGORY_INIT,
 	{"Set Joystick Keys", gamepadName, joystickKeyOffset},
-	{"Set Joystick 2 Keys", gamepadName, joystick2KeyOffset, true},
+	{"Set Joystick 2 Keys", gamepadName, joystick2KeyOffset, 1},
 	{"Set Console Switch Keys", switchName, switchKeyOffset},
 	{"Set Keyboard Keys", keyboardName, keyboardKeyOffset},
-	{"Set Keyboard 2 Keys", keyboardName, keyboard2KeyOffset}
+	{"Set Keyboard 2 Keys", keyboardName, keyboard2KeyOffset, 1}
 };
 
 std::span<const KeyCategory> categories() { return category; }

@@ -15,6 +15,7 @@
 	You should have received a copy of the GNU General Public License
 	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
 
+#include <emuframework/config.hh>
 #include <emuframework/EmuAppHelper.hh>
 #include <imagine/gui/TableView.hh>
 #include <imagine/gui/MenuItem.hh>
@@ -34,6 +35,7 @@ class VideoOptionView : public TableView, public EmuAppHelper<VideoOptionView>
 {
 public:
 	VideoOptionView(ViewAttachParams attach, bool customMenu = false);
+	void place() final;
 	void loadStockItems();
 	void setEmuVideoLayer(EmuVideoLayer &videoLayer);
 
@@ -43,11 +45,13 @@ protected:
 
 	StaticArrayList<TextMenuItem, 5> textureBufferModeItem;
 	MultiChoiceMenuItem textureBufferMode;
-	IG_UseMemberIf(Config::SCREEN_FRAME_INTERVAL, TextMenuItem, frameIntervalItem[4]);
-	IG_UseMemberIf(Config::SCREEN_FRAME_INTERVAL, MultiChoiceMenuItem, frameInterval);
-	BoolMenuItem dropLateFrames;
-	TextMenuItem frameRate;
-	TextMenuItem frameRatePAL;
+	TextMenuItem frameIntervalItem[5];
+	MultiChoiceMenuItem frameInterval;
+	TextMenuItem frameRateItems[4];
+	VideoSystem activeVideoSystem{};
+	MultiChoiceMenuItem frameRate;
+	MultiChoiceMenuItem frameRatePAL;
+	IG_UseMemberIf(enableFrameTimeStats, BoolMenuItem, frameTimeStats);
 	StaticArrayList<TextMenuItem, MAX_ASPECT_RATIO_ITEMS> aspectRatioItem;
 	MultiChoiceMenuItem aspectRatio;
 	TextMenuItem zoomItem[6];
@@ -56,6 +60,7 @@ protected:
 	MultiChoiceMenuItem viewportZoom;
 	TextMenuItem contentRotationItem[5];
 	MultiChoiceMenuItem contentRotation;
+	TextMenuItem placeVideo;
 	BoolMenuItem imgFilter;
 	TextMenuItem imgEffectItem[6];
 	MultiChoiceMenuItem imgEffect;
@@ -73,7 +78,6 @@ protected:
 	MultiChoiceMenuItem imageBuffers;
 	TextMenuItem renderPixelFormatItem[3];
 	MultiChoiceMenuItem renderPixelFormat;
-	IG_UseMemberIf(Config::envIsAndroid, BoolMenuItem, presentationTime);
 	IG_UseMemberIf(Config::envIsAndroid, BoolMenuItem, forceMaxScreenFrameRate);
 	TextMenuItem brightnessItem[2];
 	TextMenuItem redItem[2];
@@ -90,19 +94,7 @@ protected:
 	TextHeadingMenuItem systemSpecificHeading;
 	StaticArrayList<MenuItem*, 33> item;
 
-	void pushAndShowFrameRateSelectMenu(VideoSystem, const Input::Event &);
-	bool onFrameTimeChange(VideoSystem vidSys, IG::FloatSeconds time);
-	TextMenuItem::SelectDelegate setZoomDel();
-	TextMenuItem::SelectDelegate setViewportZoomDel();
-	TextMenuItem::SelectDelegate setContentRotationDel();
-	TextMenuItem::SelectDelegate setFrameIntervalDel();
-	TextMenuItem::SelectDelegate setImgEffectDel();
-	TextMenuItem::SelectDelegate setOverlayEffectDel();
-	TextMenuItem::SelectDelegate setOverlayEffectLevelDel();
-	TextMenuItem::SelectDelegate setRenderPixelFormatDel();
-	TextMenuItem::SelectDelegate setImgEffectPixelFormatDel();
-	TextMenuItem::SelectDelegate setWindowDrawableConfigDel(Gfx::DrawableConfig);
-	TextMenuItem::SelectDelegate setImageBuffersDel();
+	bool onFrameTimeChange(VideoSystem vidSys, FloatSeconds time);
 	TextMenuItem::SelectDelegate setVideoBrightnessCustomDel(ImageChannel);
 	void setAllColorLevelsSelected(MenuItem::Id);
 	EmuVideo &emuVideo() const;

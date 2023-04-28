@@ -59,27 +59,20 @@ private:
 
 class ButtonConfigView : public TableView, public EmuAppHelper<ButtonConfigView>
 {
-private:
-	struct BtnConfigMenuItem : public DualTextMenuItem
-	{
-		using DualTextMenuItem::DualTextMenuItem;
-		void draw(Gfx::RendererCommands &__restrict__ , float xPos, float yPos, float xSize, float ySize,
-			float xIndent, _2DOrigin align, const Gfx::ProjectionPlane &, Gfx::Color) const final;
-	};
-
-	InputManagerView &rootIMView;
-	TextMenuItem reset;
-	std::unique_ptr<BtnConfigMenuItem[]> btn;
-	const KeyCategory *cat{};
-	InputDeviceConfig *devConf{};
-	Input::Time leftKeyPushTime{};
-
-	void onSet(Input::Key mapKey, int keyToSet);
-	static std::string makeKeyNameStr(Input::Key key, std::string_view name);
-
 public:
 	ButtonConfigView(ViewAttachParams attach, InputManagerView &rootIMView, const KeyCategory &cat, InputDeviceConfig &devConf);
 	bool inputEvent(const Input::Event &) final;
+
+private:
+	InputManagerView &rootIMView;
+	TextMenuItem reset;
+	std::unique_ptr<DualTextMenuItem[]> btn;
+	const KeyCategory *cat{};
+	InputDeviceConfig *devConf{};
+	SteadyClockTimePoint leftKeyPushTime{};
+
+	void onSet(Input::Key mapKey, int keyToSet);
+	static std::string makeKeyNameStr(Input::Key key, std::string_view name);
 };
 
 }

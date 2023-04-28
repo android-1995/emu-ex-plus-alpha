@@ -46,31 +46,30 @@ bool config_ym2413_enabled = true;
 namespace EmuEx
 {
 
-const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2022\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nGenesis Plus Team\ncgfm2.emuviews.com";
+const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2023\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nGenesis Plus Team\nsegaretro.org/Genesis_Plus";
 bool EmuSystem::hasCheats = true;
 bool EmuSystem::hasPALVideoSystem = true;
-double EmuSystem::staticFrameTime = (262. * (double)MCYCLES_PER_LINE) / 53693175.; // ~59.92Hz
-double EmuSystem::staticPalFrameTime = (313. * (double)MCYCLES_PER_LINE) / 53203424.; // ~49.70Hz
 bool EmuSystem::canRenderRGBA8888 = RENDER_BPP == 32;
+bool EmuSystem::hasRectangularPixels = true;
 bool EmuApp::needsGlobalInstance = true;
 
 static bool hasBinExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".bin", ".BIN");
+	return IG::endsWithAnyCaseless(name, ".bin");
 }
 
 bool hasMDExtension(std::string_view name)
 {
-	return hasBinExtension(name) || IG::stringEndsWithAny(name, ".smd", ".md", ".gen", ".SMD", ".MD", ".GEN"
+	return hasBinExtension(name) || IG::endsWithAnyCaseless(name, ".smd", ".md", ".gen"
 		#ifndef NO_SYSTEM_PBC
-		, ".sms", ".SMS"
+		, ".sms"
 		#endif
 		);
 }
 
 static bool hasMDCDExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".cue", ".iso", ".chd", ".CUE", ".ISO", ".CHD");
+	return IG::endsWithAnyCaseless(name, ".cue", ".iso", ".chd");
 }
 
 static bool hasMDWithCDExtension(std::string_view name)
@@ -93,7 +92,6 @@ const char *EmuSystem::systemName() const
 }
 
 EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter = hasMDWithCDExtension;
-EmuSystem::NameFilterFunc EmuSystem::defaultBenchmarkFsFilter = hasMDExtension;
 
 void MdSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio *audio)
 {
@@ -178,7 +176,7 @@ void MdSystem::loadBackupMemory(EmuApp &app)
 	if(sCD.isActive)
 	{
 		auto saveStr = bramSaveFilename(app);
-		auto bramFile = appContext().openFileUri(saveStr, IOAccessHint::ALL, OpenFlagsMask::TEST);
+		auto bramFile = appContext().openFileUri(saveStr, IOAccessHint::All, OpenFlagsMask::Test);
 		if(!bramFile)
 		{
 			logMsg("no BRAM on disk, formatting");
@@ -232,7 +230,7 @@ void MdSystem::onFlushBackupMemory(EmuApp &app, BackupMemoryDirtyFlags)
 	{
 		logMsg("saving BRAM");
 		auto saveStr = bramSaveFilename(app);
-		auto bramFile = appContext().openFileUri(saveStr, OpenFlagsMask::NEW | OpenFlagsMask::TEST);
+		auto bramFile = appContext().openFileUri(saveStr, OpenFlagsMask::New | OpenFlagsMask::Test);
 		if(!bramFile)
 			logMsg("error creating bram file");
 		else
@@ -283,7 +281,7 @@ void MdSystem::onFlushBackupMemory(EmuApp &app, BackupMemoryDirtyFlags)
 	}
 }
 
-IG::Time MdSystem::backupMemoryLastWriteTime(const EmuApp &app) const
+WallClockTimePoint MdSystem::backupMemoryLastWriteTime(const EmuApp &app) const
 {
 	return appContext().fileUriLastWriteTime(
 		app.contentSaveFilePath(sCD.isActive ? ".brm" : ".srm").c_str());
@@ -371,15 +369,15 @@ void MdSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegate
 		}();
 		if(biosPath.empty())
 		{
-			throw std::runtime_error(fmt::format("Set a {} BIOS in the Options", biosName));
+			throw std::runtime_error(std::format("Set a {} BIOS in the Options", biosName));
 		}
 		auto [biosSize, biosFilename] = FileUtils::readFromUriWithArchiveScan(appContext(), biosPath, {cart.rom, MAXROMSIZE}, hasMDExtension);
 		if(biosSize <= 0)
-			throw std::runtime_error(fmt::format("Error loading BIOS: {}", biosPath));
+			throw std::runtime_error(std::format("Error loading BIOS: {}", biosPath));
 		init_rom(biosSize, "");
 		if(!sCD.isActive)
 		{
-			throw std::runtime_error(fmt::format("Invalid BIOS: {}", biosPath));
+			throw std::runtime_error(std::format("Invalid BIOS: {}", biosPath));
 		}
 	}
 	else
@@ -429,12 +427,15 @@ void MdSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegate
 	applyCheats();
 }
 
-void MdSystem::configAudioRate(IG::FloatSeconds frameTime, int rate)
+void MdSystem::configAudioRate(FloatSeconds outputFrameTime, int outputRate)
 {
-	audio_init(rate, 1. / frameTime.count());
-	if(hasContent())
-		sound_restore();
-	logMsg("md sound buffer size %d", snd.buffer_size);
+	float outputFrameRate = 1. / outputFrameTime.count();
+	if(snd.sample_rate == outputRate && snd.frame_rate == outputFrameRate)
+		return;
+	logMsg("set sound output rate:%d for fps:%.2f", outputRate, outputFrameRate);
+	audio_init(outputRate, outputFrameRate);
+	sound_restore();
+	//logMsg("set sound buffer size:%d", snd.buffer_size);
 }
 
 bool MdSystem::onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat fmt)
@@ -447,9 +448,9 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 {
 	const Gfx::LGradientStopDesc navViewGrad[] =
 	{
-		{ .0, Gfx::VertexColorPixelFormat.build(0., 0., 1. * .4, 1.) },
-		{ .3, Gfx::VertexColorPixelFormat.build(0., 0., 1. * .4, 1.) },
-		{ .97, Gfx::VertexColorPixelFormat.build(0., 0., .6 * .4, 1.) },
+		{ .0, Gfx::PackedColor::format.build(0., 0., 1. * .4, 1.) },
+		{ .3, Gfx::PackedColor::format.build(0., 0., 1. * .4, 1.) },
+		{ .97, Gfx::PackedColor::format.build(0., 0., .6 * .4, 1.) },
 		{ 1., view.separatorColor() },
 	};
 	view.setBackgroundGradient(navViewGrad);

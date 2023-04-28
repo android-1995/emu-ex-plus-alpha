@@ -238,7 +238,7 @@ NativeWindow Window::nativeObject() const
 	return nWin;
 }
 
-void Window::setIntendedFrameRate(double rate)
+void Window::setIntendedFrameRate(FrameRate rate)
 {
 	if(appContext().androidSDK() < 30)
 	{
@@ -354,6 +354,19 @@ void Window::setAcceptDnd(bool on) {}
 void WindowConfig::setFormat(IG::PixelFormat fmt)
 {
 	nativeFormat = toAHardwareBufferFormat(fmt);
+}
+
+void Window::setSystemGestureExclusionRects(std::span<const WRect> rects)
+{
+	if(appContext().androidSDK() < 29)
+		return;
+	auto env = appContext().mainThreadJniEnv();
+	auto jCoords = env->NewIntArray(rects.size() * 4);
+	if(rects.size())
+		env->SetIntArrayRegion(jCoords, 0, rects.size() * 4, &rects[0].x);
+	auto baseActivityCls = (jclass)env->GetObjectClass(appContext().baseActivityObject());
+	JNI::ClassMethod<void(jobject, jintArray)> jSetSystemGestureExclusionRects(env, baseActivityCls, "setSystemGestureExclusionRects", "(Landroid/view/Window;[I)V");
+	jSetSystemGestureExclusionRects(env, baseActivityCls, jWin, jCoords);
 }
 
 }

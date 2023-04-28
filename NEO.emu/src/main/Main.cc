@@ -91,10 +91,10 @@ CLINK void main_frame(void *emuTaskPtr, void *neoSystemPtr, void *emuVideoPtr);
 namespace EmuEx
 {
 
-const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2012-2022\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nGngeo Team\ncode.google.com/p/gngeo";
+const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2012-2023\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nGngeo Team\ncode.google.com/p/gngeo";
 bool EmuSystem::handlesGenericIO = false; // TODO: need to re-factor GnGeo file loading code
 bool EmuSystem::canRenderRGBA8888 = false;
-double EmuSystem::staticFrameTime = 264. / 15625.; // ~59.18Hz
+bool EmuSystem::hasRectangularPixels = true;
 bool EmuApp::needsGlobalInstance = true;
 
 NeoSystem::NeoSystem(ApplicationContext ctx):
@@ -109,7 +109,7 @@ NeoSystem::NeoSystem(ApplicationContext ctx):
 	sdlSurf.pixels = screenBuff;
 	buffer = &sdlSurf;
 	conf.sound = 1;
-	conf.sample_rate = 44100; // must be initialized to any valid value for YM2610Init()
+	conf.sample_rate = 4096; // must be initialized to any valid value for YM2610Init()
 	strcpy(rompathConfItem.data.dt_str.str, ".");
 	if(!Config::envIsAndroid)
 	{
@@ -133,7 +133,6 @@ static bool hasNeoGeoExtension(std::string_view name)
 }
 
 EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter = hasNeoGeoExtension;
-EmuSystem::NameFilterFunc EmuSystem::defaultBenchmarkFsFilter = hasNeoGeoExtension;
 
 void NeoSystem::reset(EmuApp &, ResetMode mode)
 {
@@ -174,21 +173,32 @@ static auto memcardPath(EmuApp &app)
 
 void NeoSystem::loadBackupMemory(EmuApp &app)
 {
-	FileUtils::readFromUri(appContext(), nvramPath(app), {memory.sram, 0x10000});
-	FileUtils::readFromUri(appContext(), memcardPath(app), {memory.memcard, 0x800});
+	logMsg("loading nvram & memcard");
+	if(!nvramFileIO)
+		nvramFileIO = staticBackupMemoryFile(nvramPath(app), 0x10000);
+	if(!memcardFileIO)
+		memcardFileIO = staticBackupMemoryFile(memcardPath(app), 0x800);
+	if(!nvramFileIO || !memcardFileIO)
+		throw std::runtime_error("Error accessing .nv or .memcard file, please verify it has write access");
+	nvramFileIO.read(memory.sram, 0x10000, 0);
+	memcardFileIO.read(memory.memcard, 0x800, 0);
 }
 
 void NeoSystem::onFlushBackupMemory(EmuApp &app, BackupMemoryDirtyFlags flags)
 {
-	if(!hasContent())
-		return;
 	if(flags & SRAM_DIRTY_BIT)
-		FileUtils::writeToUri(appContext(), nvramPath(app), {memory.sram, 0x10000});
+	{
+		logMsg("saving nvram");
+		nvramFileIO.write(memory.sram, 0x10000, 0);
+	}
 	if(flags & MEMCARD_DIRTY_BIT)
-		FileUtils::writeToUri(appContext(), memcardPath(app), {memory.memcard, 0x800});
+	{
+		logMsg("saving memcard");
+		memcardFileIO.write(memory.memcard, 0x800, 0);
+	}
 }
 
-IG::Time NeoSystem::backupMemoryLastWriteTime(const EmuApp &app) const
+WallClockTimePoint NeoSystem::backupMemoryLastWriteTime(const EmuApp &app) const
 {
 	return appContext().fileUriLastWriteTime(app.contentSavePath("memcard").c_str());
 }
@@ -196,12 +206,14 @@ IG::Time NeoSystem::backupMemoryLastWriteTime(const EmuApp &app) const
 void NeoSystem::closeSystem()
 {
 	close_game();
+	nvramFileIO = {};
+	memcardFileIO = {};
 }
 
 static auto openGngeoDataIO(IG::ApplicationContext ctx, IG::CStringView filename)
 {
 	#ifdef __ANDROID__
-	return ctx.openAsset(filename, IO::AccessHint::ALL);
+	return ctx.openAsset(filename, IO::AccessHint::All);
 	#else
 	return FS::fileFromArchive(static_cast<NeoApp&>(ctx.application()).system().datafilePath, filename);
 	#endif
@@ -266,14 +278,14 @@ void NeoSystem::loadContent(IO &, EmuSystemCreateParams, OnLoadProgressDelegate 
 	}
 }
 
-void NeoSystem::configAudioRate(IG::FloatSeconds frameTime, int rate)
+void NeoSystem::configAudioRate(FloatSeconds outputFrameTime, int outputRate)
 {
-	conf.sample_rate = std::round(rate / staticFrameTime * frameTime.count());
-	if(hasContent())
-	{
-		logMsg("setting YM2610 rate to %d", conf.sample_rate);
-		YM2610ChangeSamplerate(conf.sample_rate);
-	}
+	Uint16 mixRate = std::round(audioMixRate(outputRate, outputFrameTime));
+	if(conf.sample_rate == mixRate)
+		return;
+	conf.sample_rate = mixRate;
+	logMsg("set sound mix rate:%d", (int)mixRate);
+	YM2610ChangeSamplerate(mixRate);
 }
 
 void NeoSystem::renderFramebuffer(EmuVideo &video)
@@ -313,9 +325,9 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 {
 	const Gfx::LGradientStopDesc navViewGrad[] =
 	{
-		{ .0, Gfx::VertexColorPixelFormat.build((255./255.) * .4, (215./255.) * .4, (0./255.) * .4, 1.) },
-		{ .3, Gfx::VertexColorPixelFormat.build((255./255.) * .4, (215./255.) * .4, (0./255.) * .4, 1.) },
-		{ .97, Gfx::VertexColorPixelFormat.build((85./255.) * .4, (71./255.) * .4, (0./255.) * .4, 1.) },
+		{ .0, Gfx::PackedColor::format.build((255./255.) * .4, (215./255.) * .4, (0./255.) * .4, 1.) },
+		{ .3, Gfx::PackedColor::format.build((255./255.) * .4, (215./255.) * .4, (0./255.) * .4, 1.) },
+		{ .97, Gfx::PackedColor::format.build((85./255.) * .4, (71./255.) * .4, (0./255.) * .4, 1.) },
 		{ 1., view.separatorColor() },
 	};
 	view.setBackgroundGradient(navViewGrad);

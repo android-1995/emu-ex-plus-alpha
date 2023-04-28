@@ -16,7 +16,6 @@
 #include <emuframework/SystemOptionView.hh>
 #include <emuframework/FilePathOptionView.hh>
 #include <emuframework/DataPathSelectView.hh>
-#include <emuframework/EmuMainMenuView.hh>
 #include "MainApp.hh"
 #include <imagine/fs/FS.hh>
 #include <imagine/util/format.hh>
@@ -36,13 +35,13 @@ class CustomSystemOptionView : public SystemOptionView
 		biosMenuEntryStr(biosPath), &defaultFace(),
 		[this](TextMenuItem &, View &, Input::Event e)
 		{
-			pushAndShow(makeViewWithName<DataFileSelectView>("BIOS",
+			pushAndShow(makeViewWithName<DataFileSelectView<>>("BIOS",
 				app().validSearchPath(FS::dirnameUri(biosPath)),
 				[this](CStringView path, FS::file_type type)
 				{
 					biosPath = path;
 					logMsg("set bios:%s", biosPath.data());
-					bios.compile(biosMenuEntryStr(path), renderer(), projP);
+					bios.compile(biosMenuEntryStr(path), renderer());
 					return true;
 				}, hasBIOSExtension), e);
 		}
@@ -50,7 +49,7 @@ class CustomSystemOptionView : public SystemOptionView
 
 	std::string biosMenuEntryStr(std::string_view path) const
 	{
-		return fmt::format("BIOS: {}", appContext().fileUriDisplayName(path));
+		return std::format("BIOS: {}", appContext().fileUriDisplayName(path));
 	}
 
 	StaticArrayList<TextMenuItem, MAX_SH2_CORES> sh2CoreItem;

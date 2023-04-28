@@ -186,7 +186,7 @@ void XApplication::addXInputDevice(XIDeviceInfo xDevInfo, bool notify, bool isPo
 	{
 		devPtr->setSubtype(Input::Device::Subtype::PANDORA_HANDHELD);
 	}
-	addInputDevice(std::move(devPtr), notify);
+	addInputDevice(ApplicationContext{static_cast<Application&>(*this)}, std::move(devPtr), notify);
 }
 
 static const char *xInputDeviceTypeToStr(int type)
@@ -226,7 +226,7 @@ void XApplication::initInputSystem()
 	}
 
 	// setup device list
-	vkbDevice = &addInputDevice(std::make_unique<XInputDevice>(Input::Device::TYPE_BIT_VIRTUAL | Input::Device::TYPE_BIT_KEYBOARD | Input::Device::TYPE_BIT_KEY_MISC, "Virtual"));
+	vkbDevice = &addInputDevice(ApplicationContext{static_cast<Application&>(*this)}, std::make_unique<XInputDevice>(Input::Device::TYPE_BIT_VIRTUAL | Input::Device::TYPE_BIT_KEYBOARD | Input::Device::TYPE_BIT_KEY_MISC, "Virtual"));
 	int devices;
 	::XIDeviceInfo *device = XIQueryDevice(dpy, XIAllDevices, &devices);
 	for(auto &d : std::span<::XIDeviceInfo>{device, (size_t)devices})
@@ -302,7 +302,7 @@ bool XApplication::handleXI2GenericEvent(XEvent event)
 			}
 			else if(info.flags & XISlaveRemoved)
 			{
-				removeInputDeviceIf([&](auto &devPtr){ return hasXInputDeviceId(*devPtr, info.deviceid); }, true);
+				removeInputDeviceIf(ApplicationContext{static_cast<Application&>(*this)}, [&](auto &devPtr){ return hasXInputDeviceId(*devPtr, info.deviceid); }, true);
 			}
 		}
 		return true;
@@ -315,9 +315,9 @@ bool XApplication::handleXI2GenericEvent(XEvent event)
 		return true;
 	}
 	auto &win = *destWin;
-	auto time = IG::Milliseconds(ievent.time); // X11 timestamps are in ms
+	auto time = SteadyClockTimePoint{Milliseconds{ievent.time}}; // X11 timestamps are in ms
 	auto updatePointer =
-		[this](Window &win, auto event, Input::Action action, Input::Time time)
+		[this](Window &win, auto event, Input::Action action, SteadyClockTimePoint time)
 		{
 			Input::Key key{};
 			bool sendKeyEvent{};
@@ -353,7 +353,7 @@ bool XApplication::handleXI2GenericEvent(XEvent event)
 			}
 		};
 	auto handleKeyEvent =
-		[this](Window &win, XIDeviceEvent event, Input::Time time, bool pushed)
+		[this](Window &win, XIDeviceEvent event, SteadyClockTimePoint time, bool pushed)
 		{
 			auto action = pushed ? Input::Action::PUSHED : Input::Action::RELEASED;
 			if(pushed)

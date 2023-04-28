@@ -62,6 +62,7 @@ public:
 	[[no_unique_address]] IG::SensorListener sensorListener;
 	Byte1Option optionRtcEmulation{CFGKEY_RTC_EMULATION, std::to_underlying(RtcMode::AUTO), 0, optionIsValidWithMax<2>};
 	Byte4Option optionSaveTypeOverride{CFGKEY_SAVE_TYPE_OVERRIDE, GBA_SAVE_AUTO, 0, optionSaveTypeOverrideIsValid};
+	FileIO saveFileIO;
 	int detectedSaveSize{};
 	int sensorX{}, sensorY{}, sensorZ{};
 	float lightSensorScaleLux{lightSensorScaleLuxDefault};
@@ -70,6 +71,7 @@ public:
 	bool detectedRtcGame{};
 	IG_UseMemberIf(Config::SENSORS, GbaSensorType, sensorType){};
 	IG_UseMemberIf(Config::SENSORS, GbaSensorType, detectedSensorType){};
+	static constexpr FloatSeconds staticFrameTime{280896. / 16777216.}; // ~59.7275Hz
 
 	GbaSystem(ApplicationContext ctx):
 		EmuSystem{ctx} {}
@@ -93,9 +95,10 @@ public:
 	void reset(EmuApp &, ResetMode mode);
 	void clearInputBuffers(EmuInputView &view);
 	void handleInputAction(EmuApp *, InputAction);
-	unsigned translateInputAction(unsigned input, bool &turbo);
-	VController::Map vControllerMap(int player);
-	void configAudioRate(FloatSeconds frameTime, int rate);
+	InputAction translateInputAction(InputAction);
+	SystemInputDeviceDesc inputDeviceDesc(int idx) const;
+	FloatSeconds frameTime() const { return staticFrameTime; }
+	void configAudioRate(FloatSeconds outputFrameTime, int outputRate);
 	static std::span<const AspectRatioInfo> aspectRatioInfos();
 
 	// optional API functions
@@ -104,7 +107,7 @@ public:
 	bool resetSessionOptions(EmuApp &);
 	void loadBackupMemory(EmuApp &);
 	void onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags);
-	IG::Time backupMemoryLastWriteTime(const EmuApp &) const;
+	WallClockTimePoint backupMemoryLastWriteTime(const EmuApp &) const;
 	void closeSystem();
 	bool onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat);
 	void renderFramebuffer(EmuVideo &);
@@ -121,7 +124,5 @@ using MainSystem = GbaSystem;
 
 void CPULoop(GBASys &, EmuEx::EmuSystemTaskContext, EmuEx::EmuVideo *, EmuEx::EmuAudio *);
 void CPUCleanUp();
-bool CPUReadBatteryFile(IG::ApplicationContext, GBASys &gba, const char *);
-bool CPUWriteBatteryFile(IG::ApplicationContext, GBASys &gba, const char *);
 bool CPUReadState(IG::ApplicationContext, GBASys &gba, const char *);
 bool CPUWriteState(IG::ApplicationContext, GBASys &gba, const char *);

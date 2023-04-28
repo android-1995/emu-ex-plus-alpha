@@ -83,7 +83,7 @@ void updateLegacySavePathOnStoragePath(ApplicationContext ctx, EmuSystem &sys)
 	}
 }
 
-bool hasWriteAccessToDir(IG::CStringView path)
+bool hasWriteAccessToDir(CStringView path)
 {
 	// on Android test file creation since
 	// access() can still claim emulated storage is writable
@@ -93,7 +93,7 @@ bool hasWriteAccessToDir(IG::CStringView path)
 		if(IG::isUri(path))
 			return true;
 		auto testFilePath = FS::pathString(path, ".safe-to-delete-me");
-		PosixIO testFile{testFilePath, OpenFlagsMask::NEW | OpenFlagsMask::TEST};
+		PosixIO testFile{testFilePath, OpenFlagsMask::New | OpenFlagsMask::Test};
 		auto removeTestFile = IG::scopeGuard([&]() { if(testFile) FS::remove(testFilePath); });
 		return (bool)testFile;
 	}

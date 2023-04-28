@@ -26,6 +26,7 @@
 #endif
 
 #include <imagine/base/baseDefs.hh>
+#include <imagine/util/Point2D.hh>
 
 namespace IG
 {
@@ -42,19 +43,13 @@ struct WindowConfig
 	NativeWindowFormat nativeFormat{};
 	Screen *screen_{};
 	const char *title{};
-	WindowSurfaceChangeDelegate onSurfaceChange{};
-	WindowDrawDelegate onDraw{};
-	WindowInputEventDelegate onInputEvent{};
-	WindowFocusChangeDelegate onFocusChange{};
-	WindowDragDropDelegate onDragDrop{};
-	WindowDismissRequestDelegate onDismissRequest{};
-	WindowDismissDelegate onDismiss{};
+	OnWindowEvent onEvent{delegateFuncDefaultInit};
 
 	void setDefaultPosition() { position = {-1, -1}; }
 	bool isDefaultPosition() const { return position == Point2D<int>{-1, -1}; }
 	void setDefaultSize() { size = {0, 0}; }
 	bool isDefaultSize() const { return !size.x || !size.y; }
-	void setFormat(IG::PixelFormat);
+	void setFormat(PixelFormat);
 	void setScreen(Screen &screen) { screen_ = &screen; }
 	Screen &screen(ApplicationContext) const;
 };

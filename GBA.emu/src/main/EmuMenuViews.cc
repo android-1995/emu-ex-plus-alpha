@@ -18,14 +18,14 @@
 #include <emuframework/AudioOptionView.hh>
 #include <emuframework/FilePathOptionView.hh>
 #include <emuframework/UserPathSelectView.hh>
-#include <emuframework/EmuSystemActionsView.hh>
+#include <emuframework/SystemActionsView.hh>
 #include "EmuCheatViews.hh"
 #include "MainApp.hh"
 #include <imagine/gui/AlertView.hh>
-#include <imagine/util/format.hh>
 #include <vbam/gba/GBA.h>
 #include <vbam/gba/RTC.h>
 #include <vbam/gba/Sound.h>
+#include <format>
 
 namespace EmuEx
 {
@@ -45,14 +45,16 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 	MultiChoiceMenuItem rtc
 	{
 		"RTC模拟", &defaultFace(),
-		[this](int idx, Gfx::Text &t)
 		{
-			if(idx == 0)
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
 			{
-				t.resetString(rtcIsEnabled() ? "开" : "关");
-				return true;
+				if(idx == 0)
+				{
+				    t.resetString(rtcIsEnabled() ? "On" : "Off");
+					return true;
+				}
+				return false;
 			}
-			return false;
 		},
 		system().optionRtcEmulation.val,
 		rtcItem
@@ -79,14 +81,16 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 	MultiChoiceMenuItem saveType
 	{
 		"存档类型", &defaultFace(),
-		[this](int idx, Gfx::Text &t)
 		{
-			if(idx == 0)
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
 			{
-				t.resetString(saveTypeStr(system().detectedSaveType, system().detectedSaveSize));
-				return true;
+				if(idx == 0)
+				{
+					t.resetString(saveTypeStr(system().detectedSaveType, system().detectedSaveSize));
+					return true;
+				}
+				return false;
 			}
-			return false;
 		},
 		(MenuItem::Id)system().optionSaveTypeOverride.val,
 		saveTypeItem
@@ -106,14 +110,14 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 			};
 			if(saveMemoryHasContent())
 			{
-				auto ynAlertView = std::make_unique<YesNoAlertView>(attachParams(),
-					"确定改变存档类型？.sav文件中的现有数据可能会丢失，因此请在继续之前进行备份");
-				ynAlertView->setOnYes(
-					[this, optVal = item.id()](const Input::Event &e)
+				pushAndShowModal(makeView<YesNoAlertView>("确定改变存档类型？.sav文件中的现有数据可能会丢失，因此请在继续之前进行备份",
+					YesNoAlertView::Delegates
 					{
-						setSaveTypeOption(app(), optVal, attachParams(), e);
-					});
-				pushAndShowModal(std::move(ynAlertView), e);
+						.onYes = [this, optVal = item.id()](const Input::Event &e)
+						{
+							setSaveTypeOption(app(), optVal, attachParams(), e);
+						}
+					}), e);
 				return false;
 			}
 			else
@@ -137,14 +141,16 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 	MultiChoiceMenuItem hardwareSensor
 	{
 		"硬件传感器", &defaultFace(),
-		[this](int idx, Gfx::Text &t)
 		{
-			if(idx == 0)
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
 			{
-				t.resetString(wise_enum::to_string(system().detectedSensorType));
-				return true;
+				if(idx == 0)
+				{
+					t.resetString(wise_enum::to_string(system().detectedSensorType));
+					return true;
+				}
+				return false;
 			}
-			return false;
 		},
 		(MenuItem::Id)system().sensorType,
 		hardwareSensorItem
@@ -176,7 +182,7 @@ public:
 	{}
 };
 
-class CustomSystemActionsView : public EmuSystemActionsView
+class CustomSystemActionsView : public SystemActionsView
 {
 	TextMenuItem options
 	{
@@ -191,7 +197,7 @@ class CustomSystemActionsView : public EmuSystemActionsView
 	};
 
 public:
-	CustomSystemActionsView(ViewAttachParams attach): EmuSystemActionsView{attach, true}
+	CustomSystemActionsView(ViewAttachParams attach): SystemActionsView{attach, true}
 	{
 		item.emplace_back(&options);
 		loadStandardItems();
@@ -225,7 +231,7 @@ class CustomAudioOptionView : public AudioOptionView, public MainAppHelper<Custo
 			},
 			TextMenuItem
 			{
-				"自定义值", &defaultFace(),
+				"自定义数值", &defaultFace(),
 				[this, gbVol](Input::Event e)
 				{
 					app().pushAndShowNewCollectValueRangeInputView<int, 0, 100>(attachParams(), e, "输入0到100", "",
@@ -254,10 +260,12 @@ class CustomAudioOptionView : public AudioOptionView, public MainAppHelper<Custo
 		return
 		{
 			gbVol ? "GB APU音量" : "PCM音量", &defaultFace(),
-			[this, gbVol](size_t idx, Gfx::Text &t)
 			{
-				t.resetString(fmt::format("{}%", soundVolumeAsInt(gGba, gbVol)));
-				return true;
+				.onSetDisplayString = [this, gbVol](auto idx, Gfx::Text &t)
+				{
+					t.resetString(std::format("{}%", soundVolumeAsInt(gGba, gbVol)));
+					return true;
+				}
 			},
 			(MenuItem::Id)soundVolumeAsInt(gGba, gbVol),
 			volumeLevelItem[gbVol ? 1 : 0]
@@ -303,7 +311,7 @@ class CustomAudioOptionView : public AudioOptionView, public MainAppHelper<Custo
 		},
 		TextMenuItem
 		{
-			"自定义值", &defaultFace(),
+			"自定义数值", &defaultFace(),
 			[this](Input::Event e)
 			{
 				app().pushAndShowNewCollectValueRangeInputView<int, 0, 100>(attachParams(), e, "输入0到100", "",
@@ -322,10 +330,12 @@ class CustomAudioOptionView : public AudioOptionView, public MainAppHelper<Custo
 	MultiChoiceMenuItem filteringLevel
 	{
 		"过滤级别", &defaultFace(),
-		[this](size_t idx, Gfx::Text &t)
 		{
-			t.resetString(fmt::format("{}%", soundFilteringAsInt(gGba)));
-			return true;
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
+			{
+				t.resetString(std::format("{}%", soundFilteringAsInt(gGba)));
+				return true;
+			}
 		},
 		(MenuItem::Id)soundFilteringAsInt(gGba),
 		filteringLevelItem
@@ -390,10 +400,12 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper<Cus
 	MultiChoiceMenuItem lightSensorScale
 	{
 		"光线传感器级别", &defaultFace(),
-		[this](int idx, Gfx::Text &t)
 		{
-			t.resetString(fmt::format("{} lux", (int)system().lightSensorScaleLux));
-			return true;
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
+			{
+				t.resetString(std::format("{} lux", (int)system().lightSensorScaleLux));
+				return true;
+			}
 		},
 		(MenuItem::Id)system().lightSensorScaleLux,
 		lightSensorScaleItem
@@ -429,7 +441,7 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 				{
 					logMsg("set cheats path:%s", path.data());
 					system().cheatsDir = path;
-					cheatsPath.compile(cheatsMenuName(appContext(), path), renderer(), projP);
+					cheatsPath.compile(cheatsMenuName(appContext(), path), renderer());
 				}), e);
 		}
 	};
@@ -444,7 +456,7 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 				{
 					logMsg("set patches path:%s", path.data());
 					system().patchesDir = path;
-					patchesPath.compile(patchesMenuName(appContext(), path), renderer(), projP);
+					patchesPath.compile(patchesMenuName(appContext(), path), renderer());
 				}), e);
 		}
 	};

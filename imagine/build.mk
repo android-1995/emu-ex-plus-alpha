@@ -28,12 +28,10 @@ include $(imagineSrcDir)/bluetooth/system.mk
 include $(imagineSrcDir)/gui/gui.mk
 include $(imagineSrcDir)/font/system.mk
 include $(imagineSrcDir)/data-type/image/system.mk
+include $(imagineSrcDir)/thread/system.mk
 include $(imagineSrcDir)/vmem/system.mk
 include $(imagineSrcDir)/logger/system.mk
 include $(buildSysPath)/package/stdc++.mk
-
-# fmtlib 9.1.0
-SRC += fmt/format.cc
 
 libName := imagine$(libNameExt)
 ifndef RELEASE
@@ -49,7 +47,7 @@ prefix ?= $(IMAGINE_SDK_PLATFORM_PATH)
 imaginePkgconfigTemplate := $(IMAGINE_PATH)/pkgconfig/imagine.pc
 pkgName := $(libName)
 pkgDescription := Game/Multimedia Engine
-pkgVersion := 1.5.67
+pkgVersion := 1.5.71
 LDLIBS := -l$(libName) $(LDLIBS)
 ifdef libNameExt
  pkgCFlags := -DIMAGINE_CONFIG_H=$(configFilename)

@@ -3,6 +3,7 @@
 #include <emuframework/EmuSystem.hh>
 #include <emuframework/Option.hh>
 #include "genplus-config.h"
+#include "system.h"
 
 extern t_config config;
 
@@ -48,6 +49,8 @@ public:
 	#ifndef NO_SCD
 	FS::PathString cdBiosUSAPath{}, cdBiosJpnPath{}, cdBiosEurPath{};
 	#endif
+	static constexpr FloatSeconds ntscFrameTime{262. * MCYCLES_PER_LINE / 53693175.}; // ~59.92Hz
+	static constexpr FloatSeconds palFrameTime{313. * MCYCLES_PER_LINE / 53203424.}; // ~49.70Hz
 
 	MdSystem(ApplicationContext ctx):
 		EmuSystem{ctx} {}
@@ -65,15 +68,16 @@ public:
 	void reset(EmuApp &, ResetMode mode);
 	void clearInputBuffers(EmuInputView &view);
 	void handleInputAction(EmuApp *, InputAction);
-	unsigned translateInputAction(unsigned input, bool &turbo);
-	VController::Map vControllerMap(int player);
-	void configAudioRate(FloatSeconds frameTime, int rate);
+	InputAction translateInputAction(InputAction);
+	SystemInputDeviceDesc inputDeviceDesc(int idx) const;
+	FloatSeconds frameTime() const { return videoSystem() == VideoSystem::PAL ? palFrameTime : ntscFrameTime; }
+	void configAudioRate(FloatSeconds outputFrameTime, int outputRate);
 	static std::span<const AspectRatioInfo> aspectRatioInfos();
 
 	// optional API functions
 	void loadBackupMemory(EmuApp &);
 	void onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags);
-	IG::Time backupMemoryLastWriteTime(const EmuApp &) const;
+	WallClockTimePoint backupMemoryLastWriteTime(const EmuApp &) const;
 	void closeSystem();
 	bool resetSessionOptions(EmuApp &);
 	bool onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat);

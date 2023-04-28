@@ -15,9 +15,10 @@
 
 #include <emuframework/EmuApp.hh>
 #include <emuframework/EmuInput.hh>
-#include <imagine/util/format.hh>
 #include "MainSystem.hh"
+#include "MainApp.hh"
 #include <vbam/gba/GBA.h>
+#include <format>
 
 namespace EmuEx
 {
@@ -48,14 +49,99 @@ enum
 	gbaKeyIdxLightDec,
 };
 
-const char *EmuSystem::inputFaceBtnName = "A/B/L/R";
-const char *EmuSystem::inputCenterBtnName = "Select/Start";
-const int EmuSystem::inputFaceBtns = 4;
-const int EmuSystem::inputCenterBtns = 2;
-int EmuSystem::inputLTriggerIndex = 2;
-int EmuSystem::inputRTriggerIndex = 3;
+constexpr std::array<unsigned, 4> dpadButtonCodes
+{
+	gbaKeyIdxUp,
+	gbaKeyIdxRight,
+	gbaKeyIdxDown,
+	gbaKeyIdxLeft,
+};
+
+constexpr unsigned centerButtonCodes[]
+{
+	gbaKeyIdxSelect,
+	gbaKeyIdxStart,
+};
+
+constexpr unsigned faceButtonCodes[]
+{
+	gbaKeyIdxB,
+	gbaKeyIdxA,
+};
+
+constexpr unsigned faceButtonLRCodes[]
+{
+	gbaKeyIdxB,
+	gbaKeyIdxL,
+	gbaKeyIdxA,
+	gbaKeyIdxR,
+};
+
+constexpr unsigned lButtonCode[]{gbaKeyIdxL};
+constexpr unsigned rButtonCode[]{gbaKeyIdxR};
+
+constexpr std::array gamepadComponents
+{
+	InputComponentDesc{"D-Pad", dpadButtonCodes, InputComponent::dPad, LB2DO},
+	InputComponentDesc{"Face Buttons", faceButtonCodes, InputComponent::button, RB2DO},
+	InputComponentDesc{"Face Buttons + Inline L/R", faceButtonLRCodes, InputComponent::button, RB2DO, InputComponentFlagsMask::altConfig},
+	InputComponentDesc{"L", lButtonCode, InputComponent::trigger, LB2DO},
+	InputComponentDesc{"R", rButtonCode, InputComponent::trigger, RB2DO},
+	InputComponentDesc{"Select", {&centerButtonCodes[0], 1}, InputComponent::button, LB2DO},
+	InputComponentDesc{"Start", {&centerButtonCodes[1], 1}, InputComponent::button, RB2DO},
+	InputComponentDesc{"Select/Start", centerButtonCodes, InputComponent::button, CB2DO, InputComponentFlagsMask::altConfig},
+};
+
+constexpr SystemInputDeviceDesc gamepadDesc{"Gamepad", gamepadComponents};
+
+constexpr FRect gpImageCoords(IRect cellRelBounds)
+{
+	constexpr FP imageSize{256, 256};
+	constexpr int cellSize = 32;
+	return (cellRelBounds.relToAbs() * cellSize).as<float>() / imageSize;
+}
+
+constexpr struct VirtualControllerAssets
+{
+	AssetDesc dpad{AssetFileID::gamepadOverlay, gpImageCoords({{}, {4, 4}})},
+
+	a{AssetFileID::gamepadOverlay,      gpImageCoords({{4, 0}, {2, 2}})},
+	b{AssetFileID::gamepadOverlay,      gpImageCoords({{6, 0}, {2, 2}})},
+	ab{AssetFileID::gamepadOverlay,     gpImageCoords({{4, 2}, {2, 2}})},
+	rb{AssetFileID::gamepadOverlay,     gpImageCoords({{2, 4}, {2, 2}})},
+	l{AssetFileID::gamepadOverlay,      gpImageCoords({{4, 4}, {2, 2}})},
+	r{AssetFileID::gamepadOverlay,      gpImageCoords({{6, 4}, {2, 2}})},
+	select{AssetFileID::gamepadOverlay, gpImageCoords({{0, 6}, {2, 1}}), {1, 2}},
+	start{AssetFileID::gamepadOverlay,  gpImageCoords({{0, 7}, {2, 1}}), {1, 2}},
+
+	increaseLight{AssetFileID::gamepadOverlay, gpImageCoords({{2, 6}, {2, 1}}), {1, 2}},
+	decreaseLight{AssetFileID::gamepadOverlay, gpImageCoords({{2, 7}, {2, 1}}), {1, 2}},
+
+	blank{AssetFileID::gamepadOverlay, gpImageCoords({{6, 2}, {2, 2}})};
+} virtualControllerAssets;
+
+AssetDesc GbaApp::vControllerAssetDesc(unsigned key) const
+{
+	switch(key)
+	{
+		case 0: return virtualControllerAssets.dpad;
+		case gbaKeyIdxATurbo:
+		case gbaKeyIdxA: return virtualControllerAssets.a;
+		case gbaKeyIdxBTurbo:
+		case gbaKeyIdxB: return virtualControllerAssets.b;
+		case gbaKeyIdxAB: return virtualControllerAssets.ab;
+		case gbaKeyIdxRB: return virtualControllerAssets.rb;
+		case gbaKeyIdxL: return virtualControllerAssets.l;
+		case gbaKeyIdxR: return virtualControllerAssets.r;
+		case gbaKeyIdxSelect: return virtualControllerAssets.select;
+		case gbaKeyIdxStart: return virtualControllerAssets.start;
+		case gbaKeyIdxLightInc: return virtualControllerAssets.increaseLight;
+		case gbaKeyIdxLightDec: return virtualControllerAssets.decreaseLight;
+		default: return virtualControllerAssets.blank;
+	}
+}
+
 const int EmuSystem::maxPlayers = 1;
-std::array<int, EmuSystem::MAX_FACE_BTNS> EmuSystem::vControllerImageMap{1, 0, 2, 3};
 constexpr int gbaKeypadBits = 10;
 constexpr unsigned gbaKeypadMask = 0x3FF;
 
@@ -76,28 +162,6 @@ enum ActionBits : unsigned
 constexpr unsigned lightIncKey = 1;
 constexpr unsigned lightDecKey = 2;
 
-VController::Map GbaSystem::vControllerMap(int player)
-{
-	VController::Map map{};
-	map[VController::F_ELEM] = B;
-	map[VController::F_ELEM+1] = A;
-	map[VController::F_ELEM+2] = L;
-	map[VController::F_ELEM+3] = R;
-
-	map[VController::C_ELEM] = SELECT;
-	map[VController::C_ELEM+1] = START;
-
-	map[VController::D_ELEM] = UP | LEFT;
-	map[VController::D_ELEM+1] = UP;
-	map[VController::D_ELEM+2] = UP | RIGHT;
-	map[VController::D_ELEM+3] = LEFT;
-	map[VController::D_ELEM+5] = RIGHT;
-	map[VController::D_ELEM+6] = DOWN | LEFT;
-	map[VController::D_ELEM+7] = DOWN;
-	map[VController::D_ELEM+8] = DOWN | RIGHT;
-	return map;
-}
-
 static bool isGamepadButton(unsigned input)
 {
 	switch(input)
@@ -115,34 +179,38 @@ static bool isGamepadButton(unsigned input)
 	}
 }
 
-unsigned GbaSystem::translateInputAction(unsigned input, bool &turbo)
+InputAction GbaSystem::translateInputAction(InputAction action)
 {
-	if(!isGamepadButton(input))
-		turbo = 0;
-	switch(input)
+	if(!isGamepadButton(action.key))
+		action.setTurboFlag(false);
+	action.key = [&] -> unsigned
 	{
-		case gbaKeyIdxUp: return UP;
-		case gbaKeyIdxRight: return RIGHT;
-		case gbaKeyIdxDown: return DOWN;
-		case gbaKeyIdxLeft: return LEFT;
-		case gbaKeyIdxLeftUp: return UP | LEFT;
-		case gbaKeyIdxRightUp: return UP | RIGHT;
-		case gbaKeyIdxRightDown: return DOWN | RIGHT;
-		case gbaKeyIdxLeftDown: return DOWN | LEFT;
-		case gbaKeyIdxSelect: return SELECT;
-		case gbaKeyIdxStart: return START;
-		case gbaKeyIdxATurbo: turbo = 1; [[fallthrough]];
-		case gbaKeyIdxA: return A;
-		case gbaKeyIdxBTurbo: turbo = 1; [[fallthrough]];
-		case gbaKeyIdxB: return B;
-		case gbaKeyIdxL: return L;
-		case gbaKeyIdxR: return R;
-		case gbaKeyIdxAB: return A | B;
-		case gbaKeyIdxRB: return R | B;
-		case gbaKeyIdxLightInc: return lightIncKey << gbaKeypadBits;
-		case gbaKeyIdxLightDec: return lightDecKey << gbaKeypadBits;
-	}
-	bug_unreachable("input == %d", input);
+		switch(action.key)
+		{
+			case gbaKeyIdxUp: return UP;
+			case gbaKeyIdxRight: return RIGHT;
+			case gbaKeyIdxDown: return DOWN;
+			case gbaKeyIdxLeft: return LEFT;
+			case gbaKeyIdxLeftUp: return UP | LEFT;
+			case gbaKeyIdxRightUp: return UP | RIGHT;
+			case gbaKeyIdxRightDown: return DOWN | RIGHT;
+			case gbaKeyIdxLeftDown: return DOWN | LEFT;
+			case gbaKeyIdxSelect: return SELECT;
+			case gbaKeyIdxStart: return START;
+			case gbaKeyIdxATurbo: action.setTurboFlag(true); [[fallthrough]];
+			case gbaKeyIdxA: return A;
+			case gbaKeyIdxBTurbo: action.setTurboFlag(true); [[fallthrough]];
+			case gbaKeyIdxB: return B;
+			case gbaKeyIdxL: return L;
+			case gbaKeyIdxR: return R;
+			case gbaKeyIdxAB: return A | B;
+			case gbaKeyIdxRB: return R | B;
+			case gbaKeyIdxLightInc: return lightIncKey << gbaKeypadBits;
+			case gbaKeyIdxLightDec: return lightDecKey << gbaKeypadBits;
+		}
+		bug_unreachable("invalid key");
+	}();
+	return action;
 }
 
 void GbaSystem::handleInputAction(EmuApp *app, InputAction a)
@@ -156,7 +224,7 @@ void GbaSystem::handleInputAction(EmuApp *app, InputAction a)
 			darknessLevel = std::clamp(darknessLevel + darknessChange, 0, 0xff);
 			if(app)
 			{
-				app->postMessage(1, false, fmt::format("Light sensor level: {}%", IG::remap(darknessLevel, 0xff, 0, 0, 100)));
+				app->postMessage(1, false, std::format("Light sensor level: {}%", remap(darknessLevel, 0xff, 0, 0, 100)));
 			}
 		}
 	}
@@ -170,6 +238,11 @@ void GbaSystem::clearInputBuffers(EmuInputView &)
 {
 	P1 = 0x03FF;
 	clearSensorValues();
+}
+
+SystemInputDeviceDesc GbaSystem::inputDeviceDesc(int idx) const
+{
+	return gamepadDesc;
 }
 
 }
