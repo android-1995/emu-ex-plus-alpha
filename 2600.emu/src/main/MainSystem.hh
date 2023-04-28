@@ -44,11 +44,14 @@ static constexpr int TV_PHOSPHOR_AUTO = 2;
 
 inline bool optionIsValidControllerType(uint8_t val)
 {
-	switch((Controller::Type)val)
+	switch(Controller::Type(val))
 	{
 		case Controller::Type::Unknown:
 		case Controller::Type::Joystick:
 		case Controller::Type::Genesis:
+		case Controller::Type::BoosterGrip:
+		case Controller::Type::Keyboard:
+		case Controller::Type::Paddles:
 			return true;
 		default:
 			return false;
@@ -57,12 +60,13 @@ inline bool optionIsValidControllerType(uint8_t val)
 
 const char *optionVideoSystemToStr(uint8_t sysIdx);
 Controller::Type limitToSupportedControllerTypes(Controller::Type type);
-const char *controllerTypeStr(Controller::Type type);
+const char *asString(Controller::Type type);
 
 class A2600System final: public EmuSystem
 {
 public:
 	OSystem osystem;
+	float configuredInputVideoFrameRate{};
 	Properties defaultGameProps{};
 	bool p1DiffB = true, p2DiffB = true, vcsColor = true;
 	Controller::Type autoDetectedInput1{};
@@ -104,9 +108,10 @@ public:
 	void reset(EmuApp &, ResetMode mode);
 	void clearInputBuffers(EmuInputView &view);
 	void handleInputAction(EmuApp *, InputAction);
-	unsigned translateInputAction(unsigned input, bool &turbo);
-	VController::Map vControllerMap(int player);
-	void configAudioRate(FloatSeconds frameTime, int rate);
+	InputAction translateInputAction(InputAction);
+	SystemInputDeviceDesc inputDeviceDesc(int idx) const;
+	FloatSeconds frameTime() const;
+	void configAudioRate(FloatSeconds outputFrameTime, int outputRate);
 	static std::span<const AspectRatioInfo> aspectRatioInfos();
 
 	// optional API functions

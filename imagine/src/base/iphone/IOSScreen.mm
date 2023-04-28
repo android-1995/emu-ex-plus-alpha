@@ -17,6 +17,7 @@ static_assert(__has_feature(objc_arc), "This file requires ARC");
 #include <imagine/base/Screen.hh>
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/input/Input.hh>
+#include <imagine/time/Time.hh>
 #include <imagine/logger/logger.h>
 #include "ios.hh"
 
@@ -46,10 +47,10 @@ static_assert(__has_feature(objc_arc), "This file requires ARC");
 - (void)onFrame:(CADisplayLink *)displayLink
 {
 	auto &screen = *screen_;
-	auto timestamp = IG::FloatSeconds(displayLink.timestamp);
+	auto timestamp = std::chrono::duration_cast<IG::SteadyClockTime>(IG::FloatSeconds(displayLink.timestamp));
 	//logMsg("screen:%p, frame time stamp:%f, duration:%f",
 	//	screen.uiScreen(), timestamp.count(), (double)screen.displayLink().duration);
-	if(!screen.frameUpdate(timestamp))
+	if(!screen.frameUpdate(IG::SteadyClockTimePoint{timestamp}))
 	{
 		//logMsg("stopping screen updates");
 		displayLink.paused = YES;
@@ -110,9 +111,13 @@ IOSScreen::IOSScreen(ApplicationContext, InitParams initParams)
 			frameTime = 1. / 60.;
 		}
 		frameTime_ = IG::FloatSeconds(frameTime);
+		frameRate_ = 1. / frameTime_.count();
 	}
 	else
+	{
 		frameTime_ = IG::FloatSeconds(1. / 60.);
+		frameRate_ = 60;
+	}
 }
 
 IOSScreen::~IOSScreen()
@@ -149,7 +154,7 @@ int Screen::height() const
 	return uiScreen().bounds.size.height;
 }
 
-double Screen::frameRate() const
+FrameRate Screen::frameRate() const
 {
 	return 1. / frameTime().count();
 }
@@ -174,18 +179,15 @@ void Screen::unpostFrameTimer()
 	displayLink().paused = YES;
 }
 
-void Screen::setFrameRate(double rate)
+void Screen::setFrameRate(FrameRate rate)
 {
 	// unsupported
 }
 
-std::vector<double> Screen::supportedFrameRates(ApplicationContext) const
+std::span<const FrameRate> Screen::supportedFrameRates() const
 {
 	// TODO
-	std::vector<double> rateVec;
-	rateVec.reserve(1);
-	rateVec.emplace_back(frameRate());
-	return rateVec;
+	return {&frameRate_, 1};
 }
 
 }

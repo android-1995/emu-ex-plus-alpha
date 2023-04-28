@@ -16,7 +16,6 @@
 #define LOGTAG "GLRenderer"
 #include <imagine/gfx/Renderer.hh>
 #include <imagine/gfx/RendererTask.hh>
-#include <imagine/gfx/Projection.hh>
 #include <imagine/gfx/Texture.hh>
 #include <imagine/gfx/PixmapBufferTexture.hh>
 #include <imagine/gfx/TextureSampler.hh>
@@ -40,7 +39,8 @@ Renderer::Renderer(ApplicationContext ctx):
 
 Renderer::~Renderer()
 {
-	for(auto &w : appContext().windows())
+	auto ctx = appContext();
+	for(auto &w : ctx.windows())
 	{
 		detachWindow(*w);
 	}
@@ -79,13 +79,11 @@ void Renderer::initMainTask(Window *initialWindow, DrawableConfig drawableConfig
 		}
 		initialDrawable = (Drawable)winData(*initialWindow).drawable;
 	}
-	constexpr int DRAW_THREAD_PRIORITY = -4;
 	GLTaskConfig conf
 	{
 		.glManagerPtr = &glManager,
 		.bufferConfig = *bufferConfig,
 		.initialDrawable = initialDrawable,
-		.threadPriority = DRAW_THREAD_PRIORITY,
 	};
 	if(!mainTask.makeGLContext(conf)) [[unlikely]]
 	{
@@ -287,17 +285,17 @@ bool Renderer::supportsSyncFences() const
 	return support.hasSyncFences();
 }
 
-void Renderer::setPresentationTime(Window &win, IG::FrameTime time) const
+void Renderer::setPresentationTime(Window &win, SteadyClockTimePoint time) const
 {
 	#ifdef __ANDROID__
 	if(!supportsPresentationTime())
 		return;
 	auto drawable = (Drawable)winData(win).drawable;
-	bool success = support.eglPresentationTimeANDROID(glDisplay(), drawable, time.count());
+	bool success = support.eglPresentationTimeANDROID(glDisplay(), drawable, time.time_since_epoch().count());
 	if(Config::DEBUG_BUILD && !success)
 	{
 		logErr("error:%s in eglPresentationTimeANDROID(%p, %llu)",
-			GLManager::errorString(eglGetError()), (EGLSurface)drawable, (unsigned long long)time.count());
+			GLManager::errorString(eglGetError()), (EGLSurface)drawable, (unsigned long long)time.time_since_epoch().count());
 	}
 	#endif
 }
@@ -480,7 +478,7 @@ BasicEffect &Renderer::basicEffect()
 
 void Renderer::animateWindowRotation(Window &win, float srcAngle, float destAngle)
 {
-	winData(win).projAngleM = {srcAngle, destAngle, {}, steadyClockTimestamp(), Milliseconds{165}};
+	winData(win).projAngleM = {srcAngle, destAngle, {}, SteadyClock::now(), Milliseconds{165}};
 	win.addOnFrame([this, &win](FrameParams params)
 	{
 		win.signalSurfaceChanged(WindowSurfaceChange::CONTENT_RECT_RESIZED);
@@ -489,9 +487,9 @@ void Renderer::animateWindowRotation(Window &win, float srcAngle, float destAngl
 	});
 }
 
-Projection Renderer::projection(const Window &win, Viewport viewport, Mat4 matrix) const
+float Renderer::projectionRollAngle(const Window &win) const
 {
-	return {viewport, matrix, winData(win).projAngleM};
+	return winData(win).projAngleM;
 }
 
 Texture Renderer::makeTexture(TextureConfig config)

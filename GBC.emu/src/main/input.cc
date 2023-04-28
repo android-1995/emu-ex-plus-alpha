@@ -16,6 +16,7 @@
 #include <emuframework/EmuApp.hh>
 #include <emuframework/EmuInput.hh>
 #include "MainSystem.hh"
+#include "MainApp.hh"
 
 namespace EmuEx
 {
@@ -38,34 +39,72 @@ enum
 	gbcKeyIdxBTurbo
 };
 
-const char *EmuSystem::inputFaceBtnName = "A/B";
-const char *EmuSystem::inputCenterBtnName = "Select/Start";
-const int EmuSystem::inputFaceBtns = 2;
-const int EmuSystem::inputCenterBtns = 2;
-const int EmuSystem::maxPlayers = 1;
-std::array<int, EmuSystem::MAX_FACE_BTNS> EmuSystem::vControllerImageMap{1, 0};
-GbcInput gbcInput{};
-
-VController::Map GbcSystem::vControllerMap(int player)
+constexpr std::array<unsigned, 4> dpadButtonCodes
 {
-	using namespace gambatte;
-	VController::Map map;
-	map[VController::F_ELEM] = InputGetter::B;
-	map[VController::F_ELEM+1] = InputGetter::A;
+	gbcKeyIdxUp,
+	gbcKeyIdxRight,
+	gbcKeyIdxDown,
+	gbcKeyIdxLeft,
+};
 
-	map[VController::C_ELEM] = InputGetter::SELECT;
-	map[VController::C_ELEM+1] = InputGetter::START;
+constexpr unsigned centerButtonCodes[]
+{
+	gbcKeyIdxSelect,
+	gbcKeyIdxStart,
+};
 
-	map[VController::D_ELEM] = InputGetter::UP | InputGetter::LEFT;
-	map[VController::D_ELEM+1] = InputGetter::UP;
-	map[VController::D_ELEM+2] = InputGetter::UP | InputGetter::RIGHT;
-	map[VController::D_ELEM+3] = InputGetter::LEFT;
-	map[VController::D_ELEM+5] = InputGetter::RIGHT;
-	map[VController::D_ELEM+6] = InputGetter::DOWN | InputGetter::LEFT;
-	map[VController::D_ELEM+7] = InputGetter::DOWN;
-	map[VController::D_ELEM+8] = InputGetter::DOWN | InputGetter::RIGHT;
-	return map;
+constexpr unsigned faceButtonCodes[]
+{
+	gbcKeyIdxB,
+	gbcKeyIdxA,
+};
+
+constexpr std::array gamepadComponents
+{
+	InputComponentDesc{"D-Pad", dpadButtonCodes, InputComponent::dPad, LB2DO},
+	InputComponentDesc{"Face Buttons", faceButtonCodes, InputComponent::button, RB2DO},
+	InputComponentDesc{"Select", {&centerButtonCodes[0], 1}, InputComponent::button, LB2DO},
+	InputComponentDesc{"Start", {&centerButtonCodes[1], 1}, InputComponent::button, RB2DO},
+	InputComponentDesc{"Select/Start", centerButtonCodes, InputComponent::button, CB2DO, InputComponentFlagsMask::altConfig},
+};
+
+constexpr SystemInputDeviceDesc gamepadDesc{"Gamepad", gamepadComponents};
+
+constexpr FRect gpImageCoords(IRect cellRelBounds)
+{
+	constexpr FP imageSize{256, 256};
+	constexpr int cellSize = 32;
+	return (cellRelBounds.relToAbs() * cellSize).as<float>() / imageSize;
 }
+
+constexpr struct VirtualControllerAssets
+{
+	AssetDesc dpad{AssetFileID::gamepadOverlay, gpImageCoords({{}, {4, 4}})},
+
+	a{AssetFileID::gamepadOverlay,      gpImageCoords({{4, 0}, {2, 2}})},
+	b{AssetFileID::gamepadOverlay,      gpImageCoords({{6, 0}, {2, 2}})},
+	select{AssetFileID::gamepadOverlay, gpImageCoords({{4, 2}, {2, 1}}), {1, 2}},
+	start{AssetFileID::gamepadOverlay,  gpImageCoords({{4, 3}, {2, 1}}), {1, 2}},
+
+	blank{AssetFileID::gamepadOverlay, gpImageCoords({{0, 4}, {2, 2}})};
+} virtualControllerAssets;
+
+AssetDesc GbcApp::vControllerAssetDesc(unsigned key) const
+{
+	switch(key)
+	{
+		case 0: return virtualControllerAssets.dpad;
+		case gbcKeyIdxATurbo:
+		case gbcKeyIdxA: return virtualControllerAssets.a;
+		case gbcKeyIdxBTurbo:
+		case gbcKeyIdxB: return virtualControllerAssets.b;
+		case gbcKeyIdxSelect: return virtualControllerAssets.select;
+		case gbcKeyIdxStart: return virtualControllerAssets.start;
+		default: return virtualControllerAssets.blank;
+	}
+}
+
+const int EmuSystem::maxPlayers = 1;
 
 static bool isGamepadButton(unsigned input)
 {
@@ -82,30 +121,33 @@ static bool isGamepadButton(unsigned input)
 	}
 }
 
-unsigned GbcSystem::translateInputAction(unsigned input, bool &turbo)
+InputAction GbcSystem::translateInputAction(InputAction action)
 {
 	using namespace gambatte;
-	if(!isGamepadButton(input))
-		turbo = 0;
-	switch(input)
+	if(!isGamepadButton(action.key))
+		action.setTurboFlag(false);
+	action.key = [&] -> unsigned
 	{
-		case gbcKeyIdxUp: return InputGetter::UP;
-		case gbcKeyIdxRight: return InputGetter::RIGHT;
-		case gbcKeyIdxDown: return InputGetter::DOWN;
-		case gbcKeyIdxLeft: return InputGetter::LEFT;
-		case gbcKeyIdxLeftUp: return InputGetter::LEFT | InputGetter::UP;
-		case gbcKeyIdxRightUp: return InputGetter::RIGHT | InputGetter::UP;
-		case gbcKeyIdxRightDown: return InputGetter::RIGHT | InputGetter::DOWN;
-		case gbcKeyIdxLeftDown: return InputGetter::LEFT | InputGetter::DOWN;
-		case gbcKeyIdxSelect: return InputGetter::SELECT;
-		case gbcKeyIdxStart: return InputGetter::START;
-		case gbcKeyIdxATurbo: turbo = 1; [[fallthrough]];
-		case gbcKeyIdxA: return InputGetter::A;
-		case gbcKeyIdxBTurbo: turbo = 1; [[fallthrough]];
-		case gbcKeyIdxB: return InputGetter::B;
-		default: bug_unreachable("input == %d", input);
-	}
-	return 0;
+		switch(action.key)
+		{
+			case gbcKeyIdxUp: return InputGetter::UP;
+			case gbcKeyIdxRight: return InputGetter::RIGHT;
+			case gbcKeyIdxDown: return InputGetter::DOWN;
+			case gbcKeyIdxLeft: return InputGetter::LEFT;
+			case gbcKeyIdxLeftUp: return InputGetter::LEFT | InputGetter::UP;
+			case gbcKeyIdxRightUp: return InputGetter::RIGHT | InputGetter::UP;
+			case gbcKeyIdxRightDown: return InputGetter::RIGHT | InputGetter::DOWN;
+			case gbcKeyIdxLeftDown: return InputGetter::LEFT | InputGetter::DOWN;
+			case gbcKeyIdxSelect: return InputGetter::SELECT;
+			case gbcKeyIdxStart: return InputGetter::START;
+			case gbcKeyIdxATurbo: action.setTurboFlag(true); [[fallthrough]];
+			case gbcKeyIdxA: return InputGetter::A;
+			case gbcKeyIdxBTurbo: action.setTurboFlag(true); [[fallthrough]];
+			case gbcKeyIdxB: return InputGetter::B;
+		}
+		bug_unreachable("invalid key");
+	}();
+	return action;
 }
 
 void GbcSystem::handleInputAction(EmuApp *, InputAction a)
@@ -116,6 +158,11 @@ void GbcSystem::handleInputAction(EmuApp *, InputAction a)
 void GbcSystem::clearInputBuffers(EmuInputView &)
 {
 	gbcInput.bits = 0;
+}
+
+SystemInputDeviceDesc GbcSystem::inputDeviceDesc(int idx) const
+{
+	return gamepadDesc;
 }
 
 }

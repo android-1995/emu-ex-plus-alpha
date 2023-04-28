@@ -83,7 +83,7 @@ void writeCheatFile(EmuSystem &sys_)
 		return;
 	}
 
-	auto file = ctx.openFileUri(path, OpenFlagsMask::NEW | OpenFlagsMask::TEST);
+	auto file = ctx.openFileUri(path, OpenFlagsMask::New | OpenFlagsMask::Test);
 	if(!file)
 	{
 		logMsg("error creating cheats file %s", path.data());
@@ -92,14 +92,14 @@ void writeCheatFile(EmuSystem &sys_)
 	logMsg("writing cheats file %s", path.data());
 
 	int version = 0;
-	file.write((uint8_t)version);
-	file.write((uint16_t)cheatList.size());
+	file.put(uint8_t(version));
+	file.put(int16_t(cheatList.size()));
 	for(auto &e : cheatList)
 	{
-		file.write((uint8_t)e.flags);
-		file.write((uint16_t)e.name.size());
+		file.put(uint8_t(e.flags));
+		file.put(uint16_t(e.name.size()));
 		file.write(e.name.data(), e.name.size());
-		file.write((uint8_t)e.code.size());
+		file.put(uint8_t(e.code.size()));
 		file.write(e.code.data(), e.code.size());
 	}
 }
@@ -108,7 +108,7 @@ void readCheatFile(EmuSystem &sys_)
 {
 	auto &sys = static_cast<GbcSystem&>(sys_);
 	auto path = sys.userFilePath(sys.cheatsDir, ".gbcht");
-	auto file = sys.appContext().openFileUri(path, IOAccessHint::ALL, OpenFlagsMask::TEST);
+	auto file = sys.appContext().openFileUri(path, IOAccessHint::All, OpenFlagsMask::Test);
 	if(!file)
 	{
 		return;
@@ -187,11 +187,11 @@ EmuEditCheatView::EmuEditCheatView(ViewAttachParams attach, GbcCheat &cheat_, Re
 						postDraw();
 						return false;
 					}
-					cheat->code = IG::stringToUpper<decltype(cheat->code)>(str);
+					cheat->code = IG::toUpperCase<decltype(cheat->code)>(str);
 					writeCheatFile(system());
 					static_cast<GbcSystem&>(app.system()).applyCheats();
 					ggCode.set2ndName(str);
-					ggCode.compile(renderer(), projP);
+					ggCode.compile(renderer());
 					postDraw();
 					return true;
 				});
@@ -251,7 +251,7 @@ EmuEditCheatListView::EmuEditCheatListView(ViewAttachParams attach):
 							return true;
 						}
 						GbcCheat c;
-						c.code = IG::stringToUpper<decltype(c.code)>(str);
+						c.code = IG::toUpperCase<decltype(c.code)>(str);
 						c.name = "Unnamed Cheat";
 						cheatList.push_back(c);
 						logMsg("added new cheat, %zu total", cheatList.size());

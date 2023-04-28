@@ -136,29 +136,25 @@ struct AppleGameDevice : public Device
 		extGamepad.leftThumbstick.xAxis.valueChangedHandler =
 			^(GCControllerAxisInput *, float value)
 			{
-				auto time = IG::steadyClockTimestamp();
-				if(axis[0].update(value, Map::APPLE_GAME_CONTROLLER, time, *this, ctx.mainWindow()))
+				if(axis[0].update(value, Map::APPLE_GAME_CONTROLLER, SteadyClock::now(), *this, ctx.mainWindow()))
 					ctx.endIdleByUserActivity();
 			};
 		extGamepad.leftThumbstick.yAxis.valueChangedHandler =
 			^(GCControllerAxisInput *, float value)
 			{
-				auto time = IG::steadyClockTimestamp();
-				if(axis[1].update(value, Map::APPLE_GAME_CONTROLLER, time, *this, ctx.mainWindow()))
+				if(axis[1].update(value, Map::APPLE_GAME_CONTROLLER, SteadyClock::now(), *this, ctx.mainWindow()))
 					ctx.endIdleByUserActivity();
 			};
 		extGamepad.rightThumbstick.xAxis.valueChangedHandler =
 			^(GCControllerAxisInput *, float value)
 			{
-				auto time = IG::steadyClockTimestamp();
-				if(axis[2].update(value, Map::APPLE_GAME_CONTROLLER, time, *this, ctx.mainWindow()))
+				if(axis[2].update(value, Map::APPLE_GAME_CONTROLLER, SteadyClock::now(), *this, ctx.mainWindow()))
 					ctx.endIdleByUserActivity();
 			};
 		extGamepad.rightThumbstick.yAxis.valueChangedHandler =
 			^(GCControllerAxisInput *, float value)
 			{
-				auto time = IG::steadyClockTimestamp();
-				if(axis[3].update(value, Map::APPLE_GAME_CONTROLLER, time, *this, ctx.mainWindow()))
+				if(axis[3].update(value, Map::APPLE_GAME_CONTROLLER, SteadyClock::now(), *this, ctx.mainWindow()))
 					ctx.endIdleByUserActivity();
 			};
 	}
@@ -168,7 +164,7 @@ struct AppleGameDevice : public Device
 		assert(key < AppleGC::COUNT);
 		if(pushState[key] == pressed)
 			return;
-		auto time = IG::steadyClockTimestamp();
+		auto time = SteadyClock::now();
 		pushState[key] = pressed;
 		ctx.endIdleByUserActivity();
 		KeyEvent event{Map::APPLE_GAME_CONTROLLER, key, sysKey, pressed ? Action::PUSHED : Action::RELEASED, 0, 0, Source::GAMEPAD, time, this};
@@ -224,12 +220,12 @@ static void addController(ApplicationContext ctx, GCController *controller, bool
 		return;
 	}
 	logMsg("adding controller: %p", controller);
-	ctx.application().addInputDevice(std::make_unique<AppleGameDevice>(ctx, controller), notify);
+	ctx.application().addInputDevice(ctx, std::make_unique<AppleGameDevice>(ctx, controller), notify);
 }
 
-static void removeController(Application &app, GCController *controller)
+static void removeController(ApplicationContext ctx, Application &app, GCController *controller)
 {
-	app.removeInputDeviceIf(
+	app.removeInputDeviceIf(ctx,
 		[&](auto &devPtr)
 		{
 			auto gameDevPtr = asAppleGameDevice(*devPtr);
@@ -259,7 +255,7 @@ void initAppleGameControllers(ApplicationContext ctx)
 		{
 			logMsg("game controller disconnected");
 			GCController *controller = note.object;
-			removeController(ctx.application(), controller);
+			removeController(ctx, ctx.application(), controller);
 		}];
 	for(GCController *controller in [GCController controllers])
 	{

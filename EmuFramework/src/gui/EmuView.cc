@@ -1,0 +1,159 @@
+/*  This file is part of EmuFramework.
+
+	Imagine is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	Imagine is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
+
+#include <emuframework/EmuView.hh>
+#include <emuframework/EmuVideoLayer.hh>
+#include <emuframework/EmuSystem.hh>
+#include <emuframework/OutputTimingManager.hh>
+#include <imagine/input/Input.hh>
+#include <algorithm>
+#include <format>
+
+namespace EmuEx
+{
+
+EmuView::EmuView() {}
+
+EmuView::EmuView(ViewAttachParams attach, EmuVideoLayer *layer, EmuSystem &sys):
+	View{attach},
+	layer{layer},
+	sysPtr{&sys},
+	frameTimeStats{&defaultFace()} {}
+
+void EmuView::prepareDraw()
+{
+	doIfUsed(frameTimeStats, [&](auto &stats){ stats.text.makeGlyphs(renderer()); });
+	#ifdef CONFIG_EMUFRAMEWORK_AUDIO_STATS
+	audioStatsText.makeGlyphs(renderer());
+	#endif
+}
+
+void EmuView::draw(Gfx::RendererCommands &__restrict__ cmds)
+{
+	using namespace IG::Gfx;
+	if(layer && system().isStarted())
+	{
+		layer->draw(cmds);
+	}
+	#ifdef CONFIG_EMUFRAMEWORK_AUDIO_STATS
+	if(audioStatsText.isVisible())
+	{
+		cmds.setCommonProgram(CommonProgram::NO_TEX);
+		cmds.setBlendMode(BLEND_MODE_ALPHA);
+		cmds.setColor(0., 0., 0., .7);
+		GeomRect::draw(cmds, audioStatsRect);
+		cmds.setCommonProgram(CommonProgram::TEX_ALPHA);
+		audioStatsText.draw(cmds, audioStatsRect.x + TableView::globalXIndent,
+			audioStatsRect.yCenter(), LC2DO, ColorName::WHITE);
+	}
+	#endif
+}
+
+void EmuView::drawframeTimeStatsText(Gfx::RendererCommands &__restrict__ cmds)
+{
+	doIfUsed(frameTimeStats, [&](auto &stats)
+	{
+		if(!stats.text.isVisible())
+			return;
+		using namespace IG::Gfx;
+		cmds.basicEffect().disableTexture(cmds);
+		cmds.set(BlendMode::ALPHA);
+		cmds.setColor({0., 0., 0., .7});
+		cmds.drawRect(stats.rect);
+		cmds.basicEffect().enableAlphaTexture(cmds);
+		stats.text.draw(cmds, stats.rect.pos(LC2DO) + IP{stats.text.spaceWidth(), 0}, LC2DO, ColorName::WHITE);
+	});
+}
+
+void EmuView::place()
+{
+	if(layer)
+	{
+		layer->place(viewRect(), displayRect(), inputView, system());
+	}
+	placeFrameTimeStats();
+	#ifdef CONFIG_EMUFRAMEWORK_AUDIO_STATS
+	if(audioStatsText.compile(renderer()))
+	{
+		audioStatsRect = viewRect.bounds();
+		audioStatsRect.y2 = (audioStatsRect.y + audioStatsText.nominalHeight * audioStatsText.lines)
+			+ audioStatsText.nominalHeight / 2; // adjust to bottom
+	}
+	#endif
+}
+
+void EmuView::placeFrameTimeStats()
+{
+	doIfUsed(frameTimeStats, [&](auto &stats)
+	{
+		if(stats.text.compile(renderer()))
+		{
+			stats.rect = {{},
+				{stats.text.pixelSize().x + stats.text.spaceWidth() * 2, stats.text.fullHeight()}};
+			stats.rect.setPos(viewRect().pos(LC2DO), LC2DO);
+		}
+	});
+}
+
+bool EmuView::inputEvent(const Input::Event &e)
+{
+	return false;
+}
+
+void EmuView::updateFrameTimeStats(FrameTimeStats stats, SteadyClockTimePoint currentFrameTimestamp)
+{
+	auto timestampDiff = std::chrono::duration_cast<Milliseconds>(currentFrameTimestamp - stats.startOfFrame);
+	auto callbackOverhead = std::chrono::duration_cast<Milliseconds>(stats.startOfEmulation - stats.startOfFrame);
+	auto emulationTime = std::chrono::duration_cast<Milliseconds>(stats.aboutToSubmitFrame - stats.startOfEmulation);
+	auto submitFrameTime = std::chrono::duration_cast<Milliseconds>(stats.aboutToPostDraw - stats.aboutToSubmitFrame);
+	auto postDrawTime = std::chrono::duration_cast<Milliseconds>(stats.startOfDraw - stats.aboutToPostDraw);
+	auto drawTime = std::chrono::duration_cast<Milliseconds>(stats.aboutToPresent - stats.startOfDraw);
+	auto presentTime = std::chrono::duration_cast<Milliseconds>(stats.endOfDraw - stats.aboutToPresent);
+	auto frameTime = std::chrono::duration_cast<Milliseconds>(stats.endOfDraw - stats.startOfFrame);
+	doIfUsed(frameTimeStats, [&](auto &statsUI)
+	{
+		statsUI.text.resetString(std::format("Frame Time Stats\n\n"
+			"Timestamp Diff: {}ms\n"
+			"Frame Callback: {}ms\n"
+			"Emulate: {}ms\n"
+			"Submit Frame: {}ms\n"
+			"Draw Callback: {}ms\n"
+			"Draw: {}ms\n"
+			"Present: {}ms\n"
+			"Total: {}ms\n"
+			"Missed Callbacks: {}",
+			timestampDiff.count(), callbackOverhead.count(), emulationTime.count(), submitFrameTime.count(), postDrawTime.count(),
+			drawTime.count(), presentTime.count(), frameTime.count(), stats.missedFrameCallbacks));
+		placeFrameTimeStats();
+	});
+}
+
+void EmuView::updateAudioStats(int underruns, int overruns, int callbacks, double avgCallbackFrames, int frames)
+{
+	#ifdef CONFIG_EMUFRAMEWORK_AUDIO_STATS
+	audioStatsText.setString(std::format("Underruns:{}\nOverruns:{}\nCallbacks per second:{}\nFrames per callback:{:g}\nTotal frames:{}",
+		underruns, overruns, callbacks, avgCallbackFrames, frames), &View::defaultFace);
+	place();
+	#endif
+}
+
+void EmuView::clearAudioStats()
+{
+	#ifdef CONFIG_EMUFRAMEWORK_AUDIO_STATS
+	audioStatsText.setString(nullptr);
+	#endif
+}
+
+}

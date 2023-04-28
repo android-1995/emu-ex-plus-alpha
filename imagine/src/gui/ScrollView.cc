@@ -158,15 +158,15 @@ void ScrollView::drawScrollContent(Gfx::RendererCommands &cmds)
 		if(scrollWholeArea_)
 		{
 			if(dragTracker.isDragging())
-				cmds.setColor(.8, .8, .8);
+				cmds.setColor({.8, .8, .8});
 			else
-				cmds.setColor(.5, .5, .5);
+				cmds.setColor({.5, .5, .5});
 		}
 		else
-			cmds.setColor(.5, .5, .5);
+			cmds.setColor({.5, .5, .5});
 		scrollBarRect.setYPos(
 			IG::remap((float)offset, 0.f, float(offsetMax), (float)viewRect().y, float(viewRect().y2 - scrollBarRect.ySize())));
-		GeomRect::draw(cmds, scrollBarRect, projP);
+		cmds.drawRect(scrollBarRect);
 	}
 }
 
@@ -190,7 +190,7 @@ bool ScrollView::scrollInputEvent(const Input::MotionEvent &e)
 		[&](Input::DragTrackerState, auto)
 		{
 			stopScrollAnimation();
-			velTracker = {std::chrono::duration_cast<VelocityTrackerType::TimeType>(e.time()), {(float)e.pos().y}};
+			velTracker = {e.time(), {(float)e.pos().y}};
 			scrollVel = 0;
 			onDragOffset = offset;
 			const auto viewFrame = viewRect();
@@ -206,7 +206,7 @@ bool ScrollView::scrollInputEvent(const Input::MotionEvent &e)
 		},
 		[&](Input::DragTrackerState state, Input::DragTrackerState, auto)
 		{
-			velTracker.update(std::chrono::duration_cast<VelocityTrackerType::TimeType>(e.time()), {(float)e.pos().y});
+			velTracker.update(e.time(), {(float)e.pos().y});
 			if(state.isDragging())
 			{
 				auto prevOffset = offset;

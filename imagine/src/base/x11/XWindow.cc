@@ -236,7 +236,7 @@ NativeWindow Window::nativeObject() const
 	return xWin;
 }
 
-void Window::setIntendedFrameRate(double rate)
+void Window::setIntendedFrameRate(FrameRate rate)
 {
 	screen()->setFrameRate(rate);
 }
@@ -316,5 +316,7 @@ void XWindow::toggleFullScreen()
 }
 
 void WindowConfig::setFormat(IG::PixelFormat) {}
+
+void Window::setSystemGestureExclusionRects(std::span<const WRect>) {}
 
 }

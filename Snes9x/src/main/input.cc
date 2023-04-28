@@ -5,7 +5,7 @@
 #include <imagine/util/math/math.hh>
 #include <imagine/base/Window.hh>
 #include "MainSystem.hh"
-#include <snes9x.h>
+#include "MainApp.hh"
 #include <memmap.h>
 #include <display.h>
 
@@ -38,14 +38,102 @@ enum
 	s9xKeyIdxRTurbo,
 };
 
-const char *EmuSystem::inputFaceBtnName = "A/B/X/Y/L/R";
-const char *EmuSystem::inputCenterBtnName = "Select/Start";
-const int EmuSystem::inputFaceBtns = 6;
-const int EmuSystem::inputCenterBtns = 2;
-int EmuSystem::inputLTriggerIndex = 5;
-int EmuSystem::inputRTriggerIndex = 2;
+constexpr std::array<unsigned, 4> dpadButtonCodes
+{
+	s9xKeyIdxUp,
+	s9xKeyIdxRight,
+	s9xKeyIdxDown,
+	s9xKeyIdxLeft,
+};
+
+constexpr unsigned centerButtonCodes[]
+{
+	s9xKeyIdxSelect,
+	s9xKeyIdxStart,
+};
+
+constexpr unsigned faceButtonCodes[]
+{
+	s9xKeyIdxB,
+	s9xKeyIdxA,
+	s9xKeyIdxY,
+	s9xKeyIdxX,
+};
+
+constexpr unsigned faceButtonLRCodes[]
+{
+	s9xKeyIdxB,
+	s9xKeyIdxA,
+	s9xKeyIdxR,
+	s9xKeyIdxY,
+	s9xKeyIdxX,
+	s9xKeyIdxL,
+};
+
+constexpr unsigned lButtonCode[]{s9xKeyIdxL};
+constexpr unsigned rButtonCode[]{s9xKeyIdxR};
+
+constexpr std::array gamepadComponents
+{
+	InputComponentDesc{"D-Pad", dpadButtonCodes, InputComponent::dPad, LB2DO},
+	InputComponentDesc{"Face Buttons", faceButtonCodes, InputComponent::button, RB2DO, InputComponentFlagsMask::staggeredLayout},
+	InputComponentDesc{"Face Buttons + Inline L/R", faceButtonLRCodes, InputComponent::button, RB2DO, InputComponentFlagsMask::altConfig | InputComponentFlagsMask::staggeredLayout},
+	InputComponentDesc{"L", lButtonCode, InputComponent::trigger, LB2DO},
+	InputComponentDesc{"R", rButtonCode, InputComponent::trigger, RB2DO},
+	InputComponentDesc{"Select", {&centerButtonCodes[0], 1}, InputComponent::button, LB2DO},
+	InputComponentDesc{"Start", {&centerButtonCodes[1], 1}, InputComponent::button, RB2DO},
+	InputComponentDesc{"Select/Start", centerButtonCodes, InputComponent::button, CB2DO, InputComponentFlagsMask::altConfig},
+};
+
+constexpr SystemInputDeviceDesc gamepadDesc{"Gamepad", gamepadComponents};
+
+constexpr FRect gpImageCoords(IRect cellRelBounds)
+{
+	constexpr FP imageSize{256, 256};
+	constexpr int cellSize = 32;
+	return (cellRelBounds.relToAbs() * cellSize).as<float>() / imageSize;
+}
+
+constexpr struct VirtualControllerAssets
+{
+	AssetDesc dpad{AssetFileID::gamepadOverlay, gpImageCoords({{}, {4, 4}})},
+
+	a{AssetFileID::gamepadOverlay,      gpImageCoords({{4, 0}, {2, 2}})},
+	b{AssetFileID::gamepadOverlay,      gpImageCoords({{6, 0}, {2, 2}})},
+	x{AssetFileID::gamepadOverlay,      gpImageCoords({{4, 2}, {2, 2}})},
+	y{AssetFileID::gamepadOverlay,      gpImageCoords({{6, 2}, {2, 2}})},
+	l{AssetFileID::gamepadOverlay,      gpImageCoords({{4, 4}, {2, 2}})},
+	r{AssetFileID::gamepadOverlay,      gpImageCoords({{6, 4}, {2, 2}})},
+	select{AssetFileID::gamepadOverlay, gpImageCoords({{0, 6}, {2, 1}}), {1, 2}},
+	start{AssetFileID::gamepadOverlay,  gpImageCoords({{0, 7}, {2, 1}}), {1, 2}},
+
+	blank{AssetFileID::gamepadOverlay, gpImageCoords({{0, 4}, {2, 2}})};
+} virtualControllerAssets;
+
+AssetDesc Snes9xApp::vControllerAssetDesc(unsigned key) const
+{
+	switch(key)
+	{
+		case 0: return virtualControllerAssets.dpad;
+		case s9xKeyIdxATurbo:
+		case s9xKeyIdxA: return virtualControllerAssets.a;
+		case s9xKeyIdxBTurbo:
+		case s9xKeyIdxB: return virtualControllerAssets.b;
+		case s9xKeyIdxXTurbo:
+		case s9xKeyIdxX: return virtualControllerAssets.x;
+		case s9xKeyIdxYTurbo:
+		case s9xKeyIdxY: return virtualControllerAssets.y;
+		case s9xKeyIdxLTurbo:
+		case s9xKeyIdxL: return virtualControllerAssets.l;
+		case s9xKeyIdxRTurbo:
+		case s9xKeyIdxR: return virtualControllerAssets.r;
+		case s9xKeyIdxSelect: return virtualControllerAssets.select;
+		case s9xKeyIdxStart: return virtualControllerAssets.start;
+		default: return virtualControllerAssets.blank;
+	}
+}
+
 const int EmuSystem::maxPlayers = 5;
-std::array<int, EmuSystem::MAX_FACE_BTNS> EmuSystem::vControllerImageMap{1, 0, 5, 3, 2, 4};
 
 // from controls.cpp
 #define SUPERSCOPE_FIRE			0x80
@@ -59,31 +147,6 @@ std::array<int, EmuSystem::MAX_FACE_BTNS> EmuSystem::vControllerImageMap{1, 0, 5
 #define JUSTIFIER_SELECT		0x08
 
 constexpr unsigned playerBitShift = 28; // player is encoded in 3 bits, last bit of input code is reserved
-
-VController::Map Snes9xSystem::vControllerMap(int player)
-{
-	unsigned playerMask = player << playerBitShift;
-	VController::Map map{};
-	map[VController::F_ELEM] = SNES_B_MASK | playerMask;
-	map[VController::F_ELEM+1] = SNES_A_MASK | playerMask;
-	map[VController::F_ELEM+2] = SNES_TR_MASK | playerMask;
-	map[VController::F_ELEM+3] = SNES_Y_MASK | playerMask;
-	map[VController::F_ELEM+4] = SNES_X_MASK | playerMask;
-	map[VController::F_ELEM+5] = SNES_TL_MASK | playerMask;
-
-	map[VController::C_ELEM] = SNES_SELECT_MASK | playerMask;
-	map[VController::C_ELEM+1] = SNES_START_MASK | playerMask;
-
-	map[VController::D_ELEM] = SNES_UP_MASK | SNES_LEFT_MASK | playerMask;
-	map[VController::D_ELEM+1] = SNES_UP_MASK | playerMask;
-	map[VController::D_ELEM+2] = SNES_UP_MASK | SNES_RIGHT_MASK | playerMask;
-	map[VController::D_ELEM+3] = SNES_LEFT_MASK | playerMask;
-	map[VController::D_ELEM+5] = SNES_RIGHT_MASK | playerMask;
-	map[VController::D_ELEM+6] = SNES_DOWN_MASK | SNES_LEFT_MASK | playerMask;
-	map[VController::D_ELEM+7] = SNES_DOWN_MASK | playerMask;
-	map[VController::D_ELEM+8] = SNES_DOWN_MASK | SNES_RIGHT_MASK | playerMask;
-	return map;
-}
 
 static bool isGamepadButton(unsigned input)
 {
@@ -108,40 +171,44 @@ static bool isGamepadButton(unsigned input)
 	}
 }
 
-unsigned Snes9xSystem::translateInputAction(unsigned input, bool &turbo)
+InputAction Snes9xSystem::translateInputAction(InputAction action)
 {
-	if(!isGamepadButton(input))
-		turbo = 0;
-	assert(input >= s9xKeyIdxUp);
-	unsigned player = (input - s9xKeyIdxUp) / Controls::gamepadKeys;
+	if(!isGamepadButton(action.key))
+		action.setTurboFlag(false);
+	assert(action.key >= s9xKeyIdxUp);
+	unsigned player = (action.key - s9xKeyIdxUp) / Controls::gamepadKeys;
 	unsigned playerMask = player << playerBitShift;
-	input -= Controls::gamepadKeys * player;
-	switch(input)
+	action.key -= Controls::gamepadKeys * player;
+	action.key = [&] -> unsigned
 	{
-		case s9xKeyIdxUp: return SNES_UP_MASK | playerMask;
-		case s9xKeyIdxRight: return SNES_RIGHT_MASK | playerMask;
-		case s9xKeyIdxDown: return SNES_DOWN_MASK | playerMask;
-		case s9xKeyIdxLeft: return SNES_LEFT_MASK | playerMask;
-		case s9xKeyIdxLeftUp: return SNES_LEFT_MASK | SNES_UP_MASK | playerMask;
-		case s9xKeyIdxRightUp: return SNES_RIGHT_MASK | SNES_UP_MASK | playerMask;
-		case s9xKeyIdxRightDown: return SNES_RIGHT_MASK | SNES_DOWN_MASK | playerMask;
-		case s9xKeyIdxLeftDown: return SNES_LEFT_MASK | SNES_DOWN_MASK | playerMask;
-		case s9xKeyIdxSelect: return SNES_SELECT_MASK | playerMask;
-		case s9xKeyIdxStart: return SNES_START_MASK | playerMask;
-		case s9xKeyIdxXTurbo: turbo = 1; [[fallthrough]];
-		case s9xKeyIdxX: return SNES_X_MASK | playerMask;
-		case s9xKeyIdxYTurbo: turbo = 1; [[fallthrough]];
-		case s9xKeyIdxY: return SNES_Y_MASK | playerMask;
-		case s9xKeyIdxATurbo: turbo = 1; [[fallthrough]];
-		case s9xKeyIdxA: return SNES_A_MASK | playerMask;
-		case s9xKeyIdxBTurbo: turbo = 1; [[fallthrough]];
-		case s9xKeyIdxB: return SNES_B_MASK | playerMask;
-		case s9xKeyIdxLTurbo: turbo = 1; [[fallthrough]];
-		case s9xKeyIdxL: return SNES_TL_MASK | playerMask;
-		case s9xKeyIdxRTurbo: turbo = 1; [[fallthrough]];
-		case s9xKeyIdxR: return SNES_TR_MASK | playerMask;
-		default: bug_unreachable("input == %d", input);
-	}
+		switch(action.key)
+		{
+			case s9xKeyIdxUp: return SNES_UP_MASK | playerMask;
+			case s9xKeyIdxRight: return SNES_RIGHT_MASK | playerMask;
+			case s9xKeyIdxDown: return SNES_DOWN_MASK | playerMask;
+			case s9xKeyIdxLeft: return SNES_LEFT_MASK | playerMask;
+			case s9xKeyIdxLeftUp: return SNES_LEFT_MASK | SNES_UP_MASK | playerMask;
+			case s9xKeyIdxRightUp: return SNES_RIGHT_MASK | SNES_UP_MASK | playerMask;
+			case s9xKeyIdxRightDown: return SNES_RIGHT_MASK | SNES_DOWN_MASK | playerMask;
+			case s9xKeyIdxLeftDown: return SNES_LEFT_MASK | SNES_DOWN_MASK | playerMask;
+			case s9xKeyIdxSelect: return SNES_SELECT_MASK | playerMask;
+			case s9xKeyIdxStart: return SNES_START_MASK | playerMask;
+			case s9xKeyIdxXTurbo: action.setTurboFlag(true); [[fallthrough]];
+			case s9xKeyIdxX: return SNES_X_MASK | playerMask;
+			case s9xKeyIdxYTurbo: action.setTurboFlag(true); [[fallthrough]];
+			case s9xKeyIdxY: return SNES_Y_MASK | playerMask;
+			case s9xKeyIdxATurbo: action.setTurboFlag(true); [[fallthrough]];
+			case s9xKeyIdxA: return SNES_A_MASK | playerMask;
+			case s9xKeyIdxBTurbo: action.setTurboFlag(true); [[fallthrough]];
+			case s9xKeyIdxB: return SNES_B_MASK | playerMask;
+			case s9xKeyIdxLTurbo: action.setTurboFlag(true); [[fallthrough]];
+			case s9xKeyIdxL: return SNES_TL_MASK | playerMask;
+			case s9xKeyIdxRTurbo: action.setTurboFlag(true); [[fallthrough]];
+			case s9xKeyIdxR: return SNES_TR_MASK | playerMask;
+		}
+		bug_unreachable("invalid key");
+	}();
+	return action;
 }
 
 #ifdef SNES9X_VERSION_1_4
@@ -505,6 +572,11 @@ bool Snes9xSystem::onPointerInputEnd(const Input::MotionEvent &e, Input::DragTra
 		}
 	}
 	return false;
+}
+
+SystemInputDeviceDesc Snes9xSystem::inputDeviceDesc(int idx) const
+{
+	return gamepadDesc;
 }
 
 }

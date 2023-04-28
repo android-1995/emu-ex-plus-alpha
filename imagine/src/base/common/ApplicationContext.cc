@@ -18,6 +18,7 @@
 #include <imagine/base/Application.hh>
 #include <imagine/base/VibrationManager.hh>
 #include <imagine/base/Sensor.hh>
+#include <imagine/base/PerformanceHintManager.hh>
 #include <imagine/input/Input.hh>
 #include <imagine/fs/FS.hh>
 #include <imagine/fs/FSUtils.hh>
@@ -30,6 +31,9 @@
 #include <imagine/io/IO.hh>
 #include <imagine/util/ScopeGuard.hh>
 #include <imagine/util/format.hh>
+#include <imagine/util/ranges.hh>
+#include <imagine/util/container/ArrayList.hh>
+#include <imagine/util/memory/UniqueFileStream.hh>
 #include <imagine/logger/logger.h>
 #include <cstring>
 
@@ -125,11 +129,6 @@ bool ApplicationContext::isExiting() const
 	return application().isExiting();
 }
 
-void ApplicationContext::setOnInterProcessMessage(InterProcessMessageDelegate del)
-{
-	application().setOnInterProcessMessage(del);
-}
-
 bool ApplicationContext::addOnResume(ResumeDelegate del, int priority)
 {
 	return application().addOnResume(del, priority);
@@ -143,11 +142,6 @@ bool ApplicationContext::removeOnResume(ResumeDelegate del)
 bool ApplicationContext::containsOnResume(ResumeDelegate del) const
 {
 	return application().containsOnResume(del);
-}
-
-void ApplicationContext::setOnFreeCaches(FreeCachesDelegate del)
-{
-	application().setOnFreeCaches(del);
 }
 
 bool ApplicationContext::addOnExit(ExitDelegate del, int priority)
@@ -165,29 +159,9 @@ bool ApplicationContext::containsOnExit(ExitDelegate del) const
 	return application().containsOnExit(del);
 }
 
-void ApplicationContext::dispatchOnInterProcessMessage(const char *filename)
-{
-	application().dispatchOnInterProcessMessage(*this, filename);
-}
-
-bool ApplicationContext::hasOnInterProcessMessage() const
-{
-	return application().hasOnInterProcessMessage();
-}
-
-void ApplicationContext::setOnScreenChange(ScreenChangeDelegate del)
-{
-	application().setOnScreenChange(del);
-}
-
 void ApplicationContext::dispatchOnResume(bool focused)
 {
 	application().dispatchOnResume(*this, focused);
-}
-
-void ApplicationContext::dispatchOnFreeCaches(bool running)
-{
-	application().dispatchOnFreeCaches(*this, running);
 }
 
 void ApplicationContext::dispatchOnExit(bool backgrounded)
@@ -204,7 +178,7 @@ FS::RootPathInfo ApplicationContext::rootPathInfo(std::string_view path) const
 {
 	if(path.empty())
 		return {};
-	if(IG::isUri(path))
+	if(isUri(path))
 	{
 		if(auto [treePath, treePos] = FS::uriPathSegment(path, FS::uriPathSegmentTreeName);
 			Config::envIsAndroid && treePos != std::string_view::npos)
@@ -251,7 +225,7 @@ FS::RootPathInfo ApplicationContext::rootPathInfo(std::string_view path) const
 	return nearestPtr->root.info;
 }
 
-AssetIO ApplicationContext::openAsset(IG::CStringView name, IOAccessHint hint, OpenFlagsMask openFlags, const char *appName) const
+AssetIO ApplicationContext::openAsset(CStringView name, IOAccessHint hint, OpenFlagsMask openFlags, const char *appName) const
 {
 	#ifdef __ANDROID__
 	return {*this, name, hint, openFlags};
@@ -260,7 +234,7 @@ AssetIO ApplicationContext::openAsset(IG::CStringView name, IOAccessHint hint, O
 	#endif
 }
 
-FS::AssetDirectoryIterator ApplicationContext::openAssetDirectory(IG::CStringView path, const char *appName)
+FS::AssetDirectoryIterator ApplicationContext::openAssetDirectory(CStringView path, const char *appName)
 {
 	#ifdef __ANDROID__
 	return {aAssetManager(), path};
@@ -286,7 +260,7 @@ FS::AssetDirectoryIterator ApplicationContext::openAssetDirectory(IG::CStringVie
 
 FileIO ApplicationContext::openFileUri(CStringView uri, OpenFlagsMask openFlags) const
 {
-	return openFileUri(uri, IOAccessHint::NORMAL, openFlags);
+	return openFileUri(uri, IOAccessHint::Normal, openFlags);
 }
 
 [[gnu::weak]] UniqueFileDescriptor ApplicationContext::openFileUriFd(CStringView uri, OpenFlagsMask openFlags) const
@@ -294,7 +268,7 @@ FileIO ApplicationContext::openFileUri(CStringView uri, OpenFlagsMask openFlags)
 	return PosixIO{uri, openFlags}.releaseFd();
 }
 
-[[gnu::weak]] bool ApplicationContext::fileUriExists(IG::CStringView uri) const
+[[gnu::weak]] bool ApplicationContext::fileUriExists(CStringView uri) const
 {
 	return FS::exists(uri);
 }
@@ -304,32 +278,32 @@ FileIO ApplicationContext::openFileUri(CStringView uri, OpenFlagsMask openFlags)
 	return FS::status(uri).lastWriteTime();
 }
 
-[[gnu::weak]] std::string ApplicationContext::fileUriFormatLastWriteTimeLocal(IG::CStringView uri) const
+[[gnu::weak]] std::string ApplicationContext::fileUriFormatLastWriteTimeLocal(CStringView uri) const
 {
 	return FS::formatLastWriteTimeLocal(*this, uri);
 }
 
-[[gnu::weak]] FS::FileString ApplicationContext::fileUriDisplayName(IG::CStringView uri) const
+[[gnu::weak]] FS::FileString ApplicationContext::fileUriDisplayName(CStringView uri) const
 {
 	return FS::displayName(uri);
 }
 
-[[gnu::weak]] bool ApplicationContext::removeFileUri(IG::CStringView uri) const
+[[gnu::weak]] bool ApplicationContext::removeFileUri(CStringView uri) const
 {
 	return FS::remove(uri);
 }
 
-[[gnu::weak]] bool ApplicationContext::renameFileUri(IG::CStringView oldUri, IG::CStringView newUri) const
+[[gnu::weak]] bool ApplicationContext::renameFileUri(CStringView oldUri, CStringView newUri) const
 {
 	return FS::rename(oldUri, newUri);
 }
 
-[[gnu::weak]] bool ApplicationContext::createDirectoryUri(IG::CStringView uri) const
+[[gnu::weak]] bool ApplicationContext::createDirectoryUri(CStringView uri) const
 {
 	return FS::create_directory(uri);
 }
 
-[[gnu::weak]] bool ApplicationContext::removeDirectoryUri(IG::CStringView uri) const
+[[gnu::weak]] bool ApplicationContext::removeDirectoryUri(CStringView uri) const
 {
 	return FS::remove(uri);
 }
@@ -373,16 +347,6 @@ void ApplicationContext::setSwappedConfirmKeys(std::optional<bool> opt)
 	application().setSwappedConfirmKeys(opt);
 }
 
-void ApplicationContext::setOnInputDeviceChange(InputDeviceChangeDelegate del)
-{
-	application().setOnInputDeviceChange(del);
-}
-
-void ApplicationContext::setOnInputDevicesEnumerated(InputDevicesEnumeratedDelegate del)
-{
-	application().setOnInputDevicesEnumerated(del);
-}
-
 [[gnu::weak]] void ApplicationContext::setSysUIStyle(uint32_t flags) {}
 
 [[gnu::weak]] bool ApplicationContext::hasTranslucentSysUI() const { return false; }
@@ -411,29 +375,83 @@ void ApplicationContext::setOnInputDevicesEnumerated(InputDevicesEnumeratedDeleg
 
 [[gnu::weak]] bool ApplicationContext::requestPermission(Permission) { return false; }
 
-[[gnu::weak]] void ApplicationContext::addNotification(IG::CStringView onShow, IG::CStringView title, IG::CStringView message) {}
+[[gnu::weak]] void ApplicationContext::addNotification(CStringView onShow, CStringView title, CStringView message) {}
 
-[[gnu::weak]] void ApplicationContext::addLauncherIcon(IG::CStringView name, IG::CStringView path) {}
+[[gnu::weak]] void ApplicationContext::addLauncherIcon(CStringView name, CStringView path) {}
 
 [[gnu::weak]] bool VibrationManager::hasVibrator() const { return false; }
 
-[[gnu::weak]] void VibrationManager::vibrate(IG::Milliseconds) {}
+[[gnu::weak]] void VibrationManager::vibrate(Milliseconds) {}
 
 [[gnu::weak]] NativeDisplayConnection ApplicationContext::nativeDisplayConnection() const { return {}; }
 
-[[gnu::weak]] bool ApplicationContext::packageIsInstalled(IG::CStringView name) const { return false; }
+[[gnu::weak]] int ApplicationContext::cpuCount() const
+{
+	#ifdef __linux__
+	return std::min(sysconf(_SC_NPROCESSORS_CONF), long(maxCPUs));
+	#else
+	return 1;
+	#endif
+}
+
+[[gnu::weak]] int ApplicationContext::maxCPUFrequencyKHz(int cpuIdx) const
+{
+	#ifdef __linux__
+	auto maxFreqFile = UniqueFileStream{fopen(std::format("/sys/devices/system/cpu/cpu{}/cpufreq/cpuinfo_max_freq", cpuIdx).c_str(), "r")};
+	if(!maxFreqFile)
+		return 0;
+	int freq{};
+	auto items = fscanf(maxFreqFile.get(), "%d", &freq);
+	return freq;
+	#else
+	return 0;
+	#endif
+}
+
+[[gnu::weak]] CPUMask ApplicationContext::performanceCPUMask() const
+{
+	auto cpus = cpuCount();
+	if(cpus <= 2) // use all cores when count is small
+		return 0;
+	struct CPUFreqInfo{int freq, cpuIdx;};
+	StaticArrayList<CPUFreqInfo, maxCPUs> cpuFreqInfos;
+	for(int i : iotaCount(cpus))
+	{
+		auto freq = maxCPUFrequencyKHz(i);
+		if(freq > 0)
+			cpuFreqInfos.emplace_back(CPUFreqInfo{freq, i});
+	}
+	auto [min, max] = std::ranges::minmax_element(cpuFreqInfos, {}, &CPUFreqInfo::freq);
+	if(min->freq == max->freq) // not heterogeneous
+		return 0;
+	logDMsg("Detected heterogeneous CPUs with min:%d max:%d frequencies", min->freq, max->freq);
+	CPUMask mask{};
+	for(auto info : cpuFreqInfos)
+	{
+		if(info.freq != min->freq)
+			mask |= bit(info.cpuIdx);
+	}
+	return mask;
+}
+
+[[gnu::weak]] PerformanceHintManager ApplicationContext::performanceHintManager() { return {}; }
+
+[[gnu::weak]] bool ApplicationContext::packageIsInstalled(CStringView name) const { return false; }
 
 [[gnu::weak]] int32_t ApplicationContext::androidSDK() const
 {
 	bug_unreachable("Invalid platform-specific function");
 }
 
-[[gnu::weak]] std::string ApplicationContext::formatDateAndTime(WallClockTime time)
+[[gnu::weak]] bool ApplicationContext::hasSustainedPerformanceMode() const { return false; }
+[[gnu::weak]] void ApplicationContext::setSustainedPerformanceMode(bool on) {}
+
+[[gnu::weak]] std::string ApplicationContext::formatDateAndTime(WallClockTimePoint time)
 {
-	if(!time.count())
+	if(!hasTime(time))
 		return {};
 	std::tm localTime;
-	time_t secs = std::chrono::duration_cast<Seconds>(time).count();
+	time_t secs = std::chrono::duration_cast<Seconds>(time.time_since_epoch()).count();
 	if(!localtime_r(&secs, &localTime)) [[unlikely]]
 	{
 		logErr("localtime_r failed");
@@ -447,7 +465,7 @@ void ApplicationContext::setOnInputDevicesEnumerated(InputDevicesEnumeratedDeleg
 	return str;
 }
 
-std::string ApplicationContext::formatDateAndTimeAsFilename(WallClockTime time)
+std::string ApplicationContext::formatDateAndTimeAsFilename(WallClockTimePoint time)
 {
 	auto filename = formatDateAndTime(time);
 	std::ranges::replace(filename, '/', '-');
@@ -456,6 +474,12 @@ std::string ApplicationContext::formatDateAndTimeAsFilename(WallClockTime time)
 }
 
 [[gnu::weak]] SensorListener::SensorListener(ApplicationContext, SensorType, SensorChangedDelegate) {}
+
+[[gnu::weak]] void PerformanceHintSession::updateTargetWorkTime(Nanoseconds) {}
+[[gnu::weak]] void PerformanceHintSession::reportActualWorkTime(Nanoseconds) {}
+[[gnu::weak]] PerformanceHintSession::operator bool() const { return false; }
+[[gnu::weak]] PerformanceHintSession PerformanceHintManager::session(std::span<const ThreadId>, Nanoseconds) { return {}; }
+[[gnu::weak]] PerformanceHintManager::operator bool() const { return false; }
 
 OnExit::OnExit(ResumeDelegate del, ApplicationContext ctx, int priority): del{del}, ctx{ctx}
 {
@@ -497,20 +521,20 @@ ApplicationContext OnExit::appContext() const
 namespace IG::FileUtils
 {
 
-ssize_t writeToUri(ApplicationContext ctx, IG::CStringView uri, std::span<const unsigned char> src)
+ssize_t writeToUri(ApplicationContext ctx, CStringView uri, std::span<const unsigned char> src)
 {
-	auto f = ctx.openFileUri(uri, OpenFlagsMask::NEW | OpenFlagsMask::TEST);
-	return f.write(src.data(), src.size());
+	auto f = ctx.openFileUri(uri, OpenFlagsMask::New | OpenFlagsMask::Test);
+	return f.write(src).bytes;
 }
 
-ssize_t readFromUri(ApplicationContext ctx, IG::CStringView uri, std::span<unsigned char> dest,
+ssize_t readFromUri(ApplicationContext ctx, CStringView uri, std::span<unsigned char> dest,
 	IOAccessHint accessHint)
 {
-	auto f = ctx.openFileUri(uri, accessHint, OpenFlagsMask::TEST);
-	return f.read(dest.data(), dest.size());
+	auto f = ctx.openFileUri(uri, accessHint, OpenFlagsMask::Test);
+	return f.read(dest).bytes;
 }
 
-std::pair<ssize_t, FS::PathString> readFromUriWithArchiveScan(ApplicationContext ctx, IG::CStringView uri,
+std::pair<ssize_t, FS::PathString> readFromUriWithArchiveScan(ApplicationContext ctx, CStringView uri,
 	std::span<unsigned char> dest, bool(*nameMatchFunc)(std::string_view), IOAccessHint accessHint)
 {
 	auto io = ctx.openFileUri(uri, accessHint);
@@ -525,8 +549,7 @@ std::pair<ssize_t, FS::PathString> readFromUriWithArchiveScan(ApplicationContext
 			auto name = entry.name();
 			if(nameMatchFunc(name))
 			{
-				auto io = entry.moveIO();
-				return {io.read(dest.data(), dest.size()), FS::PathString{name}};
+				return {entry.releaseIO().read(dest).bytes, FS::PathString{name}};
 			}
 		}
 		logErr("no recognized files in archive:%s", uri.data());
@@ -534,7 +557,7 @@ std::pair<ssize_t, FS::PathString> readFromUriWithArchiveScan(ApplicationContext
 	}
 	else
 	{
-		return {io.read(dest.data(), dest.size()), FS::PathString{uri}};
+		return {io.read(dest).bytes, FS::PathString{uri}};
 	}
 }
 
@@ -542,30 +565,30 @@ IOBuffer bufferFromUri(ApplicationContext ctx, CStringView uri, OpenFlagsMask op
 {
 	if(!sizeLimit) [[unlikely]]
 		return {};
-	auto file = ctx.openFileUri(uri, IOAccessHint::ALL, openFlags);
+	auto file = ctx.openFileUri(uri, IOAccessHint::All, openFlags);
 	if(!file)
 		return {};
 	else if(file.size() > sizeLimit)
 	{
-		if(to_underlying(openFlags & OpenFlagsMask::TEST))
+		if(to_underlying(openFlags & OpenFlagsMask::Test))
 			return {};
 		else
-			throw std::runtime_error(fmt::format("{} exceeds {} byte limit", uri.data(), sizeLimit));
+			throw std::runtime_error(std::format("{} exceeds {} byte limit", uri, sizeLimit));
 	}
-	return file.buffer(IOBufferMode::RELEASE);
+	return file.buffer(IOBufferMode::Release);
 }
 
 IOBuffer rwBufferFromUri(ApplicationContext ctx, CStringView uri, OpenFlagsMask extraOFlags, size_t size, uint8_t initValue)
 {
 	if(!size) [[unlikely]]
 		return {};
-	auto file = ctx.openFileUri(uri, IOAccessHint::RANDOM, OpenFlagsMask::CREATE_RW | extraOFlags);
+	auto file = ctx.openFileUri(uri, IOAccessHint::Random, OpenFlagsMask::CreateRW | extraOFlags);
 	if(!file) [[unlikely]]
 		return {};
 	auto fileSize = file.size();
 	if(fileSize != size)
 		file.truncate(size);
-	auto buff = file.buffer(IOBufferMode::RELEASE);
+	auto buff = file.buffer(IOBufferMode::Release);
 	if(initValue && fileSize < size)
 	{
 		std::fill(&buff[fileSize], &buff[size], initValue);
@@ -573,12 +596,19 @@ IOBuffer rwBufferFromUri(ApplicationContext ctx, CStringView uri, OpenFlagsMask 
 	return buff;
 }
 
-FILE *fopenUri(ApplicationContext ctx, IG::CStringView path, IG::CStringView mode)
+FILE *fopenUri(ApplicationContext ctx, CStringView path, CStringView mode)
 {
-	if(IG::isUri(path))
+	if(isUri(path))
 	{
-		auto openFlags = mode.contains('w') ? OpenFlagsMask::NEW : OpenFlagsMask{};
-		return ctx.openFileUri(path, openFlags | OpenFlagsMask::TEST).toFileStream(mode);
+		assert(!mode.contains('a')); //append mode not supported
+		OpenFlagsMask openFlags{OpenFlagsMask::Test};
+		if(mode.contains('r'))
+			openFlags |= OpenFlagsMask::Read;
+		if(mode.contains('w'))
+			openFlags |= OpenFlagsMask::New;
+		if(mode.contains('+'))
+			openFlags |= OpenFlagsMask::Write;
+		return ctx.openFileUri(path, openFlags).toFileStream(mode);
 	}
 	else
 	{

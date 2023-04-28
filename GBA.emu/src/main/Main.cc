@@ -35,16 +35,14 @@ namespace EmuEx
 const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2012-2022\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nVBA-m Team\nvba-m.com";
 bool EmuSystem::hasBundledGames = true;
 bool EmuSystem::hasCheats = true;
-double EmuSystem::staticFrameTime = 280896. / 16777216.; // ~59.7275Hz
 bool EmuApp::needsGlobalInstance = true;
 constexpr IG::WP lcdSize{240, 160};
 
 EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter =
 	[](std::string_view name)
 	{
-		return IG::stringEndsWithAny(name, ".gba", ".GBA");
+		return IG::endsWithAnyCaseless(name, ".gba");
 	};
-EmuSystem::NameFilterFunc EmuSystem::defaultBenchmarkFsFilter = defaultFsFilter;
 
 const BundledGameInfo &EmuSystem::bundledGameInfo(int idx) const
 {
@@ -91,27 +89,37 @@ void GbaSystem::loadState(EmuApp &app, IG::CStringView path)
 
 void GbaSystem::loadBackupMemory(EmuApp &app)
 {
-	CPUReadBatteryFile(appContext(), gGba, app.contentSaveFilePath(".sav").c_str());
+	if(coreOptions.saveType == GBA_SAVE_NONE)
+		return;
+	if(!saveFileIO)
+		saveFileIO = staticBackupMemoryFile(app.contentSaveFilePath(".sav"), saveMemorySize(), 0xFF);
+	if(!saveFileIO)
+		throw std::runtime_error("Error accessing .sav file, please verify it has write access");
+	auto buff = saveFileIO.buffer(IOBufferMode::Release);
+	if(buff.isMappedFile())
+		saveFileIO = {};
+	saveMemoryIsMappedFile = buff.isMappedFile();
+	setSaveMemory(std::move(buff));
 }
 
 void GbaSystem::onFlushBackupMemory(EmuApp &app, BackupMemoryDirtyFlags)
 {
-	if(!hasContent() || saveType == GBA_SAVE_NONE)
+	if(coreOptions.saveType == GBA_SAVE_NONE)
 		return;
+	const ByteBuffer &saveData = eepromInUse ? eepromData : flashSaveMemory;
 	if(saveMemoryIsMappedFile)
 	{
 		logMsg("flushing backup memory");
-		ByteBuffer &saveData = eepromInUse ? eepromData : flashSaveMemory;
 		msync(saveData.data(), saveData.size(), MS_SYNC);
 	}
 	else
 	{
 		logMsg("saving backup memory");
-		CPUWriteBatteryFile(appContext(), gGba, app.contentSaveFilePath(".sav").c_str());
+		saveFileIO.write(saveData.span(), 0);
 	}
 }
 
-IG::Time GbaSystem::backupMemoryLastWriteTime(const EmuApp &app) const
+WallClockTimePoint GbaSystem::backupMemoryLastWriteTime(const EmuApp &app) const
 {
 	return appContext().fileUriLastWriteTime(app.contentSaveFilePath(".sav").c_str());
 }
@@ -120,6 +128,8 @@ void GbaSystem::closeSystem()
 {
 	assert(hasContent());
 	CPUCleanUp();
+	saveFileIO = {};
+	coreOptions.saveType = GBA_SAVE_NONE;
 	detectedRtcGame = 0;
 	detectedSensorType = {};
 	sensorListener = {};
@@ -137,7 +147,7 @@ void GbaSystem::applyGamePatches(uint8_t *rom, int &romSize)
 		logMsg("applying IPS patch:%s", userFilePath(patchesDir, ".ips").data());
 		if(!patchApplyIPS(f, &rom, &romSize))
 		{
-			throw std::runtime_error(fmt::format("Error applying IPS patch in:\n{}", patchesDir));
+			throw std::runtime_error(std::format("Error applying IPS patch in:\n{}", patchesDir));
 		}
 	}
 	else if(auto f = IG::FileUtils::fopenUri(ctx, userFilePath(patchesDir, ".ups"), "rb");
@@ -146,7 +156,7 @@ void GbaSystem::applyGamePatches(uint8_t *rom, int &romSize)
 		logMsg("applying UPS patch:%s", userFilePath(patchesDir, ".ups").data());
 		if(!patchApplyUPS(f, &rom, &romSize))
 		{
-			throw std::runtime_error(fmt::format("Error applying UPS patch in:\n{}", patchesDir));
+			throw std::runtime_error(std::format("Error applying UPS patch in:\n{}", patchesDir));
 		}
 	}
 	else if(auto f = IG::FileUtils::fopenUri(ctx, userFilePath(patchesDir, ".ppf"), "rb");
@@ -155,7 +165,7 @@ void GbaSystem::applyGamePatches(uint8_t *rom, int &romSize)
 		logMsg("applying UPS patch:%s", userFilePath(patchesDir, ".ppf").data());
 		if(!patchApplyPPF(f, &rom, &romSize))
 		{
-			throw std::runtime_error(fmt::format("Error applying PPF patch in:\n{}", patchesDir));
+			throw std::runtime_error(std::format("Error applying PPF patch in:\n{}", patchesDir));
 		}
 	}
 }
@@ -197,10 +207,10 @@ void GbaSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio
 	CPULoop(gGba, taskCtx, video, audio);
 }
 
-void GbaSystem::configAudioRate(IG::FloatSeconds frameTime, int rate)
+void GbaSystem::configAudioRate(FloatSeconds outputFrameTime, int outputRate)
 {
-	double mixRate = std::round(rate / staticFrameTime * frameTime.count());
-	logMsg("set audio rate:%d, mix rate:%d", rate, (int)mixRate);
+	long mixRate = std::round(audioMixRate(outputRate, outputFrameTime));
+	logMsg("set sound mix rate:%ld", mixRate);
 	soundSetSampleRate(gGba, mixRate);
 }
 
@@ -218,9 +228,9 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 {
 	const Gfx::LGradientStopDesc navViewGrad[] =
 	{
-		{ .0, Gfx::VertexColorPixelFormat.build(42./255., 82./255., 190./255., 1.) },
-		{ .3, Gfx::VertexColorPixelFormat.build(42./255., 82./255., 190./255., 1.) },
-		{ .97, Gfx::VertexColorPixelFormat.build((42./255.) * .6, (82./255.) * .6, (190./255.) * .6, 1.) },
+		{ .0, Gfx::PackedColor::format.build(42./255., 82./255., 190./255., 1.) },
+		{ .3, Gfx::PackedColor::format.build(42./255., 82./255., 190./255., 1.) },
+		{ .97, Gfx::PackedColor::format.build((42./255.) * .6, (82./255.) * .6, (190./255.) * .6, 1.) },
 		{ 1., view.separatorColor() },
 	};
 	view.setBackgroundGradient(navViewGrad);

@@ -79,7 +79,7 @@ bool EmuVideo::setFormat(IG::PixmapDesc desc, EmuSystemTaskContext taskCtx)
 	logMsg("resized to:%dx%d", desc.w(), desc.h());
 	if(taskCtx)
 	{
-		taskCtx.task().sendVideoFormatChangedReply(*this, taskCtx.semPtr);
+		taskCtx.task().sendVideoFormatChangedReply(*this);
 	}
 	else
 	{
@@ -156,7 +156,7 @@ void EmuVideo::postFrameFinished(EmuSystemTaskContext taskCtx)
 {
 	if(taskCtx)
 	{
-		taskCtx.task().sendFrameFinishedReply(*this, taskCtx.semPtr);
+		taskCtx.task().sendFrameFinishedReply(*this);
 	}
 }
 
@@ -166,6 +166,7 @@ void EmuVideo::finishFrame(EmuSystemTaskContext taskCtx, Gfx::LockedTextureBuffe
 	{
 		doScreenshot(taskCtx, texBuff.pixmap());
 	}
+	app().record(FrameTimeStatEvent::aboutToSubmitFrame);
 	vidImg.unlock(texBuff);
 	postFrameFinished(taskCtx);
 }
@@ -176,6 +177,7 @@ void EmuVideo::finishFrame(EmuSystemTaskContext taskCtx, IG::PixmapView pix)
 	{
 		doScreenshot(taskCtx, pix);
 	}
+	app().record(FrameTimeStatEvent::aboutToSubmitFrame);
 	syncImageAccess();
 	vidImg.write(pix, vidImg.WRITE_FLAG_ASYNC);
 	postFrameFinished(taskCtx);
@@ -301,9 +303,10 @@ void EmuVideo::setOnFormatChanged(FormatChangedDelegate del)
 	onFormatChanged = del;
 }
 
-void EmuVideo::updateNeedsFence()
+void EmuVideo::updateNeedsFence(bool usingPresentTime)
 {
-	needsFence = singleBuffer && renderer().maxSwapChainImages() > 2;
+	needsFence = singleBuffer && renderer().maxSwapChainImages() > 2 && !usingPresentTime;
+	logMsg("%s fence for synchronization", needsFence ? "using" : "not using");
 }
 
 void EmuVideo::setTextureBufferMode(EmuSystem &sys, Gfx::TextureBufferMode mode)
@@ -320,7 +323,7 @@ void EmuVideo::setTextureBufferMode(EmuSystem &sys, Gfx::TextureBufferMode mode)
 	resetImage(renderFmt);
 }
 
-void EmuVideo::setImageBuffers(int num)
+void EmuVideo::setImageBuffers(int num, bool usingPresentTime)
 {
 	assumeExpr(num < 3);
 	if(!num)
@@ -330,7 +333,7 @@ void EmuVideo::setImageBuffers(int num)
 	bool useSingleBuffer = num == 1;
 	bool modeChanged = singleBuffer != useSingleBuffer;
 	singleBuffer = useSingleBuffer;
-	updateNeedsFence();
+	updateNeedsFence(usingPresentTime);
 	//logDMsg("image buffer count:%d fences:%s", num, needsFence ? "yes" : "no");
 	if(modeChanged && vidImg)
 		resetImage();

@@ -18,10 +18,9 @@
 #include <imagine/input/Input.hh>
 #include <imagine/input/Device.hh>
 #include <imagine/util/string/StaticString.hh>
-#ifdef CONFIG_BLUETOOTH
 #include <imagine/bluetooth/BluetoothInputDevScanner.hh>
-#endif
 #include <emuframework/EmuInput.hh>
+#include <emuframework/EmuSystem.hh>
 #include <emuframework/VController.hh>
 #include <memory>
 #include <string>
@@ -110,6 +109,14 @@ enum
 	guiKeyIdxToggleFastForward,
 	guiKeyIdxTurboModifier,
 	guiKeyIdxExitApp,
+	guiKeyIdxSlowMotion,
+	guiKeyIdxToggleSlowMotion,
 };
+
+constexpr std::array<unsigned, 1> rightUIKeys{guiKeyIdxLastView};
+constexpr std::array<unsigned, 1> leftUIKeys{guiKeyIdxToggleFastForward};
+
+constexpr InputComponentDesc rightUIComponents{"Open Menu", rightUIKeys, InputComponent::ui, RT2DO};
+constexpr InputComponentDesc leftUIComponents{"Toggle Slow/Fast Mode", leftUIKeys, InputComponent::ui, LT2DO};
 
 }

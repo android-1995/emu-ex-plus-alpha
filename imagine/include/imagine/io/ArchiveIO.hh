@@ -49,8 +49,8 @@ public:
 	FS::file_type type() const;
 	size_t size() const;
 	uint32_t crc32() const;
-	ArchiveIO moveIO();
-	void moveIO(ArchiveIO io);
+	ArchiveIO releaseIO();
+	void reset(ArchiveIO io);
 	bool readNextEntry();
 	bool hasEntry() const;
 	void rewind();
@@ -66,22 +66,21 @@ protected:
 	};
 	using UniqueArchive = std::unique_ptr<struct archive, ArchiveDeleter>;
 
-	UniqueArchive arch{};
+	UniqueArchive arch;
 	struct archive_entry *ptr{};
-	std::unique_ptr<ArchiveControlBlock> ctrlBlock{};
+	std::unique_ptr<ArchiveControlBlock> ctrlBlock;
 
 	void init(IO);
 	static void freeArchive(struct archive *);
 };
 
-class ArchiveIO final : public IOUtils<ArchiveIO>
+class ArchiveIO : public IOUtils<ArchiveIO>
 {
 public:
 	using IOUtilsBase = IOUtils<ArchiveIO>;
+	using IOUtilsBase::read;
 	using IOUtilsBase::write;
-	using IOUtilsBase::seekS;
-	using IOUtilsBase::seekE;
-	using IOUtilsBase::seekC;
+	using IOUtilsBase::seek;
 	using IOUtilsBase::tell;
 	using IOUtilsBase::send;
 	using IOUtilsBase::buffer;
@@ -92,8 +91,8 @@ public:
 	ArchiveIO(ArchiveEntry entry);
 	ArchiveEntry releaseArchive();
 	std::string_view name() const;
-	ssize_t read(void *buff, size_t bytes);
-	ssize_t write(const void *buff, size_t bytes);
+	ssize_t read(void *buff, size_t bytes, std::optional<off_t> offset = {});
+	ssize_t write(const void *buff, size_t bytes, std::optional<off_t> offset = {});
 	off_t seek(off_t offset, SeekMode mode);
 	size_t size();
 	bool eof();

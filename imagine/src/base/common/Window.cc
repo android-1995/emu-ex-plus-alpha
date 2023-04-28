@@ -22,29 +22,18 @@
 #include <imagine/util/algorithm.h>
 #include <imagine/util/variant.hh>
 #include <imagine/logger/logger.h>
-#include <limits>
 
 namespace IG
 {
 
-constexpr int8_t MAX_DRAW_EVENT_PRIORITY = std::numeric_limits<int8_t>::max();
-
-static auto defaultOnSurfaceChange = [](Window &, Window::SurfaceChange){};
-static auto defaultOnDraw = [](Window &, Window::DrawParams){ return true; };
-static auto defaultOnFocusChange = [](Window &, bool){};
-static auto defaultOnDragDrop = [](Window &, const char *){};
-static auto defaultOnInputEvent = [](Window &, const Input::Event &){ return false; };
-static auto defaultOnDismissRequest = [](Window &win){ win.appContext().exit(); };
-static auto defaultOnDismiss = [](Window &){};
-
 BaseWindow::BaseWindow(ApplicationContext ctx, WindowConfig config):
+	onEvent{config.onEvent},
 	onExit
 	{
 		[this](ApplicationContext ctx, bool backgrounded)
 		{
 			auto &win = *static_cast<Window*>(this);
-			auto savedDrawEventPriority = win.setDrawEventPriority(MAX_DRAW_EVENT_PRIORITY);
-			drawEvent.cancel();
+			auto savedDrawEventPriority = win.setDrawEventPriority(Window::drawEventPriorityLocked);
 			drawEvent.detach();
 			if(backgrounded)
 			{
@@ -59,51 +48,9 @@ BaseWindow::BaseWindow(ApplicationContext ctx, WindowConfig config):
 				);
 			}
 			return true;
-		}, ctx, WINDOW_ON_EXIT_PRIORITY},
-	onSurfaceChange{config.onSurfaceChange ? config.onSurfaceChange : defaultOnSurfaceChange},
-	onDraw{config.onDraw ? config.onDraw : defaultOnDraw},
-	onInputEvent{config.onInputEvent ? config.onInputEvent : defaultOnInputEvent},
-	onFocusChange{config.onFocusChange ? config.onFocusChange : defaultOnFocusChange},
-	onDragDrop{config.onDragDrop ? config.onDragDrop : defaultOnDragDrop},
-	onDismissRequest{config.onDismissRequest ? config.onDismissRequest : defaultOnDismissRequest},
-	onDismiss{config.onDismiss ? config.onDismiss : defaultOnDismiss}
+		}, ctx, WINDOW_ON_EXIT_PRIORITY}
 {
 	attachDrawEvent();
-}
-
-void BaseWindow::setOnSurfaceChange(SurfaceChangeDelegate del)
-{
-	onSurfaceChange = del ? del : defaultOnSurfaceChange;
-}
-
-void BaseWindow::setOnDraw(DrawDelegate del)
-{
-	onDraw = del ? del : defaultOnDraw;
-}
-
-void BaseWindow::setOnFocusChange(FocusChangeDelegate del)
-{
-	onFocusChange = del ? del : defaultOnFocusChange;
-}
-
-void BaseWindow::setOnDragDrop(DragDropDelegate del)
-{
-	onDragDrop = del ? del : defaultOnDragDrop;
-}
-
-void BaseWindow::setOnInputEvent(InputEventDelegate del)
-{
-	onInputEvent = del ? del : defaultOnInputEvent;
-}
-
-void BaseWindow::setOnDismissRequest(DismissRequestDelegate del)
-{
-	onDismissRequest = del ? del : defaultOnDismissRequest;
-}
-
-void BaseWindow::setOnDismiss(DismissDelegate del)
-{
-	onDismiss = del ? del : defaultOnDismiss;
 }
 
 void BaseWindow::attachDrawEvent()
@@ -115,41 +62,6 @@ void BaseWindow::attachDrawEvent()
 			win.dispatchOnFrame();
 			win.dispatchOnDraw();
 		});
-}
-
-void Window::setOnSurfaceChange(SurfaceChangeDelegate del)
-{
-	BaseWindow::setOnSurfaceChange(del);
-}
-
-void Window::setOnDraw(DrawDelegate del)
-{
-	BaseWindow::setOnDraw(del);
-}
-
-void Window::setOnFocusChange(FocusChangeDelegate del)
-{
-	BaseWindow::setOnFocusChange(del);
-}
-
-void Window::setOnDragDrop(DragDropDelegate del)
-{
-	BaseWindow::setOnDragDrop(del);
-}
-
-void Window::setOnInputEvent(InputEventDelegate del)
-{
-	BaseWindow::setOnInputEvent(del);
-}
-
-void Window::setOnDismissRequest(DismissRequestDelegate del)
-{
-	BaseWindow::setOnDismissRequest(del);
-}
-
-void Window::setOnDismiss(DismissDelegate del)
-{
-	BaseWindow::setOnDismiss(del);
 }
 
 static Window::FrameTimeSource frameClock(const Screen &screen, Window::FrameTimeSource clock)
@@ -223,21 +135,12 @@ Screen *Window::screen() const
 
 bool Window::setNeedsDraw(bool needsDraw)
 {
-	if(needsDraw)
+	if(needsDraw && (!hasSurface() || drawEventPriority() == drawEventPriorityLocked))
 	{
-		if(!hasSurface()) [[unlikely]]
-		{
-			drawNeeded = false;
-			return false;
-		}
-		drawNeeded = true;
-		return true;
+		needsDraw = false;
 	}
-	else
-	{
-		drawNeeded = false;
-		return false;
-	}
+	drawNeeded = needsDraw;
+	return needsDraw;
 }
 
 bool Window::needsDraw() const
@@ -289,6 +192,11 @@ void Window::postFrameReadyToMainThread()
 
 int8_t Window::setDrawEventPriority(int8_t priority)
 {
+	if(priority == drawEventPriorityLocked)
+	{
+		unpostDraw();
+		drawPhase = DrawPhase::UPDATE;
+	}
 	return std::exchange(drawEventPriority_, priority);
 }
 
@@ -304,7 +212,7 @@ void Window::drawNow(bool needsSync)
 
 bool Window::dispatchInputEvent(Input::Event event)
 {
-	bool handled = onInputEvent.callCopy(*this, event);
+	bool handled = onEvent.callCopy(*this, event);
 	return visit(overloaded{
 		[&](const Input::MotionEvent &e)
 		{
@@ -322,35 +230,38 @@ bool Window::dispatchRepeatableKeyInputEvent(Input::KeyEvent event)
 
 void Window::dispatchFocusChange(bool in)
 {
-	onFocusChange.callCopy(*this, in);
+	onEvent.callCopy(*this, FocusChangeEvent{in});
 }
 
 void Window::dispatchDragDrop(const char *filename)
 {
-	onDragDrop.callCopy(*this, filename);
+	onEvent.callCopy(*this, DragDropEvent{filename});
 }
 
 void Window::dispatchDismissRequest()
 {
-	onDismissRequest.callCopy(*this);
+	if(!onEvent.callCopy(*this, DismissRequestEvent{}))
+	{
+		appContext().exit();
+	}
 }
 
 void Window::dispatchSurfaceCreated()
 {
-	onSurfaceChange.callCopy(*this, SurfaceChange::Action::CREATED);
+	onEvent.callCopy(*this, WindowSurfaceChangeEvent{SurfaceChange::Action::CREATED});
 	surfaceChangeFlags |= SurfaceChange::SURFACE_RESIZED;
 }
 
 void Window::dispatchSurfaceChanged()
 {
-	onSurfaceChange.callCopy(*this, SurfaceChange{SurfaceChange::Action::CHANGED, std::exchange(surfaceChangeFlags, {})});
+	onEvent.callCopy(*this, WindowSurfaceChangeEvent{SurfaceChange{SurfaceChange::Action::CHANGED, std::exchange(surfaceChangeFlags, {})}});
 }
 
 void Window::dispatchSurfaceDestroyed()
 {
 	surfaceChangeFlags = 0;
 	unpostDraw();
-	onSurfaceChange.callCopy(*this, SurfaceChange::Action::DESTROYED);
+	onEvent.callCopy(*this, WindowSurfaceChangeEvent{SurfaceChange::Action::DESTROYED});
 }
 
 void Window::signalSurfaceChanged(uint8_t flags)
@@ -374,8 +285,7 @@ void Window::dispatchOnFrame()
 	}
 	drawPhase = DrawPhase::UPDATE;
 	//logDMsg("running %u onFrame delegates", onFrame.size());
-	auto now = IG::steadyClockTimestamp();
-	FrameParams frameParams{now, screen()->frameTime()};
+	FrameParams frameParams{SteadyClock::now(), screen()->frameTime()};
 	onFrame.runAll([&](OnFrameDelegate del){ return del(frameParams); });
 	if(onFrame.size())
 	{
@@ -394,7 +304,7 @@ void Window::draw(bool needsSync)
 	}
 	drawNeeded = false;
 	drawPhase = DrawPhase::DRAW;
-	if(onDraw.callCopy(*this, params))
+	if(!onEvent.callCopy(*this, DrawEvent{params}))
 	{
 		postFrameReady();
 	}
@@ -509,7 +419,7 @@ Rotation Window::softOrientation() const
 
 void Window::dismiss()
 {
-	onDismiss(*this);
+	onEvent(*this, DismissEvent{});
 	drawEvent.detach();
 	application().moveOutWindow(*this);
 }

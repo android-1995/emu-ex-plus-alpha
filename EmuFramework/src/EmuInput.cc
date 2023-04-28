@@ -107,7 +107,7 @@ std::string InputDeviceData::makeDisplayName(std::string_view name, unsigned id)
 {
 	if(id)
 	{
-		return fmt::format("{} #{}", name, id + 1);
+		return std::format("{} #{}", name, id + 1);
 	}
 	else
 	{
@@ -156,7 +156,7 @@ std::span<const KeyConfig> KeyConfig::defaultConfigsForInputMap(Input::Map map)
 		default: return {};
 		case Input::Map::SYSTEM:
 			return {Controls::defaultKeyProfile, Controls::defaultKeyProfiles};
-		#ifdef CONFIG_BLUETOOTH
+		#ifdef CONFIG_INPUT_BLUETOOTH
 		case Input::Map::WIIMOTE:
 			return {Controls::defaultWiimoteProfile, Controls::defaultWiimoteProfiles};
 		case Input::Map::WII_CC:
@@ -312,7 +312,7 @@ KeyConfig *InputDeviceConfig::makeMutableKeyConf(EmuApp &app)
 		logMsg("current config not mutable, creating one");
 		auto name = uniqueCustomConfigName(customKeyConfigs);
 		conf = setKeyConfCopiedFromExisting(name, customKeyConfigs, app.savedInputDeviceList());
-		app.postMessage(3, false, fmt::format("Automatically created profile: {}", conf->name));
+		app.postMessage(3, false, std::format("Automatically created profile: {}", conf->name));
 	}
 	return conf;
 }
@@ -438,45 +438,6 @@ void genericMultiplayerTranspose(KeyConfig::KeyArray &key, int player, int start
 
 }
 
-void EmuApp::setFaceButtonMapping(std::array<int, EmuSystem::MAX_FACE_BTNS> map)
-{
-	vController.gamePad().setFaceButtonMapping(renderer, asset(AssetID::GAMEPAD_OVERLAY), map);
-}
-
-void EmuApp::applyEnabledFaceButtons(std::span<const std::pair<int, bool>> applyEnableMap)
-{
-	if constexpr(VCONTROLS_GAMEPAD)
-	{
-		auto &vController = defaultVController();
-		auto &btnGroup = vController.gamePad().faceButtons();
-		for(auto [idx, enabled] : applyEnableMap)
-		{
-			btnGroup.buttons()[idx].setEnabled(enabled);
-		}
-		if(!vController.hasWindow())
-			return;
-		vController.place();
-		system().clearInputBuffers(viewController().inputView());
-	}
-}
-
-void EmuApp::applyEnabledCenterButtons(std::span<const std::pair<int, bool>> applyEnableMap)
-{
-	if constexpr(VCONTROLS_GAMEPAD)
-	{
-		auto &vController = defaultVController();
-		auto &btnGroup = vController.gamePad().centerButtons();
-		for(auto [idx, enabled] : applyEnableMap)
-		{
-			btnGroup.buttons()[idx].setEnabled(enabled);
-		}
-		if(!vController.hasWindow())
-			return;
-		vController.place();
-		system().clearInputBuffers(viewController().inputView());
-	}
-}
-
 void EmuApp::updateKeyboardMapping()
 {
 	defaultVController().updateKeyboardMapping();
@@ -487,9 +448,18 @@ void EmuApp::toggleKeyboard()
 	defaultVController().toggleKeyboard();
 }
 
-void EmuApp::updateVControllerMapping()
+void EmuApp::setDisabledInputKeys(std::span<const unsigned> keys)
 {
-	defaultVController().updateMapping();
+	vController.setDisabledInputKeys(keys);
+	if(!vController.hasWindow())
+		return;
+	vController.place();
+	system().clearInputBuffers(viewController().inputView);
+}
+
+void EmuApp::unsetDisabledInputKeys()
+{
+	setDisabledInputKeys({});
 }
 
 void TurboInput::addEvent(unsigned action)

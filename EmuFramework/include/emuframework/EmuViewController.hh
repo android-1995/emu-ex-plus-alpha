@@ -44,6 +44,8 @@ class EmuApp;
 class EmuAudio;
 class EmuSystem;
 struct WindowData;
+struct FrameTimeConfig;
+class MainMenuView;
 
 class EmuMenuViewStack : public ViewStack
 {
@@ -71,7 +73,7 @@ public:
 	void dismissView(int idx, bool refreshLayout) final;
 	bool inputEvent(const Input::Event &) final;
 	bool extraWindowInputEvent(const Input::Event &e);
-	void showEmulationView();
+	void showEmulationView(FrameTimeConfig);
 	void showMenuView(bool updateTopView);
 	void placeEmuViews();
 	void placeElements();
@@ -79,8 +81,6 @@ public:
 	void updateExtraWindowViewport(IG::Window &, IG::Viewport, Gfx::RendererTask &);
 	bool drawMainWindow(IG::Window &win, IG::WindowDrawParams, Gfx::RendererTask &);
 	bool drawExtraWindow(IG::Window &win, IG::WindowDrawParams, Gfx::RendererTask &);
-	void updateEmuAudioStats(int underruns, int overruns, int callbacks, double avgCallbackFrames, int frames);
-	void clearEmuAudioStats();
 	void popToSystemActionsMenu();
 	void postDrawToEmuWindows();
 	IG::Screen *emuWindowScreen() const;
@@ -96,8 +96,7 @@ public:
 	void onInputDevicesChanged();
 	void onSystemCreated();
 	void onSystemClosed();
-	EmuInputView &inputView();
-	IG::ToastView &popupMessageView();
+	MainMenuView &mainMenu();
 	bool isMenuDismissKey(const Input::KeyEvent &) const;
 	IG::ApplicationContext appContext() const;
 	bool isShowingEmulation() const { return showingEmulation; }
@@ -105,16 +104,18 @@ public:
 	void movePopupToWindow(IG::Window &win);
 	void moveEmuViewToWindow(IG::Window &win);
 
-protected:
-	static constexpr bool HAS_USE_RENDER_TIME = Config::envIsLinux
-		|| (Config::envIsAndroid && Config::ENV_ANDROID_MIN_SDK < 16);
+public:
 	EmuView emuView;
-	EmuInputView emuInputView;
+	EmuInputView inputView;
 	ToastView popup;
+protected:
 	EmuMenuViewStack viewStack;
 	bool showingEmulation{};
 
-	void configureWindowForEmulation(IG::Window &win, bool running);
+	static constexpr bool HAS_USE_RENDER_TIME = Config::envIsLinux
+		|| (Config::envIsAndroid && Config::ENV_ANDROID_MIN_SDK < 16);
+
+	void configureWindowForEmulation(Window &, FrameTimeConfig, bool running);
 	EmuVideoLayer &videoLayer() const;
 };
 

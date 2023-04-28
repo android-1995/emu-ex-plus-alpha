@@ -8,7 +8,7 @@
 #define _SNES9X_H_
 
 #ifndef VERSION
-#define VERSION	"1.61"
+#define VERSION	"1.62.2"
 #endif
 
 #include "port.h"
@@ -65,6 +65,10 @@ void removeFileHelper(const char *filename);
 
 #define	NTSC_MASTER_CLOCK			21477272.727272 // 21477272 + 8/11 exact
 #define	PAL_MASTER_CLOCK			21281370.0
+#define NTSC_PROGRESSIVE_FRAME_RATE	60.09881389744051
+#define NTSC_INTERLACED_FRAME_RATE	59.94005994
+#define PAL_PROGRESSIVE_FRAME_RATE	50.006977968
+
 
 #define SNES_MAX_NTSC_VCOUNTER		262
 #define SNES_MAX_PAL_VCOUNTER		312
@@ -238,7 +242,7 @@ struct SSettings
 
 	static const bool8	SoundSync = 0;
 	static const bool8	SixteenBitSound = 1;
-	uint32	SoundPlaybackRate = 44100;
+	int	SoundPlaybackRate = 44100;
 	double SoundInputRate = 32040.;
 	static const bool8	Stereo = 1;
 	static const bool8	ReverseStereo = 0;

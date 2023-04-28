@@ -55,14 +55,11 @@ void ToastView::clear()
 
 void ToastView::place()
 {
-	text.compile(renderer(), projP, {.maxLineSize = projP.width(), .maxLines = 6});
-
-	int labelYSize = IG::makeEvenRoundedUp((int)projP.projectYSize(text.fullHeight()));
-	IG::WindowRect viewFrame;
+	text.compile(renderer(), {.maxLineSize = int(viewRect().xSize() * 0.95f), .maxLines = 6});
+	int labelYSize = IG::makeEvenRoundedUp(text.fullHeight());
 	//logMsg("label y size:%d", labelYSize);
-	viewFrame.setPosRel(viewRect().pos(CB2DO),
+	msgFrame.setPosRel(viewRect().pos(CB2DO),
 		{viewRect().xSize(), labelYSize}, CB2DO);
-	msgFrame = projP.unProjectRect(viewFrame);
 }
 
 void ToastView::unpost()
@@ -93,13 +90,12 @@ void ToastView::draw(Gfx::RendererCommands &__restrict__ cmds)
 	basicEffect.disableTexture(cmds);
 	cmds.set(BlendMode::ALPHA);
 	if(error)
-		cmds.setColor(1., 0, 0, .7);
+		cmds.setColor({1., 0, 0, .7});
 	else
-		cmds.setColor(0, 0, 1., .7);
-	GeomRect::draw(cmds, msgFrame);
-	cmds.setColor(1., 1., 1., 1.);
+		cmds.setColor({0, 0, 1., .7});
+	cmds.drawRect(msgFrame);
 	basicEffect.enableAlphaTexture(cmds);
-	text.draw(cmds, {0, projP.alignYToPixel(msgFrame.pos(C2DO).y)}, C2DO, projP);
+	text.draw(cmds, {msgFrame.xCenter(), msgFrame.pos(C2DO).y}, C2DO, ColorName::WHITE);
 }
 
 bool ToastView::inputEvent(const Input::Event &event)

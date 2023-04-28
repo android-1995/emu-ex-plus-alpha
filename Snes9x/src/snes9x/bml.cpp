@@ -9,6 +9,7 @@
 #include <imagine/io/IOStream.hh>
 #include <imagine/io/FileIO.hh>
 #include <imagine/base/ApplicationContext.hh>
+#include <main/wrappers.h>
 
 bml_node::bml_node()
 {
@@ -288,7 +289,7 @@ IG::ApplicationContext gAppContext();
 
 bool bml_node::parse_file(std::string filename)
 {
-    IG::IFStream file(EmuEx::gAppContext().openFileUri(filename, IG::OpenFlagsMask::TEST), std::ios_base::binary);
+    IG::IFStream file(EmuEx::gAppContext().openFileUri(filename, IG::OpenFlagsMask::Test), std::ios_base::binary);
 
     if (!file)
         return false;

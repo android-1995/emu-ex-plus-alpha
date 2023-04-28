@@ -142,12 +142,10 @@ void RendererTask::updateDrawableForSurfaceChange(Window &win, WindowSurfaceChan
 				GLTask::run(
 					[this, drawable = (Drawable)drawable, v = data.viewportRect](TaskContext ctx)
 					{
-						// reset the drawable if it's currently in use
-						if(GLManager::hasCurrentDrawable(drawable))
-						{
-							context.setCurrentDrawable(drawable);
-							glViewport(v.x, v.y, v.x2, v.y2);
-						}
+						// reset and clear the drawable
+						context.setCurrentDrawable(drawable);
+						glViewport(v.x, v.y, v.x2, v.y2);
+						glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 					});
 			}
 			return;
@@ -346,6 +344,8 @@ void RendererTask::setDebugOutput(bool on)
 			support.setGLDebugOutput(on);
 		});
 }
+
+ThreadId RendererTask::threadId() const { return threadId_; }
 
 RendererCommands GLRendererTask::makeRendererCommands(GLTask::TaskContext taskCtx, bool manageSemaphore,
 	bool notifyWindowAfterPresent, Window &win)

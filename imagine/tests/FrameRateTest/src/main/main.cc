@@ -20,12 +20,10 @@
 #include <imagine/gfx/Renderer.hh>
 #include <imagine/gfx/RendererTask.hh>
 #include <imagine/gfx/RendererCommands.hh>
-#include <imagine/gfx/Projection.hh>
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/base/Application.hh>
 #include <imagine/base/Screen.hh>
 #include <imagine/base/Window.hh>
-#include <imagine/util/format.hh>
 #include <imagine/util/variant.hh>
 #include "tests.hh"
 #include "TestPicker.hh"
@@ -33,6 +31,7 @@
 #include "main.hh"
 #include <meta.h>
 #include <memory>
+#include <format>
 
 namespace FrameRateTest
 {
@@ -43,9 +42,8 @@ struct WindowData
 {
 	WindowData(IG::ViewAttachParams attachParams):picker{attachParams} {}
 
-	Gfx::Projection proj{};
-	IG::WindowRect testRectWin{};
-	Gfx::GCRect testRect{};
+	Gfx::Mat4 projM;
+	WRect testRect{};
 	TestPicker picker;
 	std::unique_ptr<TestFramework> activeTest{};
 };
@@ -67,42 +65,24 @@ FrameRateTestApplication::FrameRateTestApplication(IG::ApplicationInitParams ini
 		[this](IG::ApplicationContext ctx, IG::Window &win)
 		{
 			renderer.initMainTask(&win);
-			viewManager = {renderer};
 			Gfx::GlyphTextureSet defaultFace{renderer, fontManager.makeSystem(), win.heightScaledMMInPixels(2.5)};
 			defaultFace.precacheAlphaNum(renderer);
 			defaultFace.precache(renderer, ":.%()");
-			viewManager.setDefaultFace(std::move(defaultFace));
+			viewManager.defaultFace = std::move(defaultFace);
 			auto &winData = win.makeAppData<WindowData>(IG::ViewAttachParams{viewManager, win, renderer.task()});
 			std::vector<TestDesc> testDesc;
 			testDesc.emplace_back(TEST_CLEAR, "Clear");
 			IG::WP pixmapSize{256, 256};
 			for(auto desc: renderer.textureBufferModes())
 			{
-				testDesc.emplace_back(TEST_DRAW, fmt::format("Draw RGB565 {}x{} ({})", pixmapSize.x, pixmapSize.y, desc.name),
+				testDesc.emplace_back(TEST_DRAW, std::format("Draw RGB565 {}x{} ({})", pixmapSize.x, pixmapSize.y, desc.name),
 					pixmapSize, desc.mode);
-				testDesc.emplace_back(TEST_WRITE, fmt::format("Write RGB565 {}x{} ({})", pixmapSize.x, pixmapSize.y, desc.name),
+				testDesc.emplace_back(TEST_WRITE, std::format("Write RGB565 {}x{} ({})", pixmapSize.x, pixmapSize.y, desc.name),
 					pixmapSize, desc.mode);
 			}
 			auto &picker = winData.picker;
 			picker.setTests(testDesc.data(), testDesc.size());
 			setPickerHandlers(win);
-
-			win.setOnSurfaceChange(
-				[this](IG::Window &win, IG::Window::SurfaceChange change)
-				{
-					if(change.resized())
-					{
-						auto viewport = win.viewport(win.contentBounds());
-						renderer.task().setDefaultViewport(win, viewport);
-						auto &winData = windowData(win);
-						winData.proj = renderer.projection(win, viewport,
-							Gfx::Mat4::makePerspectiveFovRH(M_PI/4.0, viewport.realAspectRatio(), 1.0, 100.));
-						winData.testRectWin = viewport.relRectBestFit({}, 4./3., C2DO, C2DO);
-						winData.testRect = winData.proj.plane().unProjectRect(winData.testRectWin);
-						placeElements(win);
-					}
-					renderer.task().updateDrawableForSurfaceChange(win, change);
-				});
 
 			ctx.addOnResume(
 				[this, &win](IG::ApplicationContext, bool focused)
@@ -123,9 +103,9 @@ FrameRateTestApplication::FrameRateTestApplication(IG::ApplicationInitParams ini
 					{
 						if(windowData(win).activeTest)
 						{
-							finishTest(win, IG::steadyClockTimestamp());
+							finishTest(win, SteadyClock::now());
 						}
-						viewManager.defaultFace().freeCaches();
+						viewManager.defaultFace.freeCaches();
 					}
 					return true;
 				});
@@ -146,133 +126,167 @@ FrameRateTestApplication::FrameRateTestApplication(IG::ApplicationInitParams ini
 	#endif
 }
 
+void FrameRateTestApplication::updateWindowSurface(Window &win, Window::SurfaceChange change)
+{
+	if(change.resized())
+	{
+		auto viewport = win.viewport(win.contentBounds());
+		renderer.task().setDefaultViewport(win, viewport);
+		auto &winData = windowData(win);
+		winData.projM = Gfx::Mat4::makePerspectiveFovRH(M_PI/4.0, viewport.realAspectRatio(), 0.1, 100.)
+			.projectionPlane(viewport, .5f, renderer.projectionRollAngle(win));
+		winData.testRect = viewport.relRectBestFit({}, 4./3., C2DO, C2DO);
+		placeElements(win);
+	}
+	renderer.task().updateDrawableForSurfaceChange(win, change);
+}
+
 void FrameRateTestApplication::setPickerHandlers(IG::Window &win)
 {
-	win.setOnDraw(
-		[&task = renderer.task()](IG::Window &win, IG::Window::DrawParams params)
+	win.onEvent = [this, &task = renderer.task()](Window &win, WindowEvent winEvent)
+	{
+		return visit(overloaded
 		{
-			return task.draw(win, params, {}, [](IG::Window &win, Gfx::RendererCommands &cmds)
+			[&](WindowSurfaceChangeEvent &e)
 			{
-				cmds.clear();
-				auto &winData = windowData(win);
-				auto &picker = winData.picker;
-				cmds.basicEffect().setModelViewProjection(cmds, winData.proj);
-				picker.draw(cmds);
-				cmds.setClipTest(false);
-				cmds.present();
-			});
-		});
-	win.setOnInputEvent(
-		[this](IG::Window &win, const Input::Event &e)
-		{
-			if(e.keyEvent() && e.asKeyEvent().pushed(Input::DefaultKey::CANCEL) && !e.asKeyEvent().repeated())
-			{
-				win.appContext().exit();
+				updateWindowSurface(win, e.change);
 				return true;
-			}
-			return windowData(win).picker.inputEvent(e);
-		});
+			},
+			[&](DrawEvent &e)
+			{
+				return task.draw(win, e.params, {}, [](Window &win, Gfx::RendererCommands &cmds)
+				{
+					cmds.clear();
+					auto &winData = windowData(win);
+					auto &picker = winData.picker;
+					cmds.basicEffect().setModelViewProjection(cmds, Gfx::Mat4::ident(), winData.projM);
+					picker.draw(cmds);
+					cmds.setClipTest(false);
+					cmds.present();
+				});
+			},
+			[&](Input::Event &e)
+			{
+				if(e.keyEvent() && e.keyEvent()->pushed(Input::DefaultKey::CANCEL) && !e.keyEvent()->repeated())
+				{
+					win.appContext().exit();
+					return true;
+				}
+				return windowData(win).picker.inputEvent(e);
+			},
+			[](auto &){ return false; }
+		}, winEvent);
+	};
 }
 
 void FrameRateTestApplication::setActiveTestHandlers(IG::Window &win)
 {
 	win.addOnFrame([this, &win](IG::FrameParams params)
+	{
+		auto atOnFrame = SteadyClock::now();
+		renderer.setPresentationTime(win, params.presentTime());
+		auto &activeTest = windowData(win).activeTest;
+		if(activeTest->started)
 		{
-			auto atOnFrame = IG::steadyClockTimestamp();
-			renderer.setPresentationTime(win, params.presentTime());
-			auto &activeTest = windowData(win).activeTest;
-			if(activeTest->started)
+			activeTest->frameUpdate(renderer.task(), win, params);
+		}
+		else
+		{
+			activeTest->started = true;
+		}
+		activeTest->lastFramePresentTime.timestamp = params.timestamp();
+		activeTest->lastFramePresentTime.atOnFrame = atOnFrame;
+		if(activeTest->frames == framesToRun || activeTest->shouldEndTest)
+		{
+			finishTest(win, params.timestamp());
+			return false;
+		}
+		else
+		{
+			win.setNeedsDraw(true);
+			return true;
+		}
+	});
+	win.onEvent = [this, &task = renderer.task()](Window &win, WindowEvent winEvent)
+	{
+		return visit(overloaded
+		{
+			[&](WindowSurfaceChangeEvent &e)
 			{
-				activeTest->frameUpdate(renderer.task(), win, params);
-			}
-			else
-			{
-				activeTest->started = true;
-			}
-			activeTest->lastFramePresentTime.timestamp = params.timestamp();
-			activeTest->lastFramePresentTime.atOnFrame = atOnFrame;
-			if(activeTest->frames == framesToRun || activeTest->shouldEndTest)
-			{
-				finishTest(win, params.timestamp());
-				return false;
-			}
-			else
-			{
-				win.setNeedsDraw(true);
+				updateWindowSurface(win, e.change);
 				return true;
-			}
-		});
-	win.setOnDraw(
-		[this, &task = renderer.task()](IG::Window &win, IG::Window::DrawParams params)
-		{
-			auto xIndent = viewManager.tableXIndent();
-			return task.draw(win, params, {}, [xIndent](IG::Window &win, Gfx::RendererCommands &cmds)
+			},
+			[&](DrawEvent &e)
 			{
-				auto &winData = windowData(win);
-				auto &activeTest = winData.activeTest;
-				auto rect = winData.testRectWin;
-				cmds.basicEffect().setModelViewProjection(cmds, winData.proj);
-				activeTest->draw(cmds, cmds.renderer().makeClipRect(win, rect), xIndent);
-				activeTest->lastFramePresentTime.atWinPresent = IG::steadyClockTimestamp();
-				activeTest->presentFence = cmds.clientWaitSyncReset(activeTest->presentFence);
-				cmds.present();
-			});
-		});
-	win.setOnInputEvent(
-		[this](IG::Window &win, const Input::Event &e)
-		{
-			auto &activeTest = windowData(win).activeTest;
-			return visit(overloaded
+				auto xIndent = viewManager.tableXIndentPx;
+				return task.draw(win, e.params, {}, [xIndent](IG::Window &win, Gfx::RendererCommands &cmds)
+				{
+					auto &winData = windowData(win);
+					auto &activeTest = winData.activeTest;
+					auto rect = winData.testRect;
+					cmds.basicEffect().setModelViewProjection(cmds, Gfx::Mat4::ident(), winData.projM);
+					activeTest->draw(cmds, cmds.renderer().makeClipRect(win, rect), xIndent);
+					activeTest->lastFramePresentTime.atWinPresent = SteadyClock::now();
+					activeTest->presentFence = cmds.clientWaitSyncReset(activeTest->presentFence);
+					cmds.present();
+				});
+			},
+			[&](Input::Event &e)
 			{
-				[&](const Input::MotionEvent &motionEv)
+				auto &activeTest = windowData(win).activeTest;
+				return visit(overloaded
 				{
-					if(motionEv.pushed() && Config::envIsIOS)
+					[&](const Input::MotionEvent &motionEv)
 					{
-						logMsg("canceled activeTest from pointer input");
-						activeTest->shouldEndTest = true;
-						return true;
-					}
-					return false;
-				},
-				[&](const Input::KeyEvent &keyEv)
-				{
-					if(keyEv.pushed(Input::DefaultKey::CANCEL))
+						if(motionEv.pushed() && Config::envIsIOS)
+						{
+							logMsg("canceled activeTest from pointer input");
+							activeTest->shouldEndTest = true;
+							return true;
+						}
+						return false;
+					},
+					[&](const Input::KeyEvent &keyEv)
 					{
-						logMsg("canceled activeTest from key input");
-						activeTest->shouldEndTest = true;
-						return true;
+						if(keyEv.pushed(Input::DefaultKey::CANCEL))
+						{
+							logMsg("canceled activeTest from key input");
+							activeTest->shouldEndTest = true;
+							return true;
+						}
+						else if(keyEv.pushed(IG::Input::Keycode::D))
+						{
+							logMsg("posting extra draw");
+							win.postDraw();
+							return true;
+						}
+						return false;
 					}
-					else if(keyEv.pushed(IG::Input::Keycode::D))
-					{
-						logMsg("posting extra draw");
-						win.postDraw();
-						return true;
-					}
-					return false;
-				}
-			}, e);
-		});
+				}, e);
+			},
+			[](auto &){ return false; }
+		}, winEvent);
+	};
 }
 
 void FrameRateTestApplication::placeElements(const IG::Window &win)
 {
 	auto &winData = windowData(win);
 	auto &picker = winData.picker;
-	auto projP = winData.proj.plane();
 	auto &activeTest = winData.activeTest;
-	viewManager.setTableXIndentToDefault(win, projP);
+	viewManager.setTableXIndentToDefault(win);
 	if(!activeTest)
 	{
-		picker.setViewRect(projP);
+		picker.setViewRect(win.contentBounds());
 		picker.place();
 	}
 	else
 	{
-		activeTest->place(renderer, projP, winData.testRect);
+		activeTest->place(renderer, win.contentBounds(), winData.testRect);
 	}
 }
 
-void FrameRateTestApplication::finishTest(IG::Window &win, IG::FrameTime frameTime)
+void FrameRateTestApplication::finishTest(Window &win, SteadyClockTimePoint frameTime)
 {
 	auto app = win.appContext();
 	auto &activeTest = windowData(win).activeTest;
@@ -297,7 +311,7 @@ void FrameRateTestApplication::finishTest(IG::Window &win, IG::FrameTime frameTi
 
 TestFramework *FrameRateTestApplication::startTest(IG::Window &win, const TestParams &t)
 {
-	auto &face = viewManager.defaultFace();
+	auto &face = viewManager.defaultFace;
 	auto app = win.appContext();
 	#ifdef __ANDROID__
 	if(cpuFreq)
