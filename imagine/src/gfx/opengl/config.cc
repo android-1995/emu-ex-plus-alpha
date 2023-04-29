@@ -672,14 +672,13 @@ RendererTask &Renderer::task()
 
 void Renderer::setWindowValidOrientations(Window &win, OrientationMask validO)
 {
-//去掉设置屏幕方向，方向由JAVA层控制
-//	if(!win.isMainWindow())
-//		return;
-//	auto oldWinO = win.softOrientation();
-//	if(win.setValidOrientations(validO) && !Config::SYSTEM_ROTATES_WINDOWS)
-//	{
-//		animateWindowRotation(win, rotationRadians(oldWinO), rotationRadians(win.softOrientation()));
-//	}
+	if(!win.isMainWindow())
+		return;
+	auto oldWinO = win.softOrientation();
+	if(win.setValidOrientations(validO) && !Config::SYSTEM_ROTATES_WINDOWS)
+	{
+		animateWindowRotation(win, rotationRadians(oldWinO), rotationRadians(win.softOrientation()));
+	}
 }
 
 void GLRenderer::addEventHandlers(ApplicationContext ctx, RendererTask &task)
