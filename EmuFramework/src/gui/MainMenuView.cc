@@ -328,7 +328,8 @@ void MainMenuView::loadStandardItems()
 	}
 	item.emplace_back(&benchmark);
 	item.emplace_back(&about);
-	item.emplace_back(&exitApp);
+//去掉功能
+//	item.emplace_back(&exitApp);
 }
 
 void MainMenuView::setAudioVideo(EmuAudio &audio_, EmuVideoLayer &videoLayer_)

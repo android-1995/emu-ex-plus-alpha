@@ -298,10 +298,10 @@ void GUIOptionView::loadStockItems()
 //	{
 //		item.emplace_back(&statusBar);
 //	}
-	if(used(layoutBehindSystemUI) && appContext().hasTranslucentSysUI())
-	{
-		item.emplace_back(&layoutBehindSystemUI);
-	}
+//	if(used(layoutBehindSystemUI) && appContext().hasTranslucentSysUI())
+//	{
+//		item.emplace_back(&layoutBehindSystemUI);
+//	}
 //	if(EmuSystem::hasBundledGames)
 //	{
 //		item.emplace_back(&showBundledGames);
