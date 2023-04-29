@@ -308,8 +308,10 @@ void EmuApp::showLastViewFromSystem(ViewAttachParams attach, const Input::Event 
 
 void EmuApp::showExitAlert(ViewAttachParams attach, const Input::Event &e)
 {
-	viewController().pushAndShowModal(std::make_unique<ExitConfirmAlertView>(
-		attach, system().hasContent()), e, false);
+//改为返回游戏
+    showEmulation();
+//	viewController().pushAndShowModal(std::make_unique<ExitConfirmAlertView>(
+//		attach, system().hasContent()), e, false);
 }
 
 static const char *parseCommandArgs(IG::CommandArgs arg)
