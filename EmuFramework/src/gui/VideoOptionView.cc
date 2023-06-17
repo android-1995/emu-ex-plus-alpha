@@ -743,7 +743,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		{
 			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
 			{
-				t.resetString(renderer().evalPresentMode(app().emuWindow(), app().presentMode) == Gfx::PresentMode::FIFO ? "Queued" : "Immediate");
+				t.resetString(renderer().evalPresentMode(app().emuWindow(), app().presentMode) == Gfx::PresentMode::FIFO ? "队列" : "立即");
 				return true;
 			},
 			.defaultItemOnSelect = [this](TextMenuItem &item)
@@ -798,7 +798,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 	},
 	presentationTime
 	{
-		"精确帧节奏(改善帧数,性能足够时保持开启)", &defaultFace(),
+		"精确帧节奏", &defaultFace(),
 		app().usePresentationTime,
 		[this](BoolMenuItem &item) { app().usePresentationTime = item.flipBoolValue(*this); }
 	},

@@ -375,17 +375,18 @@ void VController::draw(Gfx::RendererCommands &__restrict__ cmds, bool showHidden
 		cmds.setColor(whiteCol);
 		kb.draw(cmds);
 	}
-	else if(gamepadIsVisible || showHidden)
-	{
-		for(const auto &e : gpElements)
-		{
-			if(e.buttonGroup() && gamepadDisabledFlags & VController::GAMEPAD_BUTTONS_BIT)
-				continue;
-			if(e.dPad() && gamepadDisabledFlags & VController::GAMEPAD_DPAD_BIT)
-				continue;
-			e.draw(cmds, alpha, showHidden);
-		}
-	}
+	//去掉原版的虚拟按键
+//	else if(gamepadIsVisible || showHidden)
+//	{
+//		for(const auto &e : gpElements)
+//		{
+//			if(e.buttonGroup() && gamepadDisabledFlags & VController::GAMEPAD_BUTTONS_BIT)
+//				continue;
+//			if(e.dPad() && gamepadDisabledFlags & VController::GAMEPAD_DPAD_BIT)
+//				continue;
+//			e.draw(cmds, alpha, showHidden);
+//		}
+//	}
 	for(auto &e : uiElements)
 	{
 		e.draw(cmds, alpha, showHidden);
