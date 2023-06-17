@@ -64,7 +64,7 @@ void NgpSystem::reset(EmuApp &, ResetMode mode)
 
 FS::FileString NgpSystem::stateFilename(int slot, std::string_view name) const
 {
-	return stateFilenameMDFN(*MDFNGameInfo, slot, name, 'a');
+	return stateFilenameMDFN(*MDFNGameInfo, slot, name, 'a', noMD5InFilenames);
 }
 
 void NgpSystem::saveState(IG::CStringView path)
@@ -122,7 +122,7 @@ bool NgpSystem::onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat fmt)
 	return false;
 }
 
-void NgpSystem::configAudioRate(IG::FloatSeconds outputFrameTime, int outputRate)
+void NgpSystem::configAudioRate(FrameTime outputFrameTime, int outputRate)
 {
 	uint32 mixRate = std::round(audioMixRate(outputRate, outputFrameTime));
 	if(mixRate == GetSoundRate())

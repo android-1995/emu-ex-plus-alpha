@@ -214,6 +214,7 @@ void EmuViewController::moveEmuViewToWindow(IG::Window &win)
 void EmuViewController::configureWindowForEmulation(IG::Window &win, FrameTimeConfig frameTimeConfig, bool running)
 {
 	emuView.renderer().setWindowValidOrientations(win, running ? app().emuOrientation() : app().menuOrientation());
+	emuView.renderer().task().setPresentMode(win, running ? Gfx::PresentMode(app().presentMode) : Gfx::PresentMode::Auto);
 	if(running)
 		app().setIntendedFrameRate(win, frameTimeConfig);
 	else
@@ -355,13 +356,13 @@ void EmuViewController::prepareDraw()
 bool EmuViewController::drawMainWindow(IG::Window &win, IG::WindowDrawParams params, Gfx::RendererTask &task)
 {
 	return task.draw(win, params, {},
-		[this](IG::Window &win, Gfx::RendererCommands &cmds)
+		[this, isBlankFrame = std::exchange(drawBlankFrame, {})](IG::Window &win, Gfx::RendererCommands &cmds)
 	{
 		auto &winData = windowData(win);
 		cmds.basicEffect().setModelViewProjection(cmds, Gfx::Mat4::ident(), winData.projM);
 		if(showingEmulation)
 		{
-			if(winData.hasEmuView)
+			if(winData.hasEmuView && !isBlankFrame)
 			{
 				emuView.draw(cmds);
 			}
@@ -371,6 +372,7 @@ bool EmuViewController::drawMainWindow(IG::Window &win, IG::WindowDrawParams par
 			if(winData.hasPopup)
 				popup.draw(cmds);
 			app().record(FrameTimeStatEvent::aboutToPresent);
+			cmds.present(presentTime);
 		}
 		else
 		{
@@ -380,10 +382,9 @@ bool EmuViewController::drawMainWindow(IG::Window &win, IG::WindowDrawParams par
 			}
 			viewStack.draw(cmds);
 			popup.draw(cmds);
+			cmds.present();
 		}
-		cmds.present();
-		if(showingEmulation)
-			app().record(FrameTimeStatEvent::endOfDraw);
+		app().record(FrameTimeStatEvent::endOfDraw);
 		cmds.clear();
 	});
 }
@@ -400,7 +401,7 @@ bool EmuViewController::drawExtraWindow(IG::Window &win, IG::WindowDrawParams pa
 		{
 			popup.draw(cmds);
 		}
-		cmds.present();
+		cmds.present(presentTime);
 		cmds.clear();
 	});
 }
