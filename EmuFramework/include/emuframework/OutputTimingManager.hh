@@ -18,11 +18,7 @@
 #include <emuframework/EmuSystem.hh>
 #include <imagine/time/Time.hh>
 #include <imagine/gui/MenuItem.hh>
-
-namespace IG
-{
-class Screen;
-}
+#include <span>
 
 namespace EmuEx
 {
@@ -54,7 +50,7 @@ struct FrameTimeStats
 
 struct FrameTimeConfig
 {
-	FloatSeconds time;
+	FrameTime time;
 	FrameRate rate;
 	int refreshMultiplier;
 };
@@ -62,19 +58,19 @@ struct FrameTimeConfig
 class OutputTimingManager
 {
 public:
-	static constexpr FloatSeconds autoOption{};
-	static constexpr FloatSeconds originalOption{-1.};
+	static constexpr FrameTime autoOption{};
+	static constexpr FrameTime originalOption{-1};
 
 	constexpr OutputTimingManager() = default;
-	FrameTimeConfig frameTimeConfig(const EmuSystem &, const Screen &) const;
-	static bool frameTimeOptionIsValid(FloatSeconds time);
-	bool setFrameTimeOption(VideoSystem, FloatSeconds frameTime);
-	FloatSeconds frameTimeOption(VideoSystem vidSys) const { return frameTimeVar(vidSys); }
+	FrameTimeConfig frameTimeConfig(const EmuSystem &, std::span<const FrameRate> supportedFrameRates) const;
+	static bool frameTimeOptionIsValid(FrameTime time);
+	bool setFrameTimeOption(VideoSystem, FrameTime frameTime);
+	FrameTime frameTimeOption(VideoSystem vidSys) const { return frameTimeVar(vidSys); }
 	auto frameTimeOptionAsMenuId(VideoSystem vidSys) const { return MenuItem::Id(frameTimeVar(vidSys).count() > 0 ? 1 : frameTimeVar(vidSys).count()); }
 
 private:
-	FloatSeconds frameTimeNative{};
-	FloatSeconds frameTimePAL{};
+	FrameTime frameTimeNative{};
+	FrameTime frameTimePAL{};
 
 	static auto &frameTimeVar(auto &self, VideoSystem system)
 	{
@@ -85,8 +81,8 @@ private:
 	  }
 	  __builtin_unreachable();
 	}
-	FloatSeconds &frameTimeVar(VideoSystem system) { return frameTimeVar(*this, system); }
-	const FloatSeconds &frameTimeVar(VideoSystem system) const { return frameTimeVar(*this, system); }
+	FrameTime &frameTimeVar(VideoSystem system) { return frameTimeVar(*this, system); }
+	const FrameTime &frameTimeVar(VideoSystem system) const { return frameTimeVar(*this, system); }
 };
 
 }

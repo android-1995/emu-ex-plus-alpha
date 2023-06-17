@@ -35,8 +35,8 @@ namespace EmuEx
 const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2023\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nMednafen Team\nmednafen.github.io";
 bool EmuSystem::hasRectangularPixels = true;
 constexpr double masterClockFrac = 21477272.727273 / 3.;
-constexpr FloatSeconds staticFrameTimeWith262Lines{455. * 262. / masterClockFrac}; // ~60.05Hz
-constexpr FloatSeconds staticFrameTime{455. * 263. / masterClockFrac}; //~59.82Hz
+constexpr auto pceFrameTimeWith262Lines{fromSeconds<FrameTime>(455. * 262. / masterClockFrac)}; // ~60.05Hz
+constexpr auto pceFrameTime{fromSeconds<FrameTime>(455. * 263. / masterClockFrac)}; //~59.82Hz
 bool EmuApp::needsGlobalInstance = true;
 
 bool hasHuCardExtension(std::string_view name)
@@ -88,12 +88,12 @@ void PceSystem::onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags)
 
 WallClockTimePoint PceSystem::backupMemoryLastWriteTime(const EmuApp &app) const
 {
-	return appContext().fileUriLastWriteTime(savePathMDFN(app, 0, "sav").c_str());
+	return appContext().fileUriLastWriteTime(savePathMDFN(app, 0, "sav", noMD5InFilenames).c_str());
 }
 
 FS::FileString PceSystem::stateFilename(int slot, std::string_view name) const
 {
-	return stateFilenameMDFN(*MDFNGameInfo, slot, name, 'q');
+	return stateFilenameMDFN(*MDFNGameInfo, slot, name, 'q', noMD5InFilenames);
 }
 
 void PceSystem::closeSystem()
@@ -199,9 +199,9 @@ void PceSystem::updatePixmap(IG::PixelFormat fmt)
 	return;
 }
 
-FloatSeconds PceSystem::frameTime() const { return isUsing263Lines() ? staticFrameTime : staticFrameTimeWith262Lines; }
+FrameTime PceSystem::frameTime() const { return isUsing263Lines() ? pceFrameTime : pceFrameTimeWith262Lines; }
 
-void PceSystem::configAudioRate(FloatSeconds outputFrameTime, int outputRate)
+void PceSystem::configAudioRate(FrameTime outputFrameTime, int outputRate)
 {
 	configuredFor263Lines = isUsing263Lines();
 	auto mixRate = audioMixRate(outputRate, outputFrameTime);

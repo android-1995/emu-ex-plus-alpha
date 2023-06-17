@@ -26,7 +26,7 @@ namespace EmuEx
 
 enum
 {
-	CFGKEY_NGPKEY_LANGUAGE = 269,
+	CFGKEY_NGPKEY_LANGUAGE = 269, CFGKEY_NO_MD5_FILENAMES = 270,
 };
 
 class NgpSystem final: public EmuSystem
@@ -38,8 +38,9 @@ public:
 	MutablePixmapView mSurfacePix{};
 	static constexpr IP vidBufferPx{160, 152};
 	alignas(8) uint32_t pixBuff[vidBufferPx.x * vidBufferPx.y]{};
+	bool noMD5InFilenames{};
 	// TODO: Mednafen/Neopop timing is based on 199 lines/frame, verify if this is correct
-	static constexpr FloatSeconds staticFrameTime{199. * 515. / 6144000.}; //~59.95Hz
+	static constexpr auto ngpFrameTime{fromSeconds<FrameTime>(199. * 515. / 6144000.)}; //~59.95Hz
 
 	NgpSystem(ApplicationContext ctx):
 		EmuSystem{ctx}
@@ -62,8 +63,8 @@ public:
 	void handleInputAction(EmuApp *, InputAction);
 	InputAction translateInputAction(InputAction);
 	SystemInputDeviceDesc inputDeviceDesc(int idx) const;
-	FloatSeconds frameTime() const { return staticFrameTime; }
-	void configAudioRate(FloatSeconds outputFrameTime, int outputRate);
+	FrameTime frameTime() const { return ngpFrameTime; }
+	void configAudioRate(FrameTime outputFrameTime, int outputRate);
 	static std::span<const AspectRatioInfo> aspectRatioInfos();
 
 	// optional API functions

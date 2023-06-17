@@ -34,7 +34,7 @@ namespace EmuEx
 class DetectFrameRateView final: public View, public EmuAppHelper<DetectFrameRateView>
 {
 public:
-	using DetectFrameRateDelegate = DelegateFunc<void (IG::FloatSeconds frameTime)>;
+	using DetectFrameRateDelegate = DelegateFunc<void (SteadyClockTime frameTime)>;
 	DetectFrameRateDelegate onDetectFrameTime;
 	IG::OnFrameDelegate detectFrameRate;
 	SteadyClockTime totalFrameTime{};
@@ -111,19 +111,20 @@ public:
 					lastFrameTime = frameTime;
 				}
 			}
-			IG::FloatSeconds frameTimeTotalSecs = IG::FloatSeconds(frameTimeTotal);
-			IG::FloatSeconds detectedFrameTime = frameTimeTotalSecs / (double)frameTimeSample.size();
+			auto frameTimeTotalSecs = FloatSeconds(frameTimeTotal);
+			auto detectedFrameTimeSecs = frameTimeTotalSecs / (double)frameTimeSample.size();
+			auto detectedFrameTime = round<SteadyClockTime>(detectedFrameTimeSecs);
 			{
 				waitForDrawFinished();
 				if(detectedFrameTime.count())
-					fpsText.resetString(std::format("{:g}fps", 1. / detectedFrameTime.count()));
+					fpsText.resetString(std::format("{:g}fps", toHz(detectedFrameTimeSecs)));
 				else
 					fpsText.resetString("0fps");
 				fpsText.compile(renderer());
 			}
 			if(stableFrameTime)
 			{
-				logMsg("found frame time:%f", detectedFrameTime.count());
+				logMsg("found frame time:%f", detectedFrameTimeSecs.count());
 				onDetectFrameTime(detectedFrameTime);
 				dismiss();
 				return false;
@@ -137,7 +138,7 @@ public:
 		}
 		if(allTotalFrames >= framesToTime)
 		{
-			onDetectFrameTime(IG::FloatSeconds{});
+			onDetectFrameTime(SteadyClockTime{});
 			dismiss();
 			return false;
 		}
@@ -163,7 +164,7 @@ public:
 						postDraw();
 					return true;
 				}
-				return runFrameTimeDetection(params.timestamp() - std::exchange(lastFrameTimestamp, params.timestamp()), 0.00175);
+				return runFrameTimeDetection(params.timestamp - std::exchange(lastFrameTimestamp, params.timestamp), 0.00175);
 			};
 		window().addOnFrame(detectFrameRate);
 		app().setCPUNeedsLowLatency(appContext(), true);
@@ -178,7 +179,7 @@ static std::string makeFrameRateStr(VideoSystem vidSys, const OutputTimingManage
 	else if(frameTimeOpt == OutputTimingManager::originalOption)
 		return "原始";
 	else
-		return std::format("{:g}Hz", 1. / frameTimeOpt.count());
+		return std::format("{:g}Hz", toHz(frameTimeOpt));
 }
 
 static const char *autoWindowPixelFormatStr(IG::ApplicationContext ctx)
@@ -272,7 +273,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 				window().setIntendedFrameRate(system().frameRate());
 				auto frView = makeView<DetectFrameRateView>();
 				frView->onDetectFrameTime =
-					[this](FloatSeconds frameTime)
+					[this](SteadyClockTime frameTime)
 					{
 						if(frameTime.count())
 						{
@@ -295,7 +296,7 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 					"输入整数或小数", "",
 					[this](EmuApp &, auto val)
 					{
-						if(onFrameTimeChange(activeVideoSystem, FloatSeconds{val.second / val.first}))
+						if(onFrameTimeChange(activeVideoSystem, fromSeconds<SteadyClockTime>(val.second / val.first)))
 						{
 							dismissPrevious();
 							return true;
@@ -723,11 +724,35 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 			.defaultItemOnSelect = [this](TextMenuItem &item)
 			{
 				app().videoImageBuffersOption() = item.id();
-				emuVideo().setImageBuffers(item.id(), renderer().supportsPresentationTime());
+				emuVideo().setImageBuffers(item.id());
 			}
 		},
 		(MenuItem::Id)app().videoImageBuffersOption().val,
 		imageBuffersItem
+	},
+	presentModeItems
+	{
+		{"自动",                                                    &defaultFace(), to_underlying(Gfx::PresentMode::Auto)},
+		{"立即(延迟较低，但可能会丢帧)", &defaultFace(), to_underlying(Gfx::PresentMode::Immediate)},
+		{"队列(帧率更稳)",                    &defaultFace(), to_underlying(Gfx::PresentMode::FIFO)},
+	},
+	presentMode
+	{
+		"呈现模式", &defaultFace(),
+		MultiChoiceMenuItem::Delegates
+		{
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
+			{
+				t.resetString(renderer().evalPresentMode(app().emuWindow(), app().presentMode) == Gfx::PresentMode::FIFO ? "Queued" : "Immediate");
+				return true;
+			},
+			.defaultItemOnSelect = [this](TextMenuItem &item)
+			{
+				app().presentMode = Gfx::PresentMode(item.id());
+			}
+		},
+		MenuItem::Id(Gfx::PresentMode(app().presentMode)),
+		presentModeItems
 	},
 	renderPixelFormatItem
 	{
@@ -753,14 +778,35 @@ VideoOptionView::VideoOptionView(ViewAttachParams attach, bool customMenu):
 		(MenuItem::Id)app().renderPixelFormat().id(),
 		renderPixelFormatItem
 	},
-	forceMaxScreenFrameRate
+	screenFrameRateItems
 	{
-		"强制最高屏幕帧率", &defaultFace(),
-		app().shouldForceMaxScreenFrameRate(),
-		[this](BoolMenuItem &item)
+		[&]
 		{
-			app().setForceMaxScreenFrameRate(item.flipBoolValue(*this));
-		}
+			std::vector<TextMenuItem> items;
+			auto setRateDel = [this](TextMenuItem &item) { app().overrideScreenFrameRate = std::bit_cast<FrameRate>(item.id()); };
+			items.emplace_back("关", &defaultFace(), setRateDel, 0);
+			for(auto rate : app().emuScreen().supportedFrameRates())
+				items.emplace_back(std::format("{:g}Hz", rate), &defaultFace(), setRateDel, std::bit_cast<MenuItem::Id>(rate));
+			return items;
+		}()
+	},
+	screenFrameRate
+	{
+		"覆盖屏幕帧率", &defaultFace(),
+		std::bit_cast<MenuItem::Id>(FrameRate(app().overrideScreenFrameRate)),
+		screenFrameRateItems
+	},
+	presentationTime
+	{
+		"精确帧节奏(改善帧数,性能足够时保持开启)", &defaultFace(),
+		app().usePresentationTime,
+		[this](BoolMenuItem &item) { app().usePresentationTime = item.flipBoolValue(*this); }
+	},
+	blankFrameInsertion
+	{
+		"允许插入空白帧", &defaultFace(),
+		app().allowBlankFrameInsertion,
+		[this](BoolMenuItem &item) { app().allowBlankFrameInsertion = item.flipBoolValue(*this); }
 	},
 	brightnessItem
 	{
@@ -893,11 +939,16 @@ void VideoOptionView::loadStockItems()
 	item.emplace_back(&imgEffectPixelFormat);
 	if(!app().videoImageBuffersOption().isConst)
 		item.emplace_back(&imageBuffers);
-	if(IG::used(forceMaxScreenFrameRate) && Config::envIsAndroid && appContext().androidSDK() >= 30)
-		item.emplace_back(&forceMaxScreenFrameRate);
-	if(IG::used(secondDisplay))
+	if(used(presentMode) && app().supportsPresentModes())
+		item.emplace_back(&presentMode);
+	if(used(presentationTime) && renderer().supportsPresentationTime())
+		item.emplace_back(&presentationTime);
+	item.emplace_back(&blankFrameInsertion);
+	if(used(screenFrameRate) && app().emuScreen().supportedFrameRates().size() > 1)
+		item.emplace_back(&screenFrameRate);
+	if(used(secondDisplay))
 		item.emplace_back(&secondDisplay);
-	if(IG::used(showOnSecondScreen) && !app().showOnSecondScreenOption().isConst)
+	if(used(showOnSecondScreen) && !app().showOnSecondScreenOption().isConst)
 		item.emplace_back(&showOnSecondScreen);
 }
 
@@ -906,11 +957,11 @@ void VideoOptionView::setEmuVideoLayer(EmuVideoLayer &videoLayer_)
 	videoLayer = &videoLayer_;
 }
 
-bool VideoOptionView::onFrameTimeChange(VideoSystem vidSys, FloatSeconds time)
+bool VideoOptionView::onFrameTimeChange(VideoSystem vidSys, SteadyClockTime time)
 {
 	if(!app().outputTimingManager.setFrameTimeOption(vidSys, time))
 	{
-		app().postMessage(4, true, std::format("{:g}Hz 不在有效范围内", 1. / time.count()));
+		app().postMessage(4, true, std::format("{:g}Hz 不在有效范围内", toHz(time)));
 		return false;
 	}
 	return true;

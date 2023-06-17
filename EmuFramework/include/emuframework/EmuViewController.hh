@@ -108,9 +108,12 @@ public:
 	EmuView emuView;
 	EmuInputView inputView;
 	ToastView popup;
+	IG_UseMemberIf(Gfx::supportsPresentationTime, SteadyClockTimePoint, presentTime){};
 protected:
 	EmuMenuViewStack viewStack;
 	bool showingEmulation{};
+public:
+	bool drawBlankFrame{};
 
 	static constexpr bool HAS_USE_RENDER_TIME = Config::envIsLinux
 		|| (Config::envIsAndroid && Config::ENV_ANDROID_MIN_SDK < 16);

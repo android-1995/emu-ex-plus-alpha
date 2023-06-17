@@ -20,16 +20,16 @@
 namespace EmuEx
 {
 
-bool OutputTimingManager::frameTimeOptionIsValid(FloatSeconds time)
+bool OutputTimingManager::frameTimeOptionIsValid(FrameTime time)
 {
 	return time == OutputTimingManager::autoOption ||
 		time == OutputTimingManager::originalOption ||
-		EmuSystem::validFrameRateRange.contains(1. / time.count());
+		EmuSystem::validFrameRateRange.contains(toHz(time));
 }
 
-static FrameTimeConfig bestOutputTimeForScreen(const Screen &screen, FloatSeconds systemFrameTime)
+static FrameTimeConfig bestOutputTimeForScreen(std::span<const FrameRate> supportedFrameRates, FrameTime systemFrameTime)
 {
-	const auto systemFrameRate = 1. / systemFrameTime.count();
+	const auto systemFrameRate = toHz(systemFrameTime);
 	static auto selectAcceptableRate = [](double rate, double targetRate) -> std::pair<double, int>
 	{
 		assumeExpr(rate > 0);
@@ -48,7 +48,7 @@ static FrameTimeConfig bestOutputTimeForScreen(const Screen &screen, FloatSecond
 	};
 	double acceptableRate{};
 	int refreshMultiplier{};
-	for(auto rate : screen.supportedFrameRates())
+	for(auto rate : supportedFrameRates)
 	{
 		if(auto [acceptedRate, acceptedRefreshMultiplier] = selectAcceptableRate(rate, systemFrameRate);
 			acceptedRate)
@@ -59,12 +59,12 @@ static FrameTimeConfig bestOutputTimeForScreen(const Screen &screen, FloatSecond
 	}
 	if(acceptableRate)
 	{
-		return {FloatSeconds{1. / acceptableRate}, FrameRate(acceptableRate), refreshMultiplier};
+		return {fromHz<FrameTime>(acceptableRate), FrameRate(acceptableRate), refreshMultiplier};
 	}
 	return {systemFrameTime, FrameRate(systemFrameRate), 0};
 }
 
-bool OutputTimingManager::setFrameTimeOption(VideoSystem vidSys, FloatSeconds time)
+bool OutputTimingManager::setFrameTimeOption(VideoSystem vidSys, FrameTime time)
 {
 	if(!frameTimeOptionIsValid(time))
 		return false;
@@ -72,15 +72,15 @@ bool OutputTimingManager::setFrameTimeOption(VideoSystem vidSys, FloatSeconds ti
 	return true;
 }
 
-FrameTimeConfig OutputTimingManager::frameTimeConfig(const EmuSystem &system, const Screen &screen) const
+FrameTimeConfig OutputTimingManager::frameTimeConfig(const EmuSystem &system, std::span<const FrameRate> supportedFrameRates) const
 {
 	auto t = frameTimeVar(system.videoSystem());
 	assumeExpr(frameTimeOptionIsValid(t));
 	if(t.count() > 0)
-		return {t, FrameRate(1. / t.count()), 0};
+		return {t, FrameRate(toHz(t)), 0};
 	else if(t == originalOption)
 		return {system.frameTime(), FrameRate(system.frameRate()), 0};
-	return bestOutputTimeForScreen(screen, system.frameTime());
+	return bestOutputTimeForScreen(supportedFrameRates, system.frameTime());
 }
 
 }

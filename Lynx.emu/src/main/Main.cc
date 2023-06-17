@@ -57,7 +57,7 @@ void LynxSystem::reset(EmuApp &, ResetMode mode)
 
 FS::FileString LynxSystem::stateFilename(int slot, std::string_view name) const
 {
-	return stateFilenameMDFN(*MDFNGameInfo, slot, name, 'a');
+	return stateFilenameMDFN(*MDFNGameInfo, slot, name, 'a', noMD5InFilenames);
 }
 
 void LynxSystem::saveState(IG::CStringView path)
@@ -100,9 +100,9 @@ static auto microsecondsPerFrame()
 	return Microseconds{Lynx_HCount() * linesPerFrame};
 }
 
-FloatSeconds LynxSystem::frameTime() const { return FloatSeconds{microsecondsPerFrame()}; }
+FrameTime LynxSystem::frameTime() const { return FrameTime{microsecondsPerFrame()}; }
 
-void LynxSystem::configAudioRate(FloatSeconds outputFrameTime, int outputRate)
+void LynxSystem::configAudioRate(FrameTime outputFrameTime, int outputRate)
 {
 	long mixRate = std::round(audioMixRate(outputRate, outputFrameTime));
 	configuredHCount = Lynx_HCount();
