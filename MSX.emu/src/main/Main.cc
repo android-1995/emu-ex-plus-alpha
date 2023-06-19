@@ -62,6 +62,7 @@ const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2022\nRobe
 bool EmuSystem::handlesGenericIO = false; // TODO: need to re-factor BlueMSX file loading code
 bool EmuSystem::hasResetModes = true;
 bool EmuSystem::canRenderRGBA8888 = false;
+bool EmuSystem::hasRectangularPixels = true;
 bool EmuApp::needsGlobalInstance = true;
 BoardInfo boardInfo{};
 Mixer *mixer{};
@@ -89,17 +90,17 @@ FS::PathString machineBasePath(MsxSystem &sys)
 
 bool hasMSXTapeExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".cas", ".CAS");
+	return IG::endsWithAnyCaseless(name, ".cas");
 }
 
 bool hasMSXDiskExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".dsk", ".DSK");
+	return IG::endsWithAnyCaseless(name, ".dsk");
 }
 
 bool hasMSXROMExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".rom", ".mx1", ".mx2", ".col", ".ROM", ".MX1", ".MX2", ".COL");
+	return IG::endsWithAnyCaseless(name, ".rom", ".mx1", ".mx2", ".col");
 }
 
 static bool hasMSXExtension(std::string_view name)
@@ -118,7 +119,6 @@ const char *EmuSystem::systemName() const
 }
 
 EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter = hasMSXExtension;
-EmuSystem::NameFilterFunc EmuSystem::defaultBenchmarkFsFilter = hasMSXExtension;
 
 void MsxSystem::insertMedia(EmuApp &app)
 {
@@ -148,7 +148,7 @@ void MsxSystem::insertMedia(EmuApp &app)
 				logMsg("loading ROM %s", cartName[i].data());
 				if(!insertROM(app, cartName[i].data(), i))
 				{
-					throw std::runtime_error(fmt::format("Error loading ROM{}:\n{}", i, cartName[i]));
+					throw std::runtime_error(std::format("Error loading ROM{}:\n{}", i, cartName[i]));
 				}
 			}
 		}
@@ -161,7 +161,7 @@ void MsxSystem::insertMedia(EmuApp &app)
 		logMsg("loading Disk %s", diskName[i].data());
 		if(!insertDisk(app, diskName[i].data(), i))
 		{
-			throw std::runtime_error(fmt::format("Error loading Disk{}:\n{}", i, diskName[i]));
+			throw std::runtime_error(std::format("Error loading Disk{}:\n{}", i, diskName[i]));
 		}
 	}
 
@@ -172,7 +172,7 @@ void MsxSystem::insertMedia(EmuApp &app)
 		logMsg("loading HD %s", hdName[i].data());
 		if(!insertDisk(app, hdName[i].data(), diskGetHdDriveId(i / 2, i % 2)))
 		{
-			throw std::runtime_error(fmt::format("Error loading HD{}:\n{}", i, hdName[i]));
+			throw std::runtime_error(std::format("Error loading HD{}:\n{}", i, hdName[i]));
 		}
 	}
 }
@@ -287,7 +287,7 @@ bool MsxSystem::createBoardFromLoadGame(EmuApp &app)
 
 static void throwMachineInitError(std::string_view machineName)
 {
-	throw std::runtime_error(fmt::format("Error loading machine files for\n\"{}\",\nplease check Options➔File Paths➔BIOS",
+	throw std::runtime_error(std::format("Error loading machine files for\n\"{}\",\nplease check Options➔File Paths➔BIOS",
 		machineName));
 }
 
@@ -338,7 +338,7 @@ void MsxSystem::setCurrentMachineName(EmuApp &app, std::string_view machineName,
 	}
 	if(!createBoardFromLoadGame(app))
 	{
-		throw std::runtime_error(fmt::format("Error initializing {}", machine->name));
+		throw std::runtime_error(std::format("Error initializing {}", machine->name));
 	}
 	if(insertMediaFiles)
 		insertMedia(app);
@@ -556,7 +556,7 @@ void MsxSystem::loadBlueMSXState(EmuApp &app, const char *filename)
 	// from this point on, errors are fatal and require the existing game to close
 	if(!createBoardFromLoadGame(app))
 	{
-		auto err = fmt::format("Can't initialize machine:{} from save-state", machine->name);
+		auto err = std::format("Can't initialize machine: \"{}\" from state", machine->name);
 		app.closeSystemWithoutSave();
 		throw std::runtime_error{err};
 	}
@@ -689,12 +689,14 @@ void MsxSystem::loadContent(IO &, EmuSystemCreateParams, OnLoadProgressDelegate)
 	destroyMachineOnReturn.cancel();
 }
 
-void MsxSystem::configAudioRate(IG::FloatSeconds frameTime, int rate)
+void MsxSystem::configAudioRate(FrameTime outputFrameTime, int outputRate)
 {
-	assumeExpr(rate == 44100);// TODO: not all sound chips handle non-44100Hz sample rate
-	int mixRate = std::round(rate * (59.924 * frameTime.count()));
+	assumeExpr(outputRate == 44100);// TODO: not all sound chips handle non-44100Hz sample rate
+	UInt32 mixRate = std::round(audioMixRate(outputRate, outputFrameTime));
+	if(mixerGetSampleRate(mixer) == mixRate)
+		return;
+	logMsg("set sound mix rate:%d", (int)mixRate);
 	mixerSetSampleRate(mixer, mixRate);
-	logMsg("set mixer rate %d", (int)mixerGetSampleRate(mixer));
 }
 
 static Int32 soundWrite(void *audio, Int16 *buffer, UInt32 samples)
@@ -738,9 +740,9 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 {
 	const Gfx::LGradientStopDesc navViewGrad[] =
 	{
-		{ .0, Gfx::VertexColorPixelFormat.build((127./255.) * .4, (255./255.) * .4, (212./255.) * .4, 1.) },
-		{ .3, Gfx::VertexColorPixelFormat.build((127./255.) * .4, (255./255.) * .4, (212./255.) * .4, 1.) },
-		{ .97, Gfx::VertexColorPixelFormat.build((42./255.) * .4, (85./255.) * .4, (85./255.) * .4, 1.) },
+		{ .0, Gfx::PackedColor::format.build((127./255.) * .4, (255./255.) * .4, (212./255.) * .4, 1.) },
+		{ .3, Gfx::PackedColor::format.build((127./255.) * .4, (255./255.) * .4, (212./255.) * .4, 1.) },
+		{ .97, Gfx::PackedColor::format.build((42./255.) * .4, (85./255.) * .4, (85./255.) * .4, 1.) },
 		{ 1., view.separatorColor() },
 	};
 	view.setBackgroundGradient(navViewGrad);

@@ -1,17 +1,17 @@
-/*  This file is part of NGP.emu.
+/*  This file is part of Swan.emu.
 
-	NGP.emu is free software: you can redistribute it and/or modify
+	Swan.emu is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
 
-	NGP.emu is distributed in the hope that it will be useful,
+	Swan.emu is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with NGP.emu.  If not, see <http://www.gnu.org/licenses/> */
+	along with Swan.emu.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <emuframework/EmuApp.hh>
 #include <emuframework/Option.hh>
@@ -45,6 +45,7 @@ bool WsSystem::readConfig(ConfigType type, MapIO &io, unsigned key, size_t readS
 				{
 					userProfile = WsUserProfile::unpack(v);
 				});
+			case CFGKEY_NO_MD5_FILENAMES: return readOptionValue(io, readSize, noMD5InFilenames);
 		}
 	}
 	else if(type == ConfigType::SESSION)
@@ -70,6 +71,7 @@ void WsSystem::writeConfig(ConfigType type, FileIO &io)
 			writeStringOptionValue(io, CFGKEY_USER_NAME, userName);
 		if(userProfile != defaultUserProfile)
 			writeOptionValue(io, CFGKEY_USER_PROFILE, WsUserProfile::pack(userProfile));
+		writeOptionValueIfNotDefault(io, CFGKEY_NO_MD5_FILENAMES, noMD5InFilenames, false);
 	}
 	else if(type == ConfigType::SESSION)
 	{

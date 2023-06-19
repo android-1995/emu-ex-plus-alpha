@@ -29,7 +29,11 @@ namespace EmuEx
 static constexpr int KEY_CONFIGS_HARD_LIMIT = 256;
 static constexpr int INPUT_DEVICE_CONFIGS_HARD_LIMIT = 256;
 
-static bool windowPixelFormatIsValid(uint8_t val)
+bool isValidAspectRatio(float val);
+bool isValidFastSpeed(int16_t);
+bool isValidSlowSpeed(int16_t);
+
+constexpr bool windowPixelFormatIsValid(uint8_t val)
 {
 	switch(val)
 	{
@@ -40,18 +44,18 @@ static bool windowPixelFormatIsValid(uint8_t val)
 	}
 }
 
-static bool renderPixelFormatIsValid(IG::PixelFormat val)
+constexpr bool renderPixelFormatIsValid(IG::PixelFormat val)
 {
 	return windowPixelFormatIsValid(val);
 }
 
-static bool colorSpaceIsValid(Gfx::ColorSpace val)
+constexpr bool colorSpaceIsValid(Gfx::ColorSpace val)
 {
 	return val == Gfx::ColorSpace::SRGB;
 }
 
 static bool readKeyConfig(KeyConfigContainer &customKeyConfigs,
-	MapIO &io, uint16_t &size, std::span<const KeyCategory> categorySpan)
+	MapIO &io, size_t &size, std::span<const KeyCategory> categorySpan)
 {
 	auto confs = io.get<uint8_t>(); // TODO: unused currently, use to pre-allocate memory for configs
 	size--;
@@ -109,7 +113,7 @@ static bool readKeyConfig(KeyConfigContainer &customKeyConfigs,
 			if(catSize > cat.keys() * sizeof(KeyConfig::Key))
 				return false;
 			auto key = keyConf.key(cat);
-			if(io.read(key, catSize) != catSize)
+			if(io.read(static_cast<void*>(key), catSize) != catSize)
 				return false;
 			size -= catSize;
 
@@ -142,7 +146,7 @@ static bool readKeyConfig(KeyConfigContainer &customKeyConfigs,
 }
 
 static bool readInputDeviceConfig(InputDeviceSavedConfigContainer &savedInputDevs,
-	MapIO &io, uint16_t &size, const KeyConfigContainer &customKeyConfigs)
+	MapIO &io, size_t &size, const KeyConfigContainer &customKeyConfigs)
 {
 	auto confs = io.get<uint8_t>(); // TODO: unused currently, use to pre-allocate memory for configs
 	size--;
@@ -271,11 +275,6 @@ void EmuApp::saveConfigFile(FileIO &io)
 
 	const auto cfgFileOptions = std::tie
 	(
-		optionAutosaveTimerMins,
-		optionSound,
-		optionSoundVolume,
-		optionSoundRate,
-		optionAspectRatio,
 		optionImageZoom,
 		optionViewportZoom,
 		#if defined CONFIG_BASE_MULTI_WINDOW && defined CONFIG_BASE_MULTI_SCREEN
@@ -292,14 +291,10 @@ void EmuApp::saveConfigFile(FileIO &io)
 		optionEmuOrientation,
 		optionMenuOrientation,
 		optionConfirmOverwriteState,
-		optionFastSlowModeSpeed,
 		#ifdef CONFIG_INPUT_DEVICE_HOTSWAP
 		optionNotifyInputDeviceChange,
 		#endif
 		optionFrameInterval,
-		optionSkipLateFrames,
-		optionFrameRate,
-		optionFrameRatePAL,
 		optionNotificationIcon,
 		optionTitleBar,
 		optionIdleDisplayPowerSave,
@@ -311,14 +306,9 @@ void EmuApp::saveConfigFile(FileIO &io)
 		optionHideOSNav,
 		optionSustainedPerformanceMode,
 		#endif
-		#ifdef CONFIG_BLUETOOTH
+		#ifdef CONFIG_INPUT_BLUETOOTH
 		optionKeepBluetoothActive,
 		optionShowBluetoothScan,
-		#endif
-		optionSoundBuffers,
-		optionAddSoundBuffersOnUnderrun,
-		#ifdef CONFIG_AUDIO_MULTIPLE_SYSTEM_APIS
-		optionAudioAPI,
 		#endif
 		optionShowBundledGames
 	);
@@ -326,7 +316,6 @@ void EmuApp::saveConfigFile(FileIO &io)
 	std::apply([&](auto &...opt){ (writeOptionValue(io, opt), ...); }, cfgFileOptions);
 
 	writeRecentContent(io);
-	writeOptionValueIfNotDefault(io, CFGKEY_AUTOSAVE_LAUNCH_MODE, autosaveLaunchMode, AutosaveLaunchMode::Load);
 	writeOptionValue(io, CFGKEY_BACK_NAVIGATION, viewManager.needsBackControlOption());
 	writeOptionValue(io, CFGKEY_SWAPPED_GAMEPAD_CONFIM, swappedConfirmKeysOption());
 	writeOptionValue(io, CFGKEY_AUDIO_SOLO_MIX, audioManager().soloMixOption());
@@ -343,17 +332,36 @@ void EmuApp::saveConfigFile(FileIO &io)
 		writeOptionValue(io, CFGKEY_LAYOUT_BEHIND_SYSTEM_UI, false);
 	if(contentRotation_ != Rotation::ANY)
 		writeOptionValue(io, CFGKEY_CONTENT_ROTATION, contentRotation_);
+	writeOptionValueIfNotDefault(io, CFGKEY_VIDEO_LANDSCAPE_ASPECT_RATIO, videoLayer().landscapeAspectRatio, defaultVideoAspectRatio());
+	writeOptionValueIfNotDefault(io, CFGKEY_VIDEO_PORTRAIT_ASPECT_RATIO, videoLayer().portraitAspectRatio, defaultVideoAspectRatio());
+	writeOptionValueIfNotDefault(io, CFGKEY_VIDEO_LANDSCAPE_OFFSET, videoLayer().landscapeOffset, 0);
+	writeOptionValueIfNotDefault(io, CFGKEY_VIDEO_PORTRAIT_OFFSET, videoLayer().portraitOffset, 0);
+	writeOptionValueIfNotDefault(io, CFGKEY_FAST_MODE_SPEED, fastModeSpeed, defaultFastModeSpeed);
+	writeOptionValueIfNotDefault(io, CFGKEY_SLOW_MODE_SPEED, slowModeSpeed, defaultSlowModeSpeed);
+	writeOptionValueIfNotDefault(io, CFGKEY_FRAME_RATE, outputTimingManager.frameTimeOption(VideoSystem::NATIVE_NTSC), OutputTimingManager::autoOption);
+	writeOptionValueIfNotDefault(io, CFGKEY_FRAME_RATE_PAL, outputTimingManager.frameTimeOption(VideoSystem::PAL), OutputTimingManager::autoOption);
 	vController.writeConfig(io);
-	if(IG::used(usePresentationTime_) && !usePresentationTime_)
-		writeOptionValue(io, CFGKEY_RENDERER_PRESENTATION_TIME, false);
-	if(IG::used(forceMaxScreenFrameRate) && forceMaxScreenFrameRate)
-		writeOptionValue(io, CFGKEY_FORCE_MAX_SCREEN_FRAME_RATE, true);
+	autosaveManager_.writeConfig(io);
+	emuAudio.writeConfig(io);
+	doIfUsed(overrideScreenFrameRate, [&](auto &rate)
+	{
+		writeOptionValueIfNotDefault(io, CFGKEY_OVERRIDE_SCREEN_FRAME_RATE, rate, FrameRate{0});
+	});
+	writeOptionValueIfNotDefault(io, CFGKEY_BLANK_FRAME_INSERTION, allowBlankFrameInsertion, false);
 	if(videoBrightnessRGB != Gfx::Vec3{1.f, 1.f, 1.f})
 		writeOptionValue(io, CFGKEY_VIDEO_BRIGHTNESS, videoBrightnessRGB);
 	#ifdef CONFIG_BLUETOOTH_SCAN_CACHE_USAGE
 	if(!BluetoothAdapter::scanCacheUsage())
 		writeOptionValue(io, CFGKEY_BLUETOOTH_SCAN_CACHE, false);
 	#endif
+	if(used(cpuAffinityMask) && cpuAffinityMask)
+		writeOptionValue(io, CFGKEY_CPU_AFFINITY_MASK, cpuAffinityMask);
+	if(used(cpuAffinityMode))
+		writeOptionValueIfNotDefault(io, CFGKEY_CPU_AFFINITY_MODE, cpuAffinityMode, CPUAffinityMode::Auto);
+	if(used(presentMode) && supportsPresentModes())
+		writeOptionValueIfNotDefault(io, CFGKEY_RENDERER_PRESENT_MODE, presentMode, Gfx::PresentMode::Auto);
+	if(used(usePresentationTime) && renderer.supportsPresentationTime())
+		writeOptionValueIfNotDefault(io, CFGKEY_RENDERER_PRESENTATION_TIME, usePresentationTime, true);
 
 	if(customKeyConfigs.size())
 	{
@@ -403,27 +411,27 @@ void EmuApp::saveConfigFile(FileIO &io)
 		}
 		// write to config file
 		logMsg("saving %d key configs, %zu bytes", (int)customKeyConfigs.size(), bytes);
-		io.write(uint16_t(bytes));
-		io.write((uint16_t)CFGKEY_INPUT_KEY_CONFIGS);
-		io.write((uint8_t)customKeyConfigs.size());
+		io.put(uint16_t(bytes));
+		io.put(uint16_t(CFGKEY_INPUT_KEY_CONFIGS));
+		io.put(uint8_t(customKeyConfigs.size()));
 		for(uint8_t configs = 0; auto &ePtr : customKeyConfigs)
 		{
 			auto &e = *ePtr;
 			logMsg("writing config %s", e.name.data());
-			io.write(uint8_t(e.map));
+			io.put(uint8_t(e.map));
 			uint8_t nameLen = e.name.size();
-			io.write(nameLen);
+			io.put(nameLen);
 			io.write(e.name.data(), nameLen);
-			io.write(writeCategories[configs]);
+			io.put(writeCategories[configs]);
 			for(auto &cat : inputControlCategories())
 			{
 				uint8_t catIdx = std::distance(inputControlCategories().data(), &cat);
 				if(!writeCategory[configs][catIdx])
 					continue;
-				io.write((uint8_t)catIdx);
+				io.put(uint8_t(catIdx));
 				uint16_t catSize = cat.keys() * sizeof(KeyConfig::Key);
-				io.write(catSize);
-				io.write(e.key(cat), catSize);
+				io.put(catSize);
+				io.write(static_cast<void*>(e.key(cat)), catSize);
 			}
 			configs++;
 		}
@@ -462,9 +470,9 @@ void EmuApp::saveConfigFile(FileIO &io)
 		}
 		// write to config file
 		logMsg("saving %d input device configs, %d bytes", (int)savedInputDevs.size(), bytes);
-		io.write((uint16_t)bytes);
-		io.write((uint16_t)CFGKEY_INPUT_DEVICE_CONFIGS);
-		io.write((uint8_t)savedInputDevs.size());
+		io.put(uint16_t(bytes));
+		io.put(uint16_t(CFGKEY_INPUT_DEVICE_CONFIGS));
+		io.put(uint8_t(savedInputDevs.size()));
 		for(auto &ePtr : savedInputDevs)
 		{
 			auto &e = *ePtr;
@@ -472,23 +480,23 @@ void EmuApp::saveConfigFile(FileIO &io)
 			uint8_t enumIdWithFlags = e.enumId;
 			if(e.handleUnboundEvents)
 				enumIdWithFlags |= e.HANDLE_UNBOUND_EVENTS_FLAG;
-			io.write((uint8_t)enumIdWithFlags);
-			io.write((uint8_t)e.enabled);
-			io.write((uint8_t)e.player);
-			io.write((uint8_t)e.joystickAxisAsDpadBits);
+			io.put(uint8_t(enumIdWithFlags));
+			io.put(uint8_t(e.enabled));
+			io.put(uint8_t(e.player));
+			io.put(uint8_t(e.joystickAxisAsDpadBits));
 			#ifdef CONFIG_INPUT_ICADE
-			io.write((uint8_t)e.iCadeMode);
+			io.put(uint8_t(e.iCadeMode));
 			#endif
 			uint8_t nameLen = std::min((size_t)256, e.name.size());
-			io.write(nameLen);
+			io.put(nameLen);
 			io.write(e.name.data(), nameLen);
 			uint8_t keyConfMap = e.keyConf ? (uint8_t)e.keyConf->map : 0;
-			io.write(keyConfMap);
+			io.put(keyConfMap);
 			if(keyConfMap)
 			{
 				logMsg("has key conf %s, map %d", e.keyConf->name.data(), keyConfMap);
 				uint8_t keyConfNameLen = e.keyConf->name.size();
-				io.write(keyConfNameLen);
+				io.put(keyConfNameLen);
 				io.write(e.keyConf->name.data(), keyConfNameLen);
 			}
 		}
@@ -533,8 +541,8 @@ EmuApp::ConfigParams EmuApp::loadConfigFile(IG::ApplicationContext ctx)
 	#endif
 	ConfigParams appConfig{};
 	Gfx::DrawableConfig pendingWindowDrawableConf{};
-	readConfigKeys(FileUtils::bufferFromPath(configFilePath, OpenFlagsMask::TEST),
-		[&](uint16_t key, uint16_t size, auto &io) -> bool
+	readConfigKeys(FileUtils::bufferFromPath(configFilePath, OpenFlagsMask::Test),
+		[&](auto key, auto size, auto &io) -> bool
 		{
 			switch(key)
 			{
@@ -542,27 +550,24 @@ EmuApp::ConfigParams EmuApp::loadConfigFile(IG::ApplicationContext ctx)
 				{
 					if(system().readConfig(ConfigType::MAIN, io, key, size))
 						return true;
-					if(vController.readConfig(io, key, size))
+					if(vController.readConfig(*this, io, key, size))
+						return true;
+					if(autosaveManager_.readConfig(io, key, size))
+						return true;
+					if(emuAudio.readConfig(io, key, size))
 						return true;
 					logMsg("skipping key %u", (unsigned)key);
 					return false;
 				}
-				case CFGKEY_SOUND: return optionSound.readFromIO(io, size);
-				case CFGKEY_SOUND_RATE: return optionSoundRate.readFromIO(io, size);
-				case CFGKEY_AUTOSAVE_TIMER_MINS: return optionAutosaveTimerMins.readFromIO(io, size);
-				case CFGKEY_AUTOSAVE_LAUNCH_MODE: return readOptionValue(io, size, autosaveLaunchMode, [](auto m){return m <= lastEnum<AutosaveLaunchMode>;});
-				case CFGKEY_FRAME_INTERVAL:
-					return doIfUsed(optionFrameInterval, [&](auto &opt){return opt.readFromIO(io, size);});
-				case CFGKEY_SKIP_LATE_FRAMES: return optionSkipLateFrames.readFromIO(io, size);
-				case CFGKEY_FRAME_RATE: return optionFrameRate.readFromIO(io, size);
-				case CFGKEY_FRAME_RATE_PAL: return optionFrameRatePAL.readFromIO(io, size);
+				case CFGKEY_FRAME_INTERVAL: return optionFrameInterval.readFromIO(io, size);;
+				case CFGKEY_FRAME_RATE: return readOptionValue<FrameTime>(io, size, [&](auto &&val){outputTimingManager.setFrameTimeOption(VideoSystem::NATIVE_NTSC, val);});
+				case CFGKEY_FRAME_RATE_PAL: return readOptionValue<FrameTime>(io, size, [&](auto &&val){outputTimingManager.setFrameTimeOption(VideoSystem::PAL, val);});
 				case CFGKEY_LAST_DIR:
 					return readStringOptionValue<FS::PathString>(io, size, [&](auto &&path){setContentSearchPath(path);});
 				case CFGKEY_FONT_Y_SIZE: return optionFontSize.readFromIO(io, size);
 				case CFGKEY_GAME_ORIENTATION: return optionEmuOrientation.readFromIO(io, size);
 				case CFGKEY_MENU_ORIENTATION: return optionMenuOrientation.readFromIO(io, size);
 				case CFGKEY_GAME_IMG_FILTER: return optionImgFilter.readFromIO(io, size);
-				case CFGKEY_GAME_ASPECT_RATIO: return optionAspectRatio.readFromIO(io, size);
 				case CFGKEY_IMAGE_ZOOM: return optionImageZoom.readFromIO(io, size);
 				case CFGKEY_VIEWPORT_ZOOM: return optionViewportZoom.readFromIO(io, size);
 				#if defined CONFIG_BASE_MULTI_WINDOW && defined CONFIG_BASE_MULTI_SCREEN
@@ -576,9 +581,6 @@ EmuApp::ConfigParams EmuApp::loadConfigFile(IG::ApplicationContext ctx)
 				case CFGKEY_VIDEO_IMAGE_BUFFERS: return optionVideoImageBuffers.readFromIO(io, size);
 				case CFGKEY_OVERLAY_EFFECT: return optionOverlayEffect.readFromIO(io, size);
 				case CFGKEY_OVERLAY_EFFECT_LEVEL: return optionOverlayEffectLevel.readFromIO(io, size);
-				case CFGKEY_TOUCH_CONTROL_VIRBRATE:
-					vController.setVibrateOnTouchInput(*this, readOptionValue<bool>(io, size));
-					return true;
 				case CFGKEY_RECENT_GAMES: return readRecentContent(ctx, io, size);
 				case CFGKEY_SWAPPED_GAMEPAD_CONFIM:
 					setSwappedConfirmKeys(readOptionValue<bool>(io, size));
@@ -587,15 +589,15 @@ EmuApp::ConfigParams EmuApp::loadConfigFile(IG::ApplicationContext ctx)
 				case CFGKEY_NOTIFICATION_ICON: return optionNotificationIcon.readFromIO(io, size);
 				case CFGKEY_TITLE_BAR: return optionTitleBar.readFromIO(io, size);
 				case CFGKEY_BACK_NAVIGATION:
-					appConfig.setBackNavigation(readOptionValue<bool>(io, size));
-					return true;
+					return readOptionValue(io, size, viewManager.needsBackControl);
 				case CFGKEY_SYSTEM_ACTIONS_IS_DEFAULT_MENU: return optionSystemActionsIsDefaultMenu.readFromIO(io, size);
 				case CFGKEY_IDLE_DISPLAY_POWER_SAVE: return optionIdleDisplayPowerSave.readFromIO(io, size);
 				case CFGKEY_HIDE_STATUS_BAR: return doIfUsed(optionHideStatusBar, [&](auto &opt){ return opt.readFromIO(io, size); });
 				case CFGKEY_LAYOUT_BEHIND_SYSTEM_UI:
 					return ctx.hasTranslucentSysUI() ? readOptionValue(io, size, layoutBehindSystemUI) : false;
 				case CFGKEY_CONFIRM_OVERWRITE_STATE: return optionConfirmOverwriteState.readFromIO(io, size);
-				case CFGKEY_FAST_SLOW_MODE_SPEED: return optionFastSlowModeSpeed.readFromIO(io, size);
+				case CFGKEY_FAST_MODE_SPEED: return readOptionValue(io, size, fastModeSpeed, isValidFastSpeed);
+				case CFGKEY_SLOW_MODE_SPEED: return readOptionValue(io, size, slowModeSpeed, isValidSlowSpeed);
 				#ifdef CONFIG_INPUT_DEVICE_HOTSWAP
 				case CFGKEY_NOTIFY_INPUT_DEVICE_CHANGE: return optionNotifyInputDeviceChange.readFromIO(io, size);
 				#endif
@@ -607,22 +609,24 @@ EmuApp::ConfigParams EmuApp::loadConfigFile(IG::ApplicationContext ctx)
 				case CFGKEY_HIDE_OS_NAV: return optionHideOSNav.readFromIO(io, size);
 				case CFGKEY_SUSTAINED_PERFORMANCE_MODE: return optionSustainedPerformanceMode.readFromIO(io, size);
 				#endif
-				#ifdef CONFIG_BLUETOOTH
+				#ifdef CONFIG_INPUT_BLUETOOTH
 				case CFGKEY_KEEP_BLUETOOTH_ACTIVE: return doIfUsed(optionKeepBluetoothActive, [&](auto &opt){ return opt.readFromIO(io, size); });
 				case CFGKEY_SHOW_BLUETOOTH_SCAN: return optionShowBluetoothScan.readFromIO(io, size);
 					#ifdef CONFIG_BLUETOOTH_SCAN_CACHE_USAGE
 					case CFGKEY_BLUETOOTH_SCAN_CACHE: return readOptionValue<bool>(io, size, [](auto on){BluetoothAdapter::setScanCacheUsage(on);});
 					#endif
 				#endif
-				case CFGKEY_SOUND_BUFFERS: return optionSoundBuffers.readFromIO(io, size);
-				case CFGKEY_SOUND_VOLUME: return optionSoundVolume.readFromIO(io, size);
-				case CFGKEY_ADD_SOUND_BUFFERS_ON_UNDERRUN: return optionAddSoundBuffersOnUnderrun.readFromIO(io, size);
+				case CFGKEY_CPU_AFFINITY_MASK:
+					return used(cpuAffinityMask) ? readOptionValue(io, size, cpuAffinityMask) : false;
+				case CFGKEY_CPU_AFFINITY_MODE:
+					return used(cpuAffinityMode) ? readOptionValue(io, size, cpuAffinityMode, [](auto m){return m <= lastEnum<CPUAffinityMode>;}) : false;
+				case CFGKEY_RENDERER_PRESENT_MODE:
+					return used(presentMode) && supportsPresentModes() ? readOptionValue(io, size, presentMode, [](auto m){return m <= lastEnum<Gfx::PresentMode>;}) : false;
+				case CFGKEY_RENDERER_PRESENTATION_TIME:
+					return used(usePresentationTime) ? readOptionValue(io, size, usePresentationTime) : false;
 				case CFGKEY_AUDIO_SOLO_MIX:
 					audioManager().setSoloMix(readOptionValue<bool>(io, size));
 					return true;
-				#ifdef CONFIG_AUDIO_MULTIPLE_SYSTEM_APIS
-				case CFGKEY_AUDIO_API: return optionAudioAPI.readFromIO(io, size);
-				#endif
 				case CFGKEY_SAVE_PATH:
 					return readStringOptionValue<FS::PathString>(io, size, [&](auto &&path){system().setUserSaveDirectory(path);});
 				case CFGKEY_SCREENSHOTS_PATH: return readStringOptionValue(io, size, userScreenshotDir);
@@ -630,9 +634,13 @@ EmuApp::ConfigParams EmuApp::loadConfigFile(IG::ApplicationContext ctx)
 				case CFGKEY_WINDOW_PIXEL_FORMAT: return readOptionValue(io, size, pendingWindowDrawableConf.pixelFormat, windowPixelFormatIsValid);
 				case CFGKEY_VIDEO_COLOR_SPACE: return readOptionValue(io, size, pendingWindowDrawableConf.colorSpace, colorSpaceIsValid);
 				case CFGKEY_SHOW_HIDDEN_FILES: return readOptionValue<bool>(io, size, [&](auto on){setShowHiddenFilesInPicker(on);});
-				case CFGKEY_RENDERER_PRESENTATION_TIME: return readOptionValue<bool>(io, size, [&](auto on){setUsePresentationTime(on);});
-				case CFGKEY_FORCE_MAX_SCREEN_FRAME_RATE: return readOptionValue<bool>(io, size, [&](auto on){setForceMaxScreenFrameRate(on);});
+				case CFGKEY_OVERRIDE_SCREEN_FRAME_RATE: return readOptionValue(io, size, overrideScreenFrameRate);
+				case CFGKEY_BLANK_FRAME_INSERTION: return readOptionValue(io, size, allowBlankFrameInsertion);
 				case CFGKEY_CONTENT_ROTATION: return readOptionValue(io, size, contentRotation_, [](auto r){return r <= lastEnum<Rotation>;});
+				case CFGKEY_VIDEO_LANDSCAPE_ASPECT_RATIO: return readOptionValue(io, size, videoLayer().landscapeAspectRatio, isValidAspectRatio);
+				case CFGKEY_VIDEO_PORTRAIT_ASPECT_RATIO: return readOptionValue(io, size, videoLayer().portraitAspectRatio, isValidAspectRatio);
+				case CFGKEY_VIDEO_LANDSCAPE_OFFSET: return readOptionValue(io, size, videoLayer().landscapeOffset, [](auto v){return v >= -4096 && v <= 4096;});
+				case CFGKEY_VIDEO_PORTRAIT_OFFSET: return readOptionValue(io, size, videoLayer().portraitOffset, [](auto v){return v >= -4096 && v <= 4096;});
 				case CFGKEY_VIDEO_BRIGHTNESS: return readOptionValue(io, size, videoBrightnessRGB);
 				case CFGKEY_INPUT_KEY_CONFIGS: return readKeyConfig(customKeyConfigs, io, size, inputControlCategories());
 				case CFGKEY_INPUT_DEVICE_CONFIGS: return readInputDeviceConfig(savedInputDevs, io, size, customKeyConfigs);
@@ -656,7 +664,7 @@ void EmuApp::saveConfigFile(IG::ApplicationContext ctx)
 	auto configFilePath = FS::pathString(ctx.supportPath(), "config");
 	try
 	{
-		FileIO file{configFilePath, OpenFlagsMask::NEW};
+		FileIO file{configFilePath, OpenFlagsMask::New};
 		saveConfigFile(file);
 	}
 	catch(...)

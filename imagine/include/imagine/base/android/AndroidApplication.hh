@@ -24,6 +24,7 @@
 #include <pthread.h>
 #include <optional>
 #include <string>
+#include <utility>
 
 struct ANativeActivity;
 struct AInputQueue;
@@ -89,30 +90,30 @@ public:
 	FrameTimer makeFrameTimer(Screen &);
 	bool requestPermission(ApplicationContext, Permission);
 	UniqueFileDescriptor openFileUriFd(JNIEnv *, jobject baseActivity, CStringView uri, OpenFlagsMask oFlags = {}) const;
-	bool fileUriExists(JNIEnv *, jobject baseActivity, IG::CStringView uri) const;
-	Seconds fileUriLastWriteTime(JNIEnv *, jobject baseActivity, CStringView uri) const;
+	bool fileUriExists(JNIEnv *, jobject baseActivity, CStringView uri) const;
+	WallClockTimePoint fileUriLastWriteTime(JNIEnv *, jobject baseActivity, CStringView uri) const;
 	std::string fileUriFormatLastWriteTimeLocal(JNIEnv *, jobject baseActivity, CStringView uri) const;
-	FS::FileString fileUriDisplayName(JNIEnv *, jobject baseActivity, IG::CStringView uri) const;
-	bool removeFileUri(JNIEnv *, jobject baseActivity, IG::CStringView uri, bool isDir) const;
-	bool renameFileUri(JNIEnv *, jobject baseActivity, IG::CStringView oldUri, IG::CStringView newUri) const;
-	bool createDirectoryUri(JNIEnv *, jobject baseActivity, IG::CStringView uri) const;
+	FS::FileString fileUriDisplayName(JNIEnv *, jobject baseActivity, CStringView uri) const;
+	bool removeFileUri(JNIEnv *, jobject baseActivity, CStringView uri, bool isDir) const;
+	bool renameFileUri(JNIEnv *, jobject baseActivity, CStringView oldUri, CStringView newUri) const;
+	bool createDirectoryUri(JNIEnv *, jobject baseActivity, CStringView uri) const;
 	bool forEachInDirectoryUri(JNIEnv *, jobject baseActivity, CStringView uri, DirectoryEntryDelegate,
 		FS::DirOpenFlagsMask) const;
-	std::string formatDateAndTime(JNIEnv *, jclass baseActivityClass, WallClockTime timeSinceEpoch);
+	std::string formatDateAndTime(JNIEnv *, jclass baseActivityClass, WallClockTimePoint timeSinceEpoch);
 
 	// Input system functions
 	void onInputQueueCreated(ApplicationContext, AInputQueue *);
 	void onInputQueueDestroyed(AInputQueue *);
-	void updateInputConfig(AConfiguration *config);
+	void updateInputConfig(ApplicationContext, AConfiguration *config);
 	int hardKeyboardState() const;
 	int keyboardType() const;
 	bool hasXperiaPlayGamepad() const;
-	Input::AndroidInputDevice *addAndroidInputDevice(Input::AndroidInputDevice, bool notify);
-	Input::AndroidInputDevice *updateAndroidInputDevice(Input::AndroidInputDevice, bool notify);
+	Input::AndroidInputDevice *addAndroidInputDevice(ApplicationContext, Input::AndroidInputDevice, bool notify);
+	Input::AndroidInputDevice *updateAndroidInputDevice(ApplicationContext, Input::AndroidInputDevice, bool notify);
 	Input::AndroidInputDevice *inputDeviceForId(int id) const;
 	std::pair<Input::AndroidInputDevice*, int> inputDeviceForEvent(AInputEvent *);
-	void enumInputDevices(JNIEnv *, jobject baseActivity, bool notify);
-	bool processInputEvent(AInputEvent*, Window &);
+	void enumInputDevices(ApplicationContext ctx, JNIEnv *, jobject baseActivity, bool notify);
+	bool processInputEvent(AInputEvent*, Input::AndroidInputDevice *, int devId, Window &);
 	bool hasTrackball() const;
 	void flushSystemInputEvents();
 	bool hasPendingInputQueueEvents() const;
@@ -163,7 +164,10 @@ private:
 	DeviceFlags deviceFlags{PERMANENT_MENU_KEY_BIT};
 	bool keepScreenOn{};
 	bool trackballNav{};
+public:
+	bool acceptsIntents{};
 
+private:
 	// InputDeviceListener-based device changes
 	JNI::UniqueGlobalRef inputDeviceListenerHelper{};
 	JNI::InstMethod<void()> jRegister{};
@@ -174,9 +178,9 @@ private:
 	int inputDevNotifyFd = -1;
 	int watch = -1;
 
-	void setHardKeyboardState(int hardKeyboardState);
+	void setHardKeyboardState(ApplicationContext ctx, int hardKeyboardState);
 	void initActivity(JNIEnv *, jobject baseActivity, jclass baseActivityClass, int32_t androidSDK);
-	void initInput(JNIEnv *, jobject baseActivity, jclass baseActivityClass, int32_t androidSDK);
+	void initInput(ApplicationContext ctx, JNIEnv *, jobject baseActivity, jclass baseActivityClass, int32_t androidSDK);
 	void initInputConfig(AConfiguration *config);
 	void initChoreographer(JNIEnv *, jobject baseActivity, jclass baseActivityClass, int32_t androidSDK);
 	void initScreens(JNIEnv *, jobject baseActivity, jclass baseActivityClass, int32_t androidSDK, ANativeActivity *);

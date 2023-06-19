@@ -20,6 +20,7 @@
 #include <imagine/util/utility.h>
 #include <concepts>
 #include <thread>
+#include <span>
 
 namespace IG
 {
@@ -93,6 +94,11 @@ using ThreadId = pid_t;
 using ThreadId = uint64_t;
 #endif
 
+using CPUMask = uint32_t;
+static constexpr int maxCPUs = 32;
+
+void setThreadCPUAffinityMask(std::span<const ThreadId>, CPUMask mask);
+void setThreadPriority(ThreadId, int nice);
 void setThisThreadPriority(int nice);
 int thisThreadPriority();
 ThreadId thisThreadId();

@@ -16,7 +16,6 @@
 #define LOGTAG "GLRenderer"
 #include <imagine/gfx/Renderer.hh>
 #include <imagine/gfx/RendererTask.hh>
-#include <imagine/gfx/Projection.hh>
 #include <imagine/gfx/Texture.hh>
 #include <imagine/gfx/PixmapBufferTexture.hh>
 #include <imagine/gfx/TextureSampler.hh>
@@ -40,7 +39,8 @@ Renderer::Renderer(ApplicationContext ctx):
 
 Renderer::~Renderer()
 {
-	for(auto &w : appContext().windows())
+	auto ctx = appContext();
+	for(auto &w : ctx.windows())
 	{
 		detachWindow(*w);
 	}
@@ -79,13 +79,11 @@ void Renderer::initMainTask(Window *initialWindow, DrawableConfig drawableConfig
 		}
 		initialDrawable = (Drawable)winData(*initialWindow).drawable;
 	}
-	constexpr int DRAW_THREAD_PRIORITY = -4;
 	GLTaskConfig conf
 	{
 		.glManagerPtr = &glManager,
 		.bufferConfig = *bufferConfig,
 		.initialDrawable = initialDrawable,
-		.threadPriority = DRAW_THREAD_PRIORITY,
 	};
 	if(!mainTask.makeGLContext(conf)) [[unlikely]]
 	{
@@ -158,6 +156,7 @@ bool GLRenderer::makeWindowDrawable(RendererTask &task, Window &win, GLBufferCon
 	auto &rData = winData(win);
 	rData.bufferConfig = bufferConfig;
 	rData.colorSpace = colorSpace;
+	rData.swapInterval = toSwapInterval(win, Gfx::PresentMode::Auto);
 	task.destroyDrawable(rData.drawable);
 	GLDrawableAttributes attr{bufferConfig};
 	attr.colorSpace = colorSpace;
@@ -287,28 +286,24 @@ bool Renderer::supportsSyncFences() const
 	return support.hasSyncFences();
 }
 
-void Renderer::setPresentationTime(Window &win, IG::FrameTime time) const
+bool Renderer::supportsPresentationTime() const { return glManager.hasPresentationTime(); }
+
+int GLRenderer::toSwapInterval(const Window &win, PresentMode mode) const
 {
-	#ifdef __ANDROID__
-	if(!supportsPresentationTime())
-		return;
-	auto drawable = (Drawable)winData(win).drawable;
-	bool success = support.eglPresentationTimeANDROID(glDisplay(), drawable, time.count());
-	if(Config::DEBUG_BUILD && !success)
+	switch(mode)
 	{
-		logErr("error:%s in eglPresentationTimeANDROID(%p, %llu)",
-			GLManager::errorString(eglGetError()), (EGLSurface)drawable, (unsigned long long)time.count());
+		case PresentMode::Auto: return toSwapInterval(win, static_cast<const Renderer*>(this)->evalPresentMode(win, mode));
+		case PresentMode::Immediate: return 0;
+		case PresentMode::FIFO: return 1;
 	}
-	#endif
+	std::unreachable();
 }
 
-bool Renderer::supportsPresentationTime() const
+PresentMode Renderer::evalPresentMode(const Window &win, PresentMode mode) const
 {
-	#ifdef __ANDROID__
-	return support.eglPresentationTimeANDROID;
-	#else
-	return false;
-	#endif
+	if(mode == PresentMode::Auto)
+		return PresentMode::FIFO;
+	return mode;
 }
 
 int Renderer::maxSwapChainImages() const
@@ -480,18 +475,18 @@ BasicEffect &Renderer::basicEffect()
 
 void Renderer::animateWindowRotation(Window &win, float srcAngle, float destAngle)
 {
-	winData(win).projAngleM = {srcAngle, destAngle, {}, steadyClockTimestamp(), Milliseconds{165}};
+	winData(win).projAngleM = {srcAngle, destAngle, {}, SteadyClock::now(), Milliseconds{165}};
 	win.addOnFrame([this, &win](FrameParams params)
 	{
 		win.signalSurfaceChanged(WindowSurfaceChange::CONTENT_RECT_RESIZED);
-		bool didUpdate = winData(win).projAngleM.update(params.timestamp());
+		bool didUpdate = winData(win).projAngleM.update(params.timestamp);
 		return didUpdate;
 	});
 }
 
-Projection Renderer::projection(const Window &win, Viewport viewport, Mat4 matrix) const
+float Renderer::projectionRollAngle(const Window &win) const
 {
-	return {viewport, matrix, winData(win).projAngleM};
+	return winData(win).projAngleM;
 }
 
 Texture Renderer::makeTexture(TextureConfig config)

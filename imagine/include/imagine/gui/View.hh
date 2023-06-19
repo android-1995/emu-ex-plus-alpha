@@ -17,11 +17,11 @@
 
 #include <imagine/gui/viewDefs.hh>
 #include <imagine/gui/ViewAttachParams.hh>
-#include <imagine/gfx/ProjectionPlane.hh>
 #include <imagine/util/DelegateFunc.hh>
 #include <imagine/util/utility.h>
 #include <imagine/util/string/utf16.hh>
 #include <memory>
+#include <string_view>
 
 namespace IG::Input
 {
@@ -76,9 +76,9 @@ public:
 	constexpr View() = default;
 
 	constexpr View(ViewAttachParams attach):
-		win(&attach.window()),
-		rendererTask_{&attach.rendererTask()},
-		manager_{&attach.viewManager()} {}
+		win(&attach.window),
+		rendererTask_{&attach.rendererTask},
+		manager_{&attach.viewManager} {}
 
 	virtual ~View() = default;
 	View &operator=(View &&) = delete;
@@ -93,9 +93,8 @@ public:
 	virtual void setFocus(bool focused);
 	virtual std::u16string_view name() const;
 
-	void setViewRect(WindowRect viewRect, WindowRect displayRect, Gfx::ProjectionPlane);
-	void setViewRect(WindowRect viewRect, Gfx::ProjectionPlane);
-	void setViewRect(Gfx::ProjectionPlane projP);
+	void setViewRect(WindowRect viewRect, WindowRect displayRect);
+	void setViewRect(WindowRect viewRect);
 	void postDraw();
 	Window &window() const;
 	Gfx::Renderer &renderer() const;
@@ -109,6 +108,7 @@ public:
 	Gfx::GlyphTextureSet &defaultFace();
 	Gfx::GlyphTextureSet &defaultBoldFace();
 	static Gfx::Color menuTextColor(bool isSelected);
+	static int navBarHeight(const Gfx::GlyphTextureSet &face);
 	void dismiss(bool refreshLayout = true);
 	void dismissPrevious();
 	void pushAndShow(std::unique_ptr<View> v, const Input::Event &e, bool needsNavView = true, bool isModal = false);
@@ -126,8 +126,7 @@ public:
 	WindowRect displayRect() const { return displayRect_; }
 	WindowRect displayInsetRect(Direction) const;
 	static WindowRect displayInsetRect(Direction, WindowRect viewRect, WindowRect displayRect);
-	Gfx::ProjectionPlane projection() const { return projP; }
-	bool pointIsInView(IG::WP pos);
+	bool pointIsInView(WP pos);
 	void waitForDrawFinished();
 
 	template<class T>
@@ -154,9 +153,8 @@ protected:
 	ViewManager *manager_{};
 	ViewController *controller_{};
 	DismissDelegate dismissDel{};
-	IG::WindowRect viewRect_{};
-	IG::WindowRect displayRect_{};
-	Gfx::ProjectionPlane projP{};
+	WRect viewRect_{};
+	WRect displayRect_{};
 };
 
 }

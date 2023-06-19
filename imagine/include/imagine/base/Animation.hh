@@ -39,7 +39,7 @@ public:
 		return *this;
 	}
 
-	void start(Clock &c, T begin, T end, FrameTime duration, std::invocable<Clock &, T> auto &&onUpdate)
+	void start(Clock &c, T begin, T end, SteadyClockTime duration, std::invocable<Clock &, T> auto &&onUpdate)
 	{
 		cancel();
 		clock = &c;
@@ -48,12 +48,11 @@ public:
 			animator = end;
 			return;
 		}
-		auto now = steadyClockTimestamp();
-		animator = {begin, end, {}, now, duration};
+		animator = {begin, end, {}, SteadyClock::now(), duration};
 		animate =
 			[this, onUpdate = IG_forward(onUpdate)](FrameParams params)
 			{
-				bool updating = animator.update(params.timestamp());
+				bool updating = animator.update(params.timestamp);
 				onUpdate(*clock, (T)animator);
 				if(!updating)
 				{
@@ -71,7 +70,7 @@ public:
 	void finish()
 	{
 		cancel();
-		animate(FrameParams{animator.endTime(), FloatSeconds{}});
+		animate(FrameParams{.timestamp = animator.endTime()});
 	}
 
 	bool isFinished() const { return animator.isFinished(); }
@@ -90,7 +89,7 @@ public:
 	T value() const { return animator; }
 
 protected:
-	InterpolatorValue<T, FrameTime, INTERPOLATOR_TYPE> animator{};
+	InterpolatorValue<T, SteadyClockTimePoint, INTERPOLATOR_TYPE> animator{};
 	OnFrameDelegate animate{};
 	Clock *clock{};
 };

@@ -65,10 +65,11 @@ extern "C"
 namespace EmuEx
 {
 
-const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2013-2022\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nVice Team\nwww.viceteam.org";
+const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2013-2023\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nVice Team\nvice-emu.sourceforge.io";
 bool EmuSystem::hasPALVideoSystem = true;
 bool EmuSystem::hasResetModes = true;
 bool EmuSystem::handlesGenericIO = false;
+bool EmuSystem::hasRectangularPixels = true;
 bool EmuApp::needsGlobalInstance = true;
 
 const char *EmuSystem::shortSystemName() const
@@ -198,19 +199,18 @@ int systemCartType(ViceSystem system)
 
 bool hasC64DiskExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name,
-		".d64", ".d67", ".d71", ".d80", ".d81", ".d82", ".d1m", ".d2m", ".d4m", ".g64", ".p64", ".g41", ".x64", ".dsk",
-		".D64", ".D67", ".D71", ".D80", ".D81", ".D82", ".D1M", ".D2M", ".D4M", ".G64", ".P64", ".G41", ".X64", ".DSK");
+	return IG::endsWithAnyCaseless(name,
+		".d64", ".d67", ".d71", ".d80", ".d81", ".d82", ".d1m", ".d2m", ".d4m", ".g64", ".p64", ".g41", ".x64", ".dsk");
 }
 
 bool hasC64TapeExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".t64", ".tap", ".T64", ".TAP");
+	return IG::endsWithAnyCaseless(name, ".t64", ".tap");
 }
 
 bool hasC64CartExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".bin", ".crt", ".BIN", ".CRT");
+	return IG::endsWithAnyCaseless(name, ".bin", ".crt");
 }
 
 static bool hasC64Extension(std::string_view name)
@@ -218,11 +218,10 @@ static bool hasC64Extension(std::string_view name)
 	return hasC64DiskExtension(name) ||
 			hasC64TapeExtension(name) ||
 			hasC64CartExtension(name) ||
-			IG::stringEndsWithAny(name, ".prg", ".p00", ".PRG", ".P00");
+			IG::endsWithAnyCaseless(name, ".prg", ".p00");
 }
 
 EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter = hasC64Extension;
-EmuSystem::NameFilterFunc EmuSystem::defaultBenchmarkFsFilter = hasC64Extension;
 
 void C64System::reset(EmuApp &, ResetMode mode)
 {
@@ -318,47 +317,39 @@ void C64System::closeSystem()
 	plugin.machine_trigger_reset(MACHINE_RESET_MODE_HARD);
 }
 
-static const char *mainROMFilename(ViceSystem system)
+static bool hasSysFilePath(ApplicationContext ctx, const auto &paths)
 {
-	switch(system)
+	for(const auto &path : paths)
 	{
-		case ViceSystem::PET: return "kernal-4.901465-22.bin";
-		case ViceSystem::SUPER_CPU: return "scpu64";
-		default: return "kernal";
+		if(!path.empty() && !ctx.fileUriDisplayName(path).empty())
+			return true;
 	}
+	return false;
 }
 
-static void throwC64FirmwareError()
-{
-	throw std::runtime_error{fmt::format("System files missing, please set them in Options➔File Paths➔VICE System Files")};
-}
-
-bool C64System::initC64(EmuApp &app)
+void C64System::initC64(EmuApp &app)
 {
 	if(c64IsInit)
-		return true;
-	if(sysfile_locate(mainROMFilename(currSystem), sysFileDir, nullptr) == -1)
-	{
-		return false;
-	}
+		return;
+	if(!hasSysFilePath(appContext(), sysFilePath))
+		throw std::runtime_error{"Missing system file path, please check Options➔File Paths➔VICE System Files"};
 	logMsg("initializing C64");
   if(plugin.init_main() < 0)
   {
   	logErr("error in init_main()");
   	c64FailedInit = true;
-  	return false;
+  	throw std::runtime_error{std::format("Missing system file {}, please check Options➔File Paths➔VICE System Files", lastMissingSysFile)};
 	}
 	c64IsInit = true;
-	return true;
 }
 
 bool C64App::willCreateSystem(ViewAttachParams attach, const Input::Event &e)
 {
 	if(!system().c64FailedInit)
 		return true;
-	pushAndShowNewYesNoAlertView(attach, e,
-		"A previous system file load failed, you must restart the app to run any C64 software",
-		"Exit Now", "Cancel", [](View &v) { v.appContext().exit(); }, nullptr);
+	pushAndShowModalView(std::make_unique<YesNoAlertView>(attach,
+		std::format("A system file {} failed loading, you must restart the app and try again after verifying the file", system().lastMissingSysFile),
+		"Exit Now", "Cancel", YesNoAlertView::Delegates{ .onYes = [](View &v) { v.appContext().exit(); } }), e);
 	return false;
 }
 
@@ -408,16 +399,13 @@ static FS::PathString vic20ExtraCartPath(IG::ApplicationContext ctx, std::string
 
 void C64System::loadContent(IO &, EmuSystemCreateParams params, OnLoadProgressDelegate)
 {
-	if(!initC64(EmuApp::get(appContext())))
-	{
-		throwC64FirmwareError();
-	}
+	initC64(EmuApp::get(appContext()));
 	applyInitialOptionResources();
 	bool shouldAutostart = !(params.systemFlags & SYSTEM_FLAG_NO_AUTOSTART) && optionAutostartOnLaunch;
 	if(shouldAutostart && plugin.autostart_autodetect_)
 	{
 		logMsg("loading & autostarting:%s", contentLocation().data());
-		if(IG::stringEndsWithAny(contentFileName(), ".prg", ".PRG"))
+		if(IG::endsWithAnyCaseless(contentFileName(), ".prg"))
 		{
 			// needed to store AutostartPrgDisk.d64
 			fallbackSaveDirectory(true);
@@ -495,16 +483,15 @@ void C64System::renderFramebuffer(EmuVideo &video)
 	video.startFrameWithAltFormat({}, canvasSrcPix);
 }
 
-void C64System::configAudioRate(IG::FloatSeconds frameTime, int rate)
+void C64System::configAudioRate(FrameTime outputFrameTime, int outputRate)
 {
-	logMsg("set audio rate %d", rate);
-	int mixRate = std::round(rate * (systemFrameRate * frameTime.count()));
+	int mixRate = std::round(audioMixRate(outputRate, systemFrameRate, outputFrameTime));
 	int currRate = 0;
 	plugin.resources_get_int("SoundSampleRate", &currRate);
-	if(currRate != mixRate)
-	{
-		setIntResource("SoundSampleRate", mixRate);
-	}
+	if(currRate == mixRate)
+		return;
+	logMsg("set sound mix rate:%d", mixRate);
+	setIntResource("SoundSampleRate", mixRate);
 }
 
 bool C64System::shouldFastForward() const
@@ -516,9 +503,9 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 {
 	const Gfx::LGradientStopDesc navViewGrad[] =
 	{
-		{ .0, Gfx::VertexColorPixelFormat.build(48./255., 36./255., 144./255., 1.) },
-		{ .3, Gfx::VertexColorPixelFormat.build(48./255., 36./255., 144./255., 1.) },
-		{ .97, Gfx::VertexColorPixelFormat.build((48./255.) * .4, (36./255.) * .4, (144./255.) * .4, 1.) },
+		{ .0, Gfx::PackedColor::format.build(48./255., 36./255., 144./255., 1.) },
+		{ .3, Gfx::PackedColor::format.build(48./255., 36./255., 144./255., 1.) },
+		{ .97, Gfx::PackedColor::format.build((48./255.) * .4, (36./255.) * .4, (144./255.) * .4, 1.) },
 		{ 1., view.separatorColor() },
 	};
 	view.setBackgroundGradient(navViewGrad);

@@ -16,10 +16,13 @@
 	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <imagine/base/MessagePort.hh>
-#include <thread>
+#include <imagine/thread/Thread.hh>
+#include <variant>
 
 namespace EmuEx
 {
+
+using namespace IG;
 
 class EmuVideo;
 class EmuAudio;
@@ -36,27 +39,25 @@ public:
 		EXIT,
 	};
 
+	struct RunFrameCommand
+	{
+		EmuVideo *video{};
+		EmuAudio *audio{};
+		int8_t frames{};
+		bool skipForward{};
+		bool fastForward{};
+	};
+
+	struct PauseCommand {};
+	struct ExitCommand {};
+
+	using CommandVariant = std::variant<RunFrameCommand, PauseCommand, ExitCommand>;
+
 	struct CommandMessage
 	{
 		std::binary_semaphore *semPtr{};
-		union Args
-		{
-			struct RunArgs
-			{
-				EmuVideo *video;
-				EmuAudio *audio;
-				int8_t frames;
-				bool skipForward;
-			} run;
-		} args{};
-		Command command{Command::UNSET};
+		CommandVariant command{RunFrameCommand{}};
 
-		constexpr CommandMessage() {}
-		constexpr CommandMessage(Command command, std::binary_semaphore *semPtr = nullptr):
-			semPtr{semPtr}, command{command} {}
-		constexpr CommandMessage(Command command, EmuVideo *video, EmuAudio *audio, int8_t frames, bool skipForward = false):
-			args{video, audio, frames, skipForward}, command{command} {}
-		explicit operator bool() const { return command != Command::UNSET; }
 		void setReplySemaphore(std::binary_semaphore *semPtr_) { assert(!semPtr); semPtr = semPtr_; };
 	};
 
@@ -64,18 +65,17 @@ public:
 	void start();
 	void pause();
 	void stop();
-	void runFrame(EmuVideo *video, EmuAudio *audio, int8_t frames, bool skipForward, bool runSync);
-	void sendVideoFormatChangedReply(EmuVideo &video, std::binary_semaphore *frameFinishedSemPtr);
-	void sendFrameFinishedReply(EmuVideo &video, std::binary_semaphore *frameFinishedSemPtr);
+	void runFrame(EmuVideo *, EmuAudio *, int8_t frames, bool skipForward, bool fastForward);
+	void sendVideoFormatChangedReply(EmuVideo &);
+	void sendFrameFinishedReply(EmuVideo &);
 	void sendScreenshotReply(bool success);
-	EmuApp &app() const;
-	bool resetVideoFormatChanged() { return std::exchange(videoFormatChanged, false); }
+	auto threadId() const { return threadId_; }
 
 private:
-	EmuApp *appPtr{};
-	IG::MessagePort<CommandMessage> commandPort{"EmuSystemTask Command"};
+	EmuApp &app;
+	MessagePort<CommandMessage> commandPort{"EmuSystemTask Command"};
 	std::thread taskThread;
-	bool videoFormatChanged{};
+	ThreadId threadId_{};
 };
 
 }

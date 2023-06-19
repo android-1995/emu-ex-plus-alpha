@@ -15,227 +15,56 @@
 
 #define LOGTAG "VControllerButton"
 #include <emuframework/VController.hh>
+#include <emuframework/EmuApp.hh>
 #include <imagine/gfx/RendererCommands.hh>
-#include <imagine/gfx/BasicEffect.hh>
-#include <imagine/gui/View.hh>
 #include <imagine/logger/logger.h>
 
 namespace EmuEx
 {
 
-void VControllerButton::setPos(IG::WP pos, IG::WindowRect viewBounds, Gfx::ProjectionPlane projP, _2DOrigin o)
+void VControllerButton::setPos(WP pos, WRect viewBounds, _2DOrigin o)
 {
 	bounds_.setPos(pos, o);
 	bounds_.fitIn(viewBounds);
 	extendedBounds_.setPos(bounds_.pos(C2DO), C2DO);
-	IG::WindowRect spriteBounds{{0, 0}, {bounds_.xSize(), (int)(bounds_.ySize() / aspectRatio)}};
-	spriteBounds.setPos(bounds_.pos(C2DO), C2DO);
-	spr.setPos(spriteBounds, projP);
+	spr.setPos(bounds_);
 }
 
-void VControllerButton::setSize(IG::WP size, IG::WP extendedSize)
+void VControllerButton::setSize(WP size, WP extendedSize)
 {
-	bounds_ = IG::makeWindowRectRel(bounds_.pos(C2DO), size);
-	extendedBounds_ = bounds_ + IG::WindowRect{{-extendedSize}, {extendedSize}};
+	size.y /= aspectRatio;
+	bounds_ = makeWindowRectRel(bounds_.pos(C2DO), size);
+	extendedBounds_ = bounds_ + WRect{{-extendedSize}, {extendedSize}};
 }
 
-void VControllerButton::setImage(Gfx::TextureSpan img, float aR)
+void VControllerButton::setImage(Gfx::TextureSpan tex, int aR)
 {
-	spr.set(img);
+	spr.set(tex);
 	aspectRatio = aR;
 }
 
-void VControllerButton::setState(VControllerState state)
+std::string VControllerButton::name(const EmuApp &app) const
 {
-	state_ = state;
+	return std::string{app.systemKeyName(key)};
 }
 
-void VControllerButton::setShowBounds(bool on)
+void VControllerButton::drawBounds(Gfx::RendererCommands &__restrict__ cmds, float alpha) const
 {
-	showBoundingArea = on;
+	cmds.setColor({alpha, alpha, alpha, alpha});
+	cmds.drawRect(extendedBounds_);
 }
 
-void VControllerButton::setShouldSkipLayout(bool on)
+void VControllerButton::drawSprite(Gfx::RendererCommands &__restrict__ cmds, float alpha) const
 {
-	skipLayout = on;
-}
-
-void VControllerButton::setEnabled(bool on)
-{
-	disabled = !on;
-}
-
-void VControllerButton::draw(Gfx::RendererCommands &cmds, std::optional<Gfx::Color> col, bool showHidden) const
-{
-	if(!VController::shouldDraw(state(), showHidden))
-		return;
-	if(col)
-		cmds.setColor(*col);
-	spr.draw(cmds, cmds.basicEffect());
-}
-
-VControllerButtonGroup::VControllerButtonGroup(int size):
-	btns{(size_t)size}
-{}
-
-void VControllerButtonGroup::setPos(IG::WP pos, IG::WindowRect viewBounds, Gfx::ProjectionPlane projP)
-{
-	int btnsPerRow = buttonsPerRow();
-	//logMsg("laying out %d buttons in %d row(s)", buttonsToLayout(), rows());
-	bounds_.setPos(pos, C2DO);
-	bounds_.fitIn(viewBounds);
-	auto btnArea = bounds_;
-	int row{}, btnPos{}, y{-btnSize.y};
-	int stagger = btnStagger;
-	if(stagger < 0)
-		y += stagger*(btnsPerRow-1);
-	int x = -btnRowShift*(rows()-1);
-	int staggerOffset = 0;
-	for(auto &b : btns)
+	if(color != Gfx::Color{})
 	{
-		if(b.shouldSkipLayout() || !b.isEnabled())
-			continue;
-		IG::WP pos = btnArea.pos(LB2DO) + IG::WP{x, y + staggerOffset} + (btnSize/2);
-		b.setPos(pos, viewBounds, projP);
-		x += btnSize.x + btnSpace;
-		staggerOffset -= stagger;
-		if(++btnPos == btnsPerRow)
-		{
-			row++;
-			y -= btnSize.y + btnSpace;
-			staggerOffset = 0;
-			x = -btnRowShift*((rows()-1)-row);
-			btnPos = 0;
-		}
+		cmds.setColor({color.r * alpha, color.g * alpha, color.b * alpha, alpha});
 	}
-}
-
-void VControllerButtonGroup::setState(VControllerState state)
-{
-	state_ = state;
-}
-
-void VControllerButtonGroup::setButtonSize(IG::WP size, IG::WP extendedSize)
-{
-	btnSize = size;
-	setStaggerType(btnStaggerType);
-	int btnsPerRow = buttonsPerRow();
-	int xSizePixel = size.x*btnsPerRow + btnSpace*(btnsPerRow-1) + std::abs(btnRowShift*((int)rows()-1));
-	int ySizePixel = size.y*rows() + btnSpace*(rows()-1) + std::abs(btnStagger*((int)btnsPerRow-1));
-	bounds_ = IG::makeWindowRectRel({0, 0}, {xSizePixel, ySizePixel});
-	for(auto &b : btns)
+	else
 	{
-		b.setSize(size, extendedSize);
+		cmds.setColor({alpha, alpha, alpha, alpha});
 	}
-}
-
-void VControllerButtonGroup::setStaggerType(uint8_t type)
-{
-	btnStaggerType = type;
-	btnRowShift = 0;
-	switch(type)
-	{
-		case 0:
-			btnStagger = btnSize.y * -.75; break;
-		case 1:
-			btnStagger = btnSize.y * -.5; break;
-		case 2:
-			btnStagger = 0; break;
-		case 3:
-			btnStagger = btnSize.y * .5; break;
-		case 4:
-			btnStagger = btnSize.y * .75; break;
-		default:
-			btnStagger = btnSize.y + btnSpace;
-			btnRowShift = -(btnSize.y + btnSpace);
-			break;
-	}
-}
-
-void VControllerButtonGroup::setSpacing(int16_t space)
-{
-	btnSpace = space;
-	setStaggerType(btnStaggerType);
-}
-
-void VControllerButtonGroup::setShowBounds(bool on)
-{
-	showBoundingArea = on;
-}
-
-int VControllerButtonGroup::rows() const
-{
-	return buttonsToLayout() <= 3 ? 1 : 2;
-}
-
-int VControllerButtonGroup::buttonsToLayout() const
-{
-	int count{};
-	for(const auto &b : btns)
-	{
-		if(b.shouldSkipLayout() || !b.isEnabled())
-			continue;
-		count++;
-	}
-	return count;
-}
-
-int VControllerButtonGroup::buttonsPerRow() const
-{
-	return buttonsToLayout() / rows();
-}
-
-std::array<int, 2> VControllerButtonGroup::findButtonIndices(IG::WP windowPos) const
-{
-	std::array<int, 2> btnOut{-1, -1};
-	if(state() == VControllerState::OFF)
-		return btnOut;
-	for(size_t count = 0; auto &b : buttons())
-	{
-		if(b.isEnabled() && b.realBounds().overlaps(windowPos))
-		{
-			btnOut[count++] = std::distance(buttons().data(), &b);
-			if(count == btnOut.size())
-				break;
-		}
-	}
-	return btnOut;
-}
-
-void VControllerButtonGroup::draw(Gfx::RendererCommands &cmds, Gfx::ProjectionPlane projP, bool showHidden) const
-{
-	if(!VController::shouldDraw(state(), showHidden))
-		return;
-	auto &basicEffect = cmds.basicEffect();
-	if(showBoundingArea)
-	{
-		basicEffect.disableTexture(cmds);
-		for(const auto &b : btns)
-		{
-			if(!b.isEnabled())
-				continue;
-			Gfx::GeomRect::draw(cmds, b.realBounds(), projP);
-		}
-	}
-	//basicEffect.disableTexture(cmds);
-	//Gfx::GeomRect::draw(cmds, bounds(), projP);
-	basicEffect.enableTexture(cmds);
-	for(auto &b : btns)
-	{
-		if(!b.isEnabled())
-			continue;
-		b.sprite().draw(cmds);
-	}
-}
-
-std::vector<VControllerButton> &VControllerButtonGroup::buttons()
-{
-	return btns;
-}
-
-const std::vector<VControllerButton> &VControllerButtonGroup::buttons() const
-{
-	return btns;
+	sprite().draw(cmds);
 }
 
 }

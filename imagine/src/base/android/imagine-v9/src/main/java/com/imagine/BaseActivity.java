@@ -38,6 +38,7 @@ import android.view.DisplayCutout;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.PixelFormat;
+import android.graphics.Rect;
 import android.util.DisplayMetrics;
 import android.media.AudioManager;
 import android.net.Uri;
@@ -56,6 +57,7 @@ import java.io.File;
 import android.util.Log;
 import android.provider.DocumentsContract;
 import java.util.Date;
+import java.util.ArrayList;
 import java.text.DateFormat;
 
 // This class is also named BaseActivity to prevent shortcuts from breaking with previous SDK < 9 APKs
@@ -65,8 +67,8 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 	private static final String logTag = "BaseActivity";
 	static native void onContentRectChanged(long nativeUserData,
 		int left, int top, int right, int bottom, int windowWidth, int windowHeight);
-	static native void displayEnumerated(long nativeUserData, Display dpy, int id,
-		float refreshRate, int rotation, DisplayMetrics metrics);
+	static native void displayEnumerated(long nativeUserData, Display dpy, int id, float refreshRate,
+		long presentationDeadline, int rotation, DisplayMetrics metrics);
 	static native void inputDeviceEnumerated(long nativeUserData,
 		int devID, InputDevice dev, String name, int src, int kbType,
 		int jsAxisBits, int vendorProductId, boolean isPowerButton);
@@ -126,11 +128,20 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 		return defaultDpy.getRotation();
 	}
 
+	static long getPresentationDeadlineNanos(Display dpy)
+	{
+		if(android.os.Build.VERSION.SDK_INT >= 21)
+		{
+			return dpy.getPresentationDeadlineNanos();
+		}
+		return 16666666; // assume 16ms
+	}
+
 	void enumDisplays(long nativeUserData)
 	{
 		displayEnumerated(nativeUserData, defaultDpy, Display.DEFAULT_DISPLAY,
-			defaultDpy.getRefreshRate(), defaultDpy.getRotation(),
-			getResources().getDisplayMetrics());
+			defaultDpy.getRefreshRate(), getPresentationDeadlineNanos(defaultDpy),
+			defaultDpy.getRotation(), getResources().getDisplayMetrics());
 		if(android.os.Build.VERSION.SDK_INT >= 17)
 		{
 			DisplayListenerHelper.enumPresentationDisplays(this, nativeUserData);
@@ -239,6 +250,18 @@ public final class BaseActivity extends NativeActivity implements AudioManager.O
 		setContentView(contentView);
 		contentView.requestFocus();
 		return getWindow();
+	}
+
+	static void setSystemGestureExclusionRects(Window win, int[] coords)
+	{
+		if(Build.VERSION.SDK_INT < 29)
+			return;
+		ArrayList<Rect> rects = new ArrayList<Rect>(coords.length / 4);
+		for(int i = 0; i < coords.length; i += 4)
+		{
+			rects.add(new Rect(coords[i], coords[i+1], coords[i+2], coords[i+3]));
+		}
+		win.setSystemGestureExclusionRects(rects);
 	}
 
 	void addNotification(String onShow, String title, String message)

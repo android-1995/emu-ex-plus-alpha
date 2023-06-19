@@ -18,7 +18,7 @@ static_assert(__has_feature(objc_arc), "This file requires ARC");
 #include <imagine/font/Font.hh>
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/logger/logger.h>
-#include <imagine/util/container/array.hh>
+#include <imagine/util/mdspan.hh>
 #import <CoreGraphics/CGBitmapContext.h>
 #import <CoreGraphics/CGContext.h>
 #import <UIKit/UIKit.h>
@@ -32,6 +32,8 @@ struct GlyphRenderData
 	GlyphMetrics metrics{};
 	void *pixData{};
 	void *startOfCharInPixData{};
+
+	constexpr explicit operator bool() const { return bool(metrics); }
 };
 
 static void renderTextIntoBuffer(NSString *str, void *buff, int xSize, int ySize,
@@ -53,7 +55,7 @@ static void renderTextIntoBuffer(NSString *str, void *buff, int xSize, int ySize
 }
 
 static GlyphRenderData makeGlyphRenderData(int idx, FontSize &fontSize, CGColorSpaceRef grayColorSpace,
-	CGColorRef textColor, bool keepPixData, std::errc &ec)
+	CGColorRef textColor, bool keepPixData)
 {
 	UniChar uniChar = idx;
 	auto str = [[NSString alloc] initWithCharacters:&uniChar length:1];
@@ -63,10 +65,8 @@ static GlyphRenderData makeGlyphRenderData(int idx, FontSize &fontSize, CGColorS
 	if(!size.width || !size.height)
 	{
 		logMsg("invalid char 0x%X size %f:%f", idx, size.width, size.height);
-		ec = std::errc::invalid_argument;
 		return {};
 	}
-	ec = (std::errc)0;
 	//logMsg("char %c size %f:%f", idx, size.width, size.height);
 	int cXFullSize = size.width;
 	int cYFullSize = size.height;
@@ -78,12 +78,12 @@ static GlyphRenderData makeGlyphRenderData(int idx, FontSize &fontSize, CGColorS
 		grayColorSpace, textColor, fontSize.font());
 
 	// measure real bounds
-	auto pixView = IG::ArrayView2<char>{pixBuffer, (size_t)cXFullSize};
+	auto pixView = mdspan{pixBuffer, cYFullSize, cXFullSize};
 	int minX = cXFullSize, maxX = 0, minY = cYFullSize, maxY = 0;
 	for(auto y : iotaCount(cYFullSize))
 		for(auto x : iotaCount(cXFullSize))
 		{
-			if(pixView[y][x])
+			if(pixView[y, x])
 			{
 				if (x < minX) minX = x;
 				if (x > maxX) maxX = x;
@@ -92,17 +92,15 @@ static GlyphRenderData makeGlyphRenderData(int idx, FontSize &fontSize, CGColorS
 			}
 		}
 	//logMsg("min bounds %d:%d:%d:%d", minX, minY, maxX, maxY);
-	auto cXOffset = minX;
-	uint32_t cXSize = (maxX - minX) + 1;
-	auto cYOffset = minY;
-	uint32_t cYSize = (maxY - minY) + 1;
-	auto startOfCharInPixBuffer = &pixView[cYOffset][cXOffset];
+	int16_t cXOffset = minX;
+	int16_t cXSize = (maxX - minX) + 1;
+	int16_t cYOffset = minY;
+	int16_t cYSize = (maxY - minY) + 1;
+	auto startOfCharInPixBuffer = &pixView[cYOffset, cXOffset];
 
 	GlyphMetrics metrics;
-	metrics.xSize = cXSize;
-	metrics.ySize = cYSize;
-	metrics.xOffset = cXOffset;
-	metrics.yOffset = -cYOffset;
+	metrics.size = {cXSize, cYSize};
+	metrics.offset = {cXOffset, int16_t(-cYOffset)};
 	metrics.xAdvance = cXFullSize;
 	
 	if(keepPixData)
@@ -144,17 +142,17 @@ Font::operator bool() const
 	return true;
 }
 
-Font::Glyph Font::glyph(int idx, FontSize &size, std::errc &ec)
+Font::Glyph Font::glyph(int idx, FontSize &size)
 {
-	auto glyphData = makeGlyphRenderData(idx, size, grayColorSpace, textColor, true, ec);
-	if((bool)ec)
+	auto glyphData = makeGlyphRenderData(idx, size, grayColorSpace, textColor, true);
+	if(!glyphData)
 	{
 		return {};
 	}
 	PixmapView pix
 	{
 		{
-			{glyphData.metrics.xSize, glyphData.metrics.ySize},
+			glyphData.metrics.size.as<int>(),
 			IG::PIXEL_FMT_A8
 		},
 		glyphData.startOfCharInPixData,
@@ -163,24 +161,22 @@ Font::Glyph Font::glyph(int idx, FontSize &size, std::errc &ec)
 	return {{pix, glyphData.pixData}, glyphData.metrics};
 }
 
-GlyphMetrics Font::metrics(int idx, FontSize &size, std::errc &ec)
+GlyphMetrics Font::metrics(int idx, FontSize &size)
 {
-	auto glyphData = makeGlyphRenderData(idx, size, grayColorSpace, textColor, false, ec);
-	if((bool)ec)
+	auto glyphData = makeGlyphRenderData(idx, size, grayColorSpace, textColor, false);
+	if(!glyphData)
 	{
 		return {};
 	}
 	return glyphData.metrics;
 }
 
-FontSize Font::makeSize(FontSettings settings, std::errc &ec)
+FontSize Font::makeSize(FontSettings settings)
 {
 	if(settings.pixelHeight() <= 0)
 	{
-		ec = std::errc::invalid_argument;
 		return {};
 	}	
-	ec = (std::errc)0;
 	if(weight == FontWeight::BOLD)
 		return {(void*)CFBridgingRetain([UIFont boldSystemFontOfSize:(CGFloat)settings.pixelHeight()])};
 	else

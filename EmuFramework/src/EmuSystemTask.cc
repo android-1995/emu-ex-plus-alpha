@@ -24,56 +24,67 @@ namespace EmuEx
 {
 
 EmuSystemTask::EmuSystemTask(EmuApp &app):
-	appPtr{&app}
-{}
+	app{app} {}
 
 void EmuSystemTask::start()
 {
 	if(taskThread.joinable())
 		return;
-	taskThread = IG::makeThreadSync(
+	taskThread = makeThreadSync(
 		[this](auto &sem)
 		{
-			auto eventLoop = IG::EventLoop::makeForThread();
+			threadId_ = thisThreadId();
+			auto eventLoop = EventLoop::makeForThread();
 			bool started = true;
-			commandPort.attach(eventLoop,
-				[this, &started](auto msgs)
+			commandPort.attach(eventLoop, [this, &started](auto msgs)
+			{
+				constexpr int frameProccessLimit = 20;
+				const int maxFrames = app.frameInterval() ? frameProccessLimit : 1;
+				int fastForwardFrames{};
+				RunFrameCommand runCmd{};
+				for(auto msg : msgs)
 				{
-					for(auto msg : msgs)
+					bool threadIsRunning = visit(overloaded
 					{
-						switch(msg.command)
+						[&](RunFrameCommand &run)
 						{
-							case Command::RUN_FRAME:
-							{
-								auto frames = msg.args.run.frames;
-								assumeExpr(frames);
-								//logMsg("running %d frame(s)", frames);
-								app().runFrames({this, msg.semPtr}, msg.args.run.video, msg.args.run.audio,
-									frames, msg.args.run.skipForward);
-								break;
-							}
-							case Command::PAUSE:
-							{
-								//logMsg("got pause command");
-								assumeExpr(msg.semPtr);
-								msg.semPtr->release();
-								break;
-							}
-							case Command::EXIT:
-							{
-								//logMsg("got exit command");
-								started = false;
-								IG::EventLoop::forThread().stop();
-								return false;
-							}
-							default:
-							{
-								logWarn("unknown CommandMessage value:%d", (int)msg.command);
-							}
-						}
-					}
+							runCmd.video = run.video;
+							runCmd.audio = run.audio;
+							// accumulate the total frames from all commands in queue
+							if(!run.fastForward)
+								runCmd.frames = std::min(runCmd.frames + run.frames, maxFrames);
+							else
+								fastForwardFrames += run.frames;
+							runCmd.skipForward = run.skipForward;
+							return true;
+						},
+						[&](PauseCommand &)
+						{
+							//logMsg("got pause command");
+							runCmd.frames = fastForwardFrames = 0;
+							assumeExpr(msg.semPtr);
+							msg.semPtr->release();
+							return true;
+						},
+						[&](ExitCommand &)
+						{
+							started = false;
+							EventLoop::forThread().stop();
+							return false;
+						},
+					}, msg.command);
+					if(!threadIsRunning)
+						return false;
+				}
+				runCmd.frames = std::min(runCmd.frames + fastForwardFrames, frameProccessLimit);
+				if(!runCmd.frames)
 					return true;
-				});
+				assumeExpr(runCmd.frames > 0);
+				//logMsg("running %d frame(s)", runCmd.frames);
+				app.runFrames({this}, runCmd.video, runCmd.audio,
+					runCmd.frames, runCmd.skipForward);
+				return true;
+			});
 			sem.release();
 			logMsg("starting thread event loop");
 			eventLoop.run(started);
@@ -86,71 +97,47 @@ void EmuSystemTask::pause()
 {
 	if(!taskThread.joinable())
 		return;
-	commandPort.send({Command::PAUSE}, true);
-	app().flushMainThreadMessages();
+	commandPort.send({.command = PauseCommand{}}, true);
+	app.flushMainThreadMessages();
 }
 
 void EmuSystemTask::stop()
 {
 	if(!taskThread.joinable())
 		return;
-	commandPort.send({Command::EXIT});
+	commandPort.send({.command = ExitCommand{}});
 	taskThread.join();
-	app().flushMainThreadMessages();
+	threadId_ = 0;
+	app.flushMainThreadMessages();
 }
 
-void EmuSystemTask::runFrame(EmuVideo *video, EmuAudio *audio, int8_t frames, bool skipForward, bool runSync)
+void EmuSystemTask::runFrame(EmuVideo *video, EmuAudio *audio, int8_t frames, bool skipForward, bool fastForward)
 {
-	assumeExpr(frames);
+	assumeExpr(frames > 0);
 	if(!taskThread.joinable()) [[unlikely]]
 		return;
-	commandPort.send({Command::RUN_FRAME, video, audio, frames, skipForward}, runSync);
+	commandPort.send({.command = RunFrameCommand{video, audio, frames, skipForward, fastForward}});
 }
 
-void EmuSystemTask::sendVideoFormatChangedReply(EmuVideo &video, std::binary_semaphore *frameFinishedSemPtr)
+void EmuSystemTask::sendVideoFormatChangedReply(EmuVideo &video)
 {
-	if(frameFinishedSemPtr)
+	app.runOnMainThread([&video](ApplicationContext)
 	{
-		videoFormatChanged = true;
-	}
-	else
-	{
-		app().runOnMainThread(
-			[&video](IG::ApplicationContext)
-			{
-				video.dispatchFormatChanged();
-			});
-	}
+		video.dispatchFormatChanged();
+	});
 }
 
-void EmuSystemTask::sendFrameFinishedReply(EmuVideo &video, std::binary_semaphore *frameFinishedSemPtr)
+void EmuSystemTask::sendFrameFinishedReply(EmuVideo &video)
 {
-	if(frameFinishedSemPtr)
-	{
-		frameFinishedSemPtr->release(); // main thread continues execution
-	}
-	else
-	{
-		app().runOnMainThread(
-			[&video](IG::ApplicationContext)
-			{
-				video.dispatchFrameFinished();
-			});
-	}
+	video.dispatchFrameFinished();
 }
 
 void EmuSystemTask::sendScreenshotReply(bool success)
 {
-	app().runOnMainThread(
-		[=](IG::ApplicationContext ctx)
-		{
-			EmuApp::get(ctx).printScreenshotResult(success);
-		});
-}
-
-EmuApp &EmuSystemTask::app() const
-{
-	return *appPtr;
+	app.runOnMainThread([&app = app, success](ApplicationContext ctx)
+	{
+		app.printScreenshotResult(success);
+	});
 }
 
 }

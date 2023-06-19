@@ -6,7 +6,6 @@
 #include <imagine/util/format.hh>
 #include <imagine/util/string.h>
 
-#include <snes9x.h>
 #include <memmap.h>
 #include <display.h>
 #include <snapshot.h>
@@ -20,7 +19,7 @@
 namespace EmuEx
 {
 
-const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2022\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nSnes9x Team\nwww.snes9x.com";
+const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2023\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nSnes9x Team\nwww.snes9x.com";
 #if PIXEL_FORMAT == RGB565
 constexpr auto srcPixFmt = IG::PIXEL_FMT_RGB565;
 #else
@@ -32,18 +31,16 @@ constexpr auto SNES_HEIGHT_480i = SNES_HEIGHT * 2;
 constexpr auto SNES_HEIGHT_EXTENDED_480i = SNES_HEIGHT_EXTENDED * 2;
 bool EmuSystem::hasCheats = true;
 bool EmuSystem::hasPALVideoSystem = true;
-double EmuSystem::staticFrameTime = 357366. / 21477272.; // ~60.098Hz
-double EmuSystem::staticPalFrameTime = 425568. / 21281370.; // ~50.00Hz
 bool EmuSystem::hasResetModes = true;
 bool EmuSystem::canRenderRGBA8888 = false;
+bool EmuSystem::hasRectangularPixels = true;
 bool EmuApp::needsGlobalInstance = true;
 
 EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter =
 	[](std::string_view name)
 	{
-		return IG::stringEndsWithAny(name, ".smc", ".sfc", ".fig", ".mgd", ".bs", ".SMC", ".SFC", ".FIG", ".MGD", ".BS");
+		return IG::endsWithAnyCaseless(name, ".smc", ".sfc", ".swc", ".bs", ".st", ".fig", ".mgd");
 	};
-EmuSystem::NameFilterFunc EmuSystem::defaultBenchmarkFsFilter = defaultFsFilter;
 
 const BundledGameInfo &EmuSystem::bundledGameInfo(int idx) const
 {
@@ -159,7 +156,7 @@ void Snes9xSystem::onFlushBackupMemory(EmuApp &app, BackupMemoryDirtyFlags)
 	Memory.SaveSRAM(sramFilename(app).c_str());
 }
 
-IG::Time Snes9xSystem::backupMemoryLastWriteTime(const EmuApp &app) const
+WallClockTimePoint Snes9xSystem::backupMemoryLastWriteTime(const EmuApp &app) const
 {
 	return appContext().fileUriLastWriteTime(app.contentSaveFilePath(".srm").c_str());
 }
@@ -181,7 +178,7 @@ static bool isSufamiTurboBios(const IOBuffer &buff)
 
 bool Snes9xSystem::hasBiosExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".bin", ".bios", ".BIN", ".BIOS");
+	return IG::endsWithAnyCaseless(name, ".bin", ".bios");
 }
 
 IOBuffer Snes9xSystem::readSufamiTurboBios() const
@@ -195,7 +192,7 @@ IOBuffer Snes9xSystem::readSufamiTurboBios() const
 		{
 			if(entry.type() == FS::file_type::directory || !hasBiosExtension(entry.name()))
 				continue;
-			auto buff = entry.moveIO().buffer(IOBufferMode::RELEASE);
+			auto buff = entry.releaseIO().buffer(IOBufferMode::Release);
 			if(!isSufamiTurboBios(buff))
 				throw std::runtime_error{"Incompatible Sufami Turbo BIOS"};
 			return buff;
@@ -204,7 +201,7 @@ IOBuffer Snes9xSystem::readSufamiTurboBios() const
 	}
 	else
 	{
-		auto buff = appCtx.openFileUri(sufamiBiosPath, IOAccessHint::ALL).releaseBuffer();
+		auto buff = appCtx.openFileUri(sufamiBiosPath, IOAccessHint::All).releaseBuffer();
 		if(!isSufamiTurboBios(buff))
 			throw std::runtime_error{"Incompatible Sufami Turbo BIOS"};
 		return buff;
@@ -222,7 +219,7 @@ void Snes9xSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDele
 	IG::fill(Memory.NSRTHeader);
 	#endif
 	Memory.HeaderCount = 0;
-	strncpy(Memory.ROMFilename, contentFileName().data(), sizeof(Memory.ROMFilename));
+	Memory.ROMFilename = contentFileName();
 	auto forceVideoSystemSettings = [&]() -> std::pair<bool, bool> // ForceNTSC, ForcePAL
 	{
 		switch(optionVideoSystem.val)
@@ -264,20 +261,23 @@ void Snes9xSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDele
 	IPPU.RenderThisFrame = TRUE;
 }
 
-void Snes9xSystem::configAudioRate(IG::FloatSeconds frameTime, int rate)
+void Snes9xSystem::configAudioRate(FrameTime outputFrameTime, int outputRate)
 {
-	const double systemFrameTime = videoSystem() == VideoSystem::PAL ? staticPalFrameTime : staticFrameTime;
 	#ifndef SNES9X_VERSION_1_4
-	Settings.SoundPlaybackRate = rate;
-	Settings.SoundInputRate = systemFrameTime / frameTime.count() * 32040.;
+	auto inputRate = frameTimeSecs().count() / duration_cast<FloatSeconds>(outputFrameTime).count() * 32040.;
+	if(inputRate == Settings.SoundInputRate && outputRate == Settings.SoundPlaybackRate)
+		return;
+	Settings.SoundPlaybackRate = outputRate;
+	Settings.SoundInputRate = inputRate;
+	logMsg("set sound input rate:%.2f output rate:%d", inputRate, outputRate);
 	S9xUpdateDynamicRate(0, 10);
-	logMsg("sound input rate:%.2f from system frame rate:%f",
-		Settings.SoundInputRate, 1. / systemFrameTime);
 	#else
-	Settings.SoundPlaybackRate = std::round(rate / systemFrameTime * frameTime.count());
+	int mixRate = std::round(audioMixRate(outputRate, outputFrameTime));
+	if(mixRate == Settings.SoundPlaybackRate)
+		return;
+	Settings.SoundPlaybackRate = mixRate;
+	logMsg("set sound mix rate:%d", mixRate);
 	S9xSetPlaybackRate(Settings.SoundPlaybackRate);
-	logMsg("sound playback rate:%u from system frame rate:%f",
-		Settings.SoundPlaybackRate, 1. / systemFrameTime);
 	#endif
 }
 
@@ -346,9 +346,9 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 {
 	const Gfx::LGradientStopDesc navViewGrad[] =
 	{
-		{ .0, Gfx::VertexColorPixelFormat.build((139./255.) * .4, (149./255.) * .4, (230./255.) * .4, 1.) },
-		{ .3, Gfx::VertexColorPixelFormat.build((139./255.) * .4, (149./255.) * .4, (230./255.) * .4, 1.) },
-		{ .97, Gfx::VertexColorPixelFormat.build((46./255.) * .4, (50./255.) * .4, (77./255.) * .4, 1.) },
+		{ .0, Gfx::PackedColor::format.build((139./255.) * .4, (149./255.) * .4, (230./255.) * .4, 1.) },
+		{ .3, Gfx::PackedColor::format.build((139./255.) * .4, (149./255.) * .4, (230./255.) * .4, 1.) },
+		{ .97, Gfx::PackedColor::format.build((46./255.) * .4, (50./255.) * .4, (77./255.) * .4, 1.) },
 		{ 1., view.separatorColor() },
 	};
 	view.setBackgroundGradient(navViewGrad);

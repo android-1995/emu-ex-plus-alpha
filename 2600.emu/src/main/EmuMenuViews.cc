@@ -20,7 +20,7 @@
 #define Debugger DebuggerMac
 #include <emuframework/AudioOptionView.hh>
 #include <emuframework/VideoOptionView.hh>
-#include <emuframework/EmuSystemActionsView.hh>
+#include <emuframework/SystemActionsView.hh>
 #undef Debugger
 #include "MainApp.hh"
 #include <imagine/util/format.hh>
@@ -116,16 +116,18 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 	MultiChoiceMenuItem tvPhosphor
 	{
 		"Simulate TV Phosphor", &defaultFace(),
-		[this](int idx, Gfx::Text &t)
 		{
-			if(idx == 2 && system().osystem.hasConsole())
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
 			{
-				bool phospherInUse = system().osystem.console().properties().get(PropType::Display_Phosphor) == "YES";
-				t.resetString(phospherInUse ? "On" : "Off");
-				return true;
+				if(idx == 2 && system().osystem.hasConsole())
+				{
+					bool phospherInUse = system().osystem.console().properties().get(PropType::Display_Phosphor) == "YES";
+					t.resetString(phospherInUse ? "On" : "Off");
+					return true;
+				}
+				else
+					return false;
 			}
-			else
-				return false;
 		},
 		(MenuItem::Id)system().optionTVPhosphor.val,
 		tvPhosphorItem
@@ -145,15 +147,17 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 	MultiChoiceMenuItem videoSystem
 	{
 		"Video System", &defaultFace(),
-		[this](int idx, Gfx::Text &t)
 		{
-			if(idx == 0 && system().osystem.hasConsole())
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
 			{
-				t.resetString(system().osystem.console().about().DisplayFormat.c_str());
-				return true;
+				if(idx == 0 && system().osystem.hasConsole())
+				{
+					t.resetString(system().osystem.console().about().DisplayFormat.c_str());
+					return true;
+				}
+				else
+					return false;
 			}
-			else
-				return false;
 		},
 		(MenuItem::Id)system().optionVideoSystem.val,
 		videoSystemItem
@@ -179,28 +183,31 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 		};
 	}
 
-	TextMenuItem inputPortsItem[4]
+	TextMenuItem inputPortsItem[5]
 	{
-		{"Auto",            &defaultFace(), setInputPortsDel(), (int)Controller::Type::Unknown},
-		{"Joystick",        &defaultFace(), setInputPortsDel(), (int)Controller::Type::Joystick},
-		{"Genesis Gamepad", &defaultFace(), setInputPortsDel(), (int)Controller::Type::Genesis},
-		{"Paddles",         &defaultFace(), setInputPortsDel(), (int)Controller::Type::Paddles},
+		{"Auto",            &defaultFace(), setInputPortsDel(), to_underlying(Controller::Type::Unknown)},
+		{"Joystick",        &defaultFace(), setInputPortsDel(), to_underlying(Controller::Type::Joystick)},
+		{"Paddles",         &defaultFace(), setInputPortsDel(), to_underlying(Controller::Type::Paddles)},
+		{"Genesis Gamepad", &defaultFace(), setInputPortsDel(), to_underlying(Controller::Type::Genesis)},
+		{"Booster Grip",    &defaultFace(), setInputPortsDel(), to_underlying(Controller::Type::BoosterGrip)},
 	};
 
 	MultiChoiceMenuItem inputPorts
 	{
 		"Input Ports", &defaultFace(),
-		[this](int idx, Gfx::Text &t)
 		{
-			if(idx == 0 && system().osystem.hasConsole())
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
 			{
-				t.resetString(controllerTypeStr(system().osystem.console().leftController().type()));
-				return true;
+				if(idx == 0 && system().osystem.hasConsole())
+				{
+					t.resetString(asString(system().osystem.console().leftController().type()));
+					return true;
+				}
+				else
+					return false;
 			}
-			else
-				return false;
 		},
-		(MenuItem::Id)system().optionInputPort1.val,
+		MenuItem::Id(system().optionInputPort1.val),
 		inputPortsItem
 	};
 
@@ -212,7 +219,7 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 			system().optionInputPort1 = item.id();
 			if(system().osystem.hasConsole())
 			{
-				system().setControllerType(app(), system().osystem.console(), (Controller::Type)item.id());
+				system().setControllerType(app(), system().osystem.console(), Controller::Type(item.id()));
 			}
 		};
 	}
@@ -271,10 +278,12 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 	MultiChoiceMenuItem dPaddleSensitivity
 	{
 		"Digital Paddle Sensitivity", &defaultFace(),
-		[this](uint32_t idx, Gfx::Text &t)
 		{
-			t.resetString(fmt::format("{}", system().optionPaddleDigitalSensitivity.val));
-			return true;
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
+			{
+				t.resetString(std::format("{}", system().optionPaddleDigitalSensitivity.val));
+				return true;
+			}
 		},
 		(MenuItem::Id)system().optionPaddleDigitalSensitivity.val,
 		dPaddleSensitivityItem
@@ -367,7 +376,7 @@ public:
 
 };
 
-class CustomSystemActionsView : public EmuSystemActionsView
+class CustomSystemActionsView : public SystemActionsView
 {
 private:
 	TextMenuItem switches
@@ -395,7 +404,7 @@ private:
 	};
 
 public:
-	CustomSystemActionsView(ViewAttachParams attach): EmuSystemActionsView{attach, true}
+	CustomSystemActionsView(ViewAttachParams attach): SystemActionsView{attach, true}
 	{
 		item.emplace_back(&switches);
 		item.emplace_back(&options);

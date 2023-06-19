@@ -18,6 +18,7 @@
 #include <imagine/config/defs.hh>
 #include <imagine/base/baseDefs.hh>
 #include <imagine/util/jni.hh>
+#include <variant>
 
 struct AChoreographer;
 
@@ -68,7 +69,7 @@ public:
 	{}
 	void scheduleVSync() { choreographerPtr->scheduleVSync(); }
 	void cancel() {}
-	void setFrameTime(FloatSeconds) {}
+	void setFrameRate(FrameRate) {}
 
 protected:
 	ChoreographerBase *choreographerPtr{};

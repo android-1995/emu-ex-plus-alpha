@@ -18,12 +18,12 @@
 #include <imagine/io/IO.hh>
 #include <imagine/io/FileIO.hh>
 #include <imagine/fs/FSDefs.hh>
-#include <imagine/util/format.hh>
 #include <imagine/logger/logger.h>
 #include "utils.hh"
 #include "IOUtils.hh"
 #include <archive.h>
 #include <archive_entry.h>
+#include <format>
 
 namespace IG
 {
@@ -32,7 +32,7 @@ template class IOUtils<ArchiveIO>;
 
 static FS::file_type makeEntryType(int type)
 {
-	using namespace FS;
+	using namespace IG::FS;
 	switch(type)
 	{
 		case AE_IFREG: return file_type::regular;
@@ -77,7 +77,7 @@ ArchiveEntry &ArchiveEntry::operator=(ArchiveEntry &&) noexcept = default;
 
 ArchiveEntry::ArchiveEntry(CStringView path)
 {
-	init(FileIO{path, IOAccessHint::SEQUENTIAL});
+	init(FileIO{path, IOAccessHint::Sequential});
 }
 
 ArchiveEntry::ArchiveEntry(IO io)
@@ -107,7 +107,7 @@ void ArchiveEntry::init(IO io)
 		{
 			//logMsg("skip %lld", (long long)request);
 			auto &a = *((ArchiveControlBlock*)data);
-			if(auto bytes = a.io.seekC(request);
+			if(auto bytes = a.io.seek(request, IOSeekMode::Cur);
 				bytes != -1)
 				return bytes;
 			else
@@ -130,7 +130,7 @@ void ArchiveEntry::init(IO io)
 				if(bytesRead)
 				{
 					*buffOut = a.io.map().data() + pos;
-					a.io.seekC(bytesRead);
+					a.io.seek(bytesRead, IOSeekMode::Cur);
 				}
 				//logMsg("read %lld bytes @ offset:%llu", (long long)bytesRead, (long long)pos);
 				return bytesRead;
@@ -159,7 +159,7 @@ void ArchiveEntry::init(IO io)
 		auto errString = archive_error_string(newArch.get());
 		if(Config::DEBUG_BUILD)
 			logErr("error opening archive:%s", errString);
-		throw std::runtime_error{fmt::format("Error opening archive: {}", errString)};
+		throw std::runtime_error{std::format("Error opening archive: {}", errString)};
 	}
 	logMsg("opened archive:%p", newArch.get());
 	arch = std::move(newArch);
@@ -200,12 +200,12 @@ uint32_t ArchiveEntry::crc32() const
 	return archive_entry_crc32(ptr);
 }
 
-ArchiveIO ArchiveEntry::moveIO()
+ArchiveIO ArchiveEntry::releaseIO()
 {
 	return ArchiveIO{std::move(*this)};
 }
 
-void ArchiveEntry::moveIO(ArchiveIO io)
+void ArchiveEntry::reset(ArchiveIO io)
 {
 	*this = io.releaseArchive();
 }
@@ -266,21 +266,28 @@ std::string_view ArchiveIO::name() const
 	return entry.name();
 }
 
-ssize_t ArchiveIO::read(void *buff, size_t bytes)
+ssize_t ArchiveIO::read(void *buff, size_t bytes, std::optional<off_t> offset)
 {
 	if(!*this) [[unlikely]]
 	{
 		return -1;
 	}
-	int bytesRead = archive_read_data(entry.archive(), buff, bytes);
-	if(bytesRead < 0)
+	if(offset)
 	{
-		bytesRead = -1;
+		return readAtPosGeneric(buff, bytes, *offset);
 	}
-	return bytesRead;
+	else
+	{
+		int bytesRead = archive_read_data(entry.archive(), buff, bytes);
+		if(bytesRead < 0)
+		{
+			bytesRead = -1;
+		}
+		return bytesRead;
+	}
 }
 
-ssize_t ArchiveIO::write(const void* buff, size_t bytes)
+ssize_t ArchiveIO::write(const void* buff, size_t bytes, std::optional<off_t> offset)
 {
 	return -1;
 }

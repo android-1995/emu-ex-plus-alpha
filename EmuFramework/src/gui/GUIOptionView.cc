@@ -1,0 +1,317 @@
+/*  This file is part of EmuFramework.
+
+	Imagine is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	Imagine is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with EmuFramework.  If not, see <http://www.gnu.org/licenses/> */
+
+#include <emuframework/GUIOptionView.hh>
+#include <emuframework/EmuApp.hh>
+#include "../EmuOptions.hh"
+#include <imagine/base/ApplicationContext.hh>
+#include <imagine/gfx/Renderer.hh>
+#include <format>
+
+namespace EmuEx
+{
+
+static constexpr bool USE_MOBILE_ORIENTATION_NAMES = Config::envIsAndroid || Config::envIsIOS;
+static const char *landscapeName = USE_MOBILE_ORIENTATION_NAMES ? "Landscape" : "90° Left";
+static const char *landscape2Name = USE_MOBILE_ORIENTATION_NAMES ? "Landscape 2" : "90° Right";
+static const char *portraitName = USE_MOBILE_ORIENTATION_NAMES ? "Portrait" : "Standard";
+static const char *portrait2Name = USE_MOBILE_ORIENTATION_NAMES ? "Portrait 2" : "Upside Down";
+
+GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
+	TableView{"界面设置", attach, item},
+	pauseUnfocused
+	{
+		"Pause if unfocused", &defaultFace(),
+		(bool)app().pauseUnfocusedOption(),
+		[this](BoolMenuItem &item)
+		{
+			app().pauseUnfocusedOption() = item.flipBoolValue(*this);
+		}
+	},
+	fontSizeItem
+	{
+		{"2",  &defaultFace(), 2000},
+		{"3",  &defaultFace(), 3000},
+		{"4",  &defaultFace(), 4000},
+		{"5",  &defaultFace(), 5000},
+		{"6",  &defaultFace(), 6000},
+		{"7",  &defaultFace(), 7000},
+		{"8",  &defaultFace(), 8000},
+		{"9",  &defaultFace(), 9000},
+		{"10", &defaultFace(), 10000},
+		{"自定义", &defaultFace(),
+			[this](const Input::Event &e)
+			{
+				app().pushAndShowNewCollectValueInputView<float>(attachParams(), e, "输入2.0到10.0", "",
+					[this](EmuApp &app, auto val)
+					{
+						int scaledIntVal = val * 1000.0;
+						if(app.setFontSize(scaledIntVal))
+						{
+							fontSize.setSelected((MenuItem::Id)scaledIntVal, *this);
+							dismissPrevious();
+							return true;
+						}
+						else
+						{
+							app.postErrorMessage("值错误");
+							return false;
+						}
+					});
+				return false;
+			}, MenuItem::DEFAULT_ID
+		},
+	},
+	fontSize
+	{
+		"字体大小", &defaultFace(),
+		{
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
+			{
+				t.resetString(std::format("{:g}", app().fontSize() / 1000.));
+				return true;
+			},
+			.defaultItemOnSelect = [this](TextMenuItem &item) { app().setFontSize(item.id()); }
+		},
+		(MenuItem::Id)app().fontSize(),
+		fontSizeItem
+	},
+	notificationIcon
+	{
+		"通知栏图标", &defaultFace(),
+		(bool)app().notificationIconOption().val,
+		[this](BoolMenuItem &item)
+		{
+			app().notificationIconOption() = item.flipBoolValue(*this);
+		}
+	},
+	statusBarItem
+	{
+		{"Off",    &defaultFace(), to_underlying(Tristate::OFF)},
+		{"In Emu", &defaultFace(), to_underlying(Tristate::IN_EMU)},
+		{"On",     &defaultFace(), to_underlying(Tristate::ON)}
+	},
+	statusBar
+	{
+		"Hide Status Bar", &defaultFace(),
+		MultiChoiceMenuItem::Delegates
+		{
+			.defaultItemOnSelect = [this](TextMenuItem &item) { app().setHideStatusBarMode(Tristate(item.id())); }
+		},
+		(MenuItem::Id)app().hideStatusBarMode(),
+		statusBarItem
+	},
+	lowProfileOSNavItem
+	{
+		{"关",    &defaultFace(), to_underlying(Tristate::OFF)},
+		{"游戏时", &defaultFace(), to_underlying(Tristate::IN_EMU)},
+		{"开",     &defaultFace(), to_underlying(Tristate::ON)}
+	},
+	lowProfileOSNav
+	{
+		"Dim OS UI", &defaultFace(),
+		MultiChoiceMenuItem::Delegates
+		{
+			.defaultItemOnSelect = [this](TextMenuItem &item) { app().setLowProfileOSNavMode(Tristate(item.id())); }
+		},
+		(MenuItem::Id)app().lowProfileOSNavMode(),
+		lowProfileOSNavItem
+	},
+	hideOSNavItem
+	{
+		{"Off",    &defaultFace(), to_underlying(Tristate::OFF)},
+		{"In Emu", &defaultFace(), to_underlying(Tristate::IN_EMU)},
+		{"On",     &defaultFace(), to_underlying(Tristate::ON)}
+	},
+	hideOSNav
+	{
+		"Hide OS Navigation", &defaultFace(),
+		MultiChoiceMenuItem::Delegates
+		{
+			.defaultItemOnSelect = [this](TextMenuItem &item) { app().setHideOSNavMode(Tristate(item.id())); }
+		},
+		(MenuItem::Id)app().hideOSNavMode(),
+		hideOSNavItem
+	},
+	idleDisplayPowerSave
+	{
+		"自动休眠", &defaultFace(),
+		app().idleDisplayPowerSave(),
+		[this](BoolMenuItem &item)
+		{
+			app().setIdleDisplayPowerSave(item.flipBoolValue(*this));
+		}
+	},
+	navView
+	{
+		"标题栏", &defaultFace(),
+		app().showsTitleBar(),
+		[this](BoolMenuItem &item)
+		{
+			app().setShowsTitleBar(item.flipBoolValue(*this));
+		}
+	},
+	backNav
+	{
+		"标题栏返回按钮", &defaultFace(),
+		attach.viewManager.needsBackControl,
+		[this](BoolMenuItem &item)
+		{
+			manager().needsBackControl = item.flipBoolValue(*this);
+			app().viewController().setShowNavViewBackButton(manager().needsBackControl);
+			app().viewController().placeElements();
+		}
+	},
+	systemActionsIsDefaultMenu
+	{
+		"默认菜单", &defaultFace(),
+		(bool)app().systemActionsIsDefaultMenuOption().val,
+		"上次使用", "游戏菜单",
+		[this](BoolMenuItem &item)
+		{
+			app().systemActionsIsDefaultMenuOption() = item.flipBoolValue(*this);
+		}
+	},
+	showBundledGames
+	{
+		"Show Bundled Content", &defaultFace(),
+		app().showsBundledGames(),
+		[this](BoolMenuItem &item)
+		{
+			app().setShowsBundledGames(item.flipBoolValue(*this));
+		}
+	},
+	showBluetoothScan
+	{
+		"Show Bluetooth Menu Items", &defaultFace(),
+		app().showsBluetoothScanItems(),
+		[this](BoolMenuItem &item)
+		{
+			app().setShowsBluetoothScanItems(item.flipBoolValue(*this));
+		}
+	},
+	showHiddenFiles
+	{
+		"Show Hidden Files", &defaultFace(),
+		app().showHiddenFilesInPicker(),
+		[this](BoolMenuItem &item)
+		{
+			app().setShowHiddenFilesInPicker(item.flipBoolValue(*this));
+		}
+	},
+	orientationHeading
+	{
+		"Orientation", &defaultBoldFace()
+	},
+	menuOrientationItem
+	{
+		{"Auto",         &defaultFace(), to_underlying(OrientationMask::UNSET)},
+		{landscapeName,  &defaultFace(), to_underlying(OrientationMask::LANDSCAPE_RIGHT)},
+		{landscape2Name, &defaultFace(), to_underlying(OrientationMask::LANDSCAPE_LEFT)},
+		{portraitName,   &defaultFace(), to_underlying(OrientationMask::PORTRAIT)},
+		{portrait2Name,  &defaultFace(), to_underlying(OrientationMask::PORTRAIT_UPSIDE_DOWN)},
+	},
+	menuOrientation
+	{
+		"In Menu", &defaultFace(),
+		{
+			.defaultItemOnSelect = [this](TextMenuItem &item) { app().setMenuOrientation(OrientationMask(item.id())); }
+		},
+		(MenuItem::Id)app().menuOrientation(),
+		menuOrientationItem
+	},
+	emuOrientationItem
+	{
+		{"Auto",         &defaultFace(), to_underlying(OrientationMask::UNSET)},
+		{landscapeName,  &defaultFace(), to_underlying(OrientationMask::LANDSCAPE_RIGHT)},
+		{landscape2Name, &defaultFace(), to_underlying(OrientationMask::LANDSCAPE_LEFT)},
+		{portraitName,   &defaultFace(), to_underlying(OrientationMask::PORTRAIT)},
+		{portrait2Name,  &defaultFace(), to_underlying(OrientationMask::PORTRAIT_UPSIDE_DOWN)},
+	},
+	emuOrientation
+	{
+		"In Emu", &defaultFace(),
+		{
+			.defaultItemOnSelect = [this](TextMenuItem &item) { app().setEmuOrientation(OrientationMask(item.id())); }
+		},
+		(MenuItem::Id)app().emuOrientation(),
+		emuOrientationItem
+	},
+	layoutBehindSystemUI
+	{
+		"显示到状态栏区域", &defaultFace(),
+		app().doesLayoutBehindSystemUI(),
+		[this](BoolMenuItem &item)
+		{
+			app().setLayoutBehindSystemUI(item.flipBoolValue(*this));
+		}
+	}
+{
+	if(!customMenu)
+	{
+		loadStockItems();
+	}
+}
+
+void GUIOptionView::loadStockItems()
+{
+//	if(!app().pauseUnfocusedOption().isConst)
+//	{
+//		item.emplace_back(&pauseUnfocused);
+//	}
+	if(!app().notificationIconOption().isConst)
+	{
+		item.emplace_back(&notificationIcon);
+	}
+	if(used(navView))
+	{
+		item.emplace_back(&navView);
+	}
+	if(ViewManager::needsBackControlIsMutable)
+	{
+		item.emplace_back(&backNav);
+	}
+	item.emplace_back(&systemActionsIsDefaultMenu);
+	item.emplace_back(&fontSize);
+	item.emplace_back(&idleDisplayPowerSave);
+//	if(used(lowProfileOSNav))
+//	{
+//		item.emplace_back(&lowProfileOSNav);
+//	}
+//	if(used(hideOSNav))
+//	{
+//		item.emplace_back(&hideOSNav);
+//	}
+//	if(used(statusBar))
+//	{
+//		item.emplace_back(&statusBar);
+//	}
+//	if(used(layoutBehindSystemUI) && appContext().hasTranslucentSysUI())
+//	{
+//		item.emplace_back(&layoutBehindSystemUI);
+//	}
+//	if(EmuSystem::hasBundledGames)
+//	{
+//		item.emplace_back(&showBundledGames);
+//	}
+//	if(used(showBluetoothScan))
+//		item.emplace_back(&showBluetoothScan);
+//	item.emplace_back(&showHiddenFiles);
+//	item.emplace_back(&orientationHeading);
+//	item.emplace_back(&emuOrientation);
+//	item.emplace_back(&menuOrientation);
+}
+
+}

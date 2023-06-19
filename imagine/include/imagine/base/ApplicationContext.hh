@@ -28,12 +28,15 @@
 #include <imagine/base/baseDefs.hh>
 #include <imagine/io/ioDefs.hh>
 #include <imagine/time/Time.hh>
+#include <imagine/thread/Thread.hh>
 #include <imagine/util/bitset.hh>
 #include <imagine/util/utility.h>
 #include <imagine/util/string/CStringView.hh>
 #include <imagine/util/memory/UniqueFileDescriptor.hh>
 #include <vector>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <list>
 #include <imagine/util/rectangle2.h>
 
@@ -62,6 +65,7 @@ extern std::function<void(const char *screenshotPath)> g_android_screenshot_comp
 //endregion
 
 class PixelFormat;
+class PerformanceHintManager;
 
 using DirectoryEntryDelegate = DelegateFuncS<sizeof(void*)*3, bool(const FS::directory_entry &)>;
 
@@ -111,32 +115,26 @@ public:
 	const WindowContainer &windows() const;
 	Window &mainWindow();
 	bool systemAnimatesWindowRotation() const;
-	IG::PixelFormat defaultWindowPixelFormat() const;
+	PixelFormat defaultWindowPixelFormat() const;
 
 	const ScreenContainer &screens() const;
 	Screen &mainScreen();
 
 	NativeDisplayConnection nativeDisplayConnection() const;
 
+	// CPU configuration
+	int cpuCount() const;
+	int maxCPUFrequencyKHz(int cpuIdx) const;
+	CPUMask performanceCPUMask() const;
+	PerformanceHintManager performanceHintManager();
+
 	// App Callbacks
-
-	// Called when another process sends the app a message
-	void setOnInterProcessMessage(InterProcessMessageDelegate);
-	void dispatchOnInterProcessMessage(const char *filename);
-	bool hasOnInterProcessMessage() const;
-
-	// Called when a Screen is connected/disconnected or its properties change
-	void setOnScreenChange(ScreenChangeDelegate del);
 
 	// Called when app returns from backgrounded state
 	bool addOnResume(ResumeDelegate, int priority = APP_ON_RESUME_PRIORITY);
 	bool removeOnResume(ResumeDelegate);
 	bool containsOnResume(ResumeDelegate) const;
 	void dispatchOnResume(bool focused);
-
-	// Called when OS needs app to free any cached data
-	void setOnFreeCaches(FreeCachesDelegate del);
-	void dispatchOnFreeCaches(bool running);
 
 	// Called when app will finish execution
 	// If backgrounded == true, app may eventually resume execution
@@ -161,8 +159,8 @@ public:
 	void setAcceptIPC(bool on, const char *appId = applicationId);
 
 	// external services
-	void openURL(IG::CStringView url) const;
-	bool packageIsInstalled(IG::CStringView name) const;
+	void openURL(CStringView url) const;
+	bool packageIsInstalled(CStringView name) const;
 
 	// file system paths & asset loading, thread-safe
 	FS::PathString assetPath(const char *appName = applicationName) const;
@@ -175,7 +173,7 @@ public:
 	std::vector<FS::PathLocation> rootFileLocations() const;
 	FS::RootPathInfo rootPathInfo(std::string_view path) const;
 	AssetIO openAsset(CStringView name, IOAccessHint access, OpenFlagsMask oFlags = {}, const char *appName = applicationName) const;
-	FS::AssetDirectoryIterator openAssetDirectory(IG::CStringView path, const char *appName = applicationName);
+	FS::AssetDirectoryIterator openAssetDirectory(CStringView path, const char *appName = applicationName);
 
 	// path/file access using OS-specific URIs such as those in the Android Storage Access Framework,
 	// backwards compatible with regular file system paths, all thread-safe except for picker functions
@@ -188,7 +186,7 @@ public:
 	FileIO openFileUri(CStringView uri, OpenFlagsMask oFlags = {}) const;
 	UniqueFileDescriptor openFileUriFd(CStringView uri, OpenFlagsMask oFlags = {}) const;
 	bool fileUriExists(CStringView uri) const;
-	Seconds fileUriLastWriteTime(CStringView uri) const;
+	WallClockTimePoint fileUriLastWriteTime(CStringView uri) const;
 	std::string fileUriFormatLastWriteTimeLocal(CStringView uri) const;
 	FS::FileString fileUriDisplayName(CStringView uri) const;
 	bool removeFileUri(CStringView uri) const;
@@ -210,12 +208,14 @@ public:
 	SensorValues remapSensorValuesForDeviceRotation(SensorValues) const;
 
 	// Notification/Launcher icons
-	void addNotification(IG::CStringView onShow, IG::CStringView title, IG::CStringView message);
-	void addLauncherIcon(IG::CStringView name, IG::CStringView path);
+	void addNotification(CStringView onShow, CStringView title, CStringView message);
+	void addLauncherIcon(CStringView name, CStringView path);
 
 	// Power Management
 	void setIdleDisplayPowerSave(bool on);
 	void endIdleByUserActivity();
+	bool hasSustainedPerformanceMode() const;
+	void setSustainedPerformanceMode(bool on);
 
 	// Permissions
 	bool usesPermission(Permission p) const;
@@ -223,8 +223,8 @@ public:
 	bool requestPermission(Permission p);
 
 	// Date & Time
-	std::string formatDateAndTime(WallClockTime timeSinceEpoch);
-	std::string formatDateAndTimeAsFilename(WallClockTime timeSinceEpoch);
+	std::string formatDateAndTime(WallClockTimePoint timeSinceEpoch);
+	std::string formatDateAndTimeAsFilename(WallClockTimePoint timeSinceEpoch);
 
 	// Input
 	const InputDeviceContainer &inputDevices() const;
@@ -238,12 +238,6 @@ public:
 	void flushInputEvents();
 	void flushSystemInputEvents();
 	void flushInternalInputEvents();
-
-	// Called when a known input device addition/removal/change occurs
-	void setOnInputDeviceChange(InputDeviceChangeDelegate);
-
-	// Called when the device list is rebuilt, all devices should be re-checked
-	void setOnInputDevicesEnumerated(InputDevicesEnumeratedDelegate);
 
 	// App exit
 	void exit(int returnVal);

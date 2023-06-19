@@ -16,6 +16,7 @@
 #include "EmuOptions.hh"
 #include <emuframework/EmuSystem.hh>
 #include <emuframework/EmuApp.hh>
+#include <emuframework/MainMenuView.hh>
 #include <emuframework/VideoImageEffect.hh>
 #include <emuframework/VideoImageOverlay.hh>
 #include <emuframework/VController.hh>
@@ -28,15 +29,12 @@
 #include <imagine/fs/FS.hh>
 #include <imagine/io/FileIO.hh>
 #include <imagine/io/MapIO.hh>
-#include <imagine/util/format.hh>
 
 namespace EmuEx
 {
 
 void EmuApp::initOptions(IG::ApplicationContext ctx)
 {
-	optionSoundRate.initDefault(audioManager().nativeRate());
-
 	#ifdef CONFIG_BASE_IOS
 	if(ctx.deviceIsIPad())
 		optionFontSize.initDefault(5000);
@@ -70,13 +68,10 @@ void EmuApp::initOptions(IG::ApplicationContext ctx)
 	}
 	else
 	{
-		#ifdef CONFIG_BLUETOOTH
 		optionShowBluetoothScan.initDefault(0);
-		#endif
 	}
 	{
-		auto type = ctx.sustainedPerformanceModeType();
-		if(type == IG::SustainedPerformanceType::NONE)
+		if(!ctx.hasSustainedPerformanceMode())
 		{
 			optionSustainedPerformanceMode.initDefault(0);
 			optionSustainedPerformanceMode.isConst = true;
@@ -89,35 +84,14 @@ void EmuApp::initOptions(IG::ApplicationContext ctx)
 	}
 	if(androidSdk < 27) // use safer value for devices defaulting to OpenSL ES
 	{
-		optionSoundBuffers.initDefault(4);
+		audio().soundBuffers = audio().defaultSoundBuffers = 4;
 	}
 	#endif
-
-	if(!ctx.mainScreen().frameRateIsReliable())
-	{
-		optionFrameRate.initDefault(60);
-	}
 
 	if(!EmuApp::hasIcon)
 	{
 		optionNotificationIcon.initDefault(false);
 		optionNotificationIcon.isConst = true;
-	}
-
-	if(EmuSystem::forcedSoundRate)
-	{
-		optionSoundRate.initDefault(EmuSystem::forcedSoundRate);
-		optionSoundRate.isConst = true;
-	}
-
-	if(!EmuSystem::hasSound)
-	{
-		optionSound.initDefault(0);
-	}
-
-	if(EmuSystem::constFrameRate)
-	{
-		optionFrameRate.isConst = true;
 	}
 }
 
@@ -125,8 +99,8 @@ void EmuApp::applyFontSize(Window &win)
 {
 	auto settings = fontSettings(win);
 	logMsg("setting up font with pixel height:%d", settings.pixelHeight());
-	viewManager.defaultFace().setFontSettings(renderer, settings);
-	viewManager.defaultBoldFace().setFontSettings(renderer, settings);
+	viewManager.defaultFace.setFontSettings(renderer, settings);
+	viewManager.defaultBoldFace.setFontSettings(renderer, settings);
 }
 
 IG::FontSettings EmuApp::fontSettings(Window &win) const
@@ -148,7 +122,7 @@ void EmuApp::writeRecentContent(FileIO &io)
 	for(const auto &e : recentContentList)
 	{
 		auto len = e.path.size();
-		io.write((uint16_t)len);
+		io.put(uint16_t(len));
 		io.write(e.path.data(), len);
 	}
 }
@@ -196,46 +170,15 @@ bool EmuApp::readRecentContent(IG::ApplicationContext ctx, MapIO &io, size_t rea
 	return true;
 }
 
-std::pair<IG::FloatSeconds, bool> EmuApp::setFrameTime(VideoSystem vidSys, IG::FloatSeconds time)
-{
-	auto wantedTime = time;
-	if(!time.count())
-	{
-		wantedTime = bestFrameTimeForScreen(vidSys);
-	}
-	if(!system().setFrameTime(vidSys, wantedTime))
-	{
-		return {wantedTime, false};
-	}
-	system().configFrameTime(soundRate());
-	frameTimeOption(vidSys) = time.count();
-	return {wantedTime, true};
-}
-
-IG::FloatSeconds EmuApp::frameTime(VideoSystem system) const
-{
-	auto &opt = frameTimeOption(system);
-	if(opt.val)
-		return IG::FloatSeconds(opt.val);
-	return bestFrameTimeForScreen(system);
-}
-
-bool EmuApp::frameTimeIsConst(VideoSystem system) const
-{
-	return frameTimeOption(system).isConst;
-}
-
 void EmuApp::setFrameInterval(int val)
 {
+	logMsg("set frame interval:%d", val);
 	optionFrameInterval = val;
 };
 
 int EmuApp::frameInterval() const
 {
-	if constexpr(Config::SCREEN_FRAME_INTERVAL)
-		return optionFrameInterval;
-	else
-		return 1;
+	return optionFrameInterval;
 }
 
 IG::PixelFormat EmuApp::videoEffectPixelFormat() const
@@ -290,26 +233,40 @@ bool EmuApp::setOverlayEffectLevel(EmuVideoLayer &videoLayer, uint8_t val)
 	if(!optionOverlayEffectLevel.isValidVal(val))
 		return false;
 	optionOverlayEffectLevel = val;
-	videoLayer.setOverlayIntensity(val/100.);
+	videoLayer.setOverlayIntensity(val / 100.f);
 	viewController().postDrawToEmuWindows();
 	return true;
 }
 
-bool EmuApp::setVideoAspectRatio(double ratio)
+bool isValidAspectRatio(float val)
 {
-	if(!optionAspectRatio.isValidVal(ratio))
+	return val == -1.f || (val >= 0.1f && val <= 10.f);
+}
+
+bool EmuApp::setVideoAspectRatio(float ratio)
+{
+	if(ratio == 0.f)
+		ratio = viewController().emuWindow().size().ratio<float>();
+	if(!isValidAspectRatio(ratio))
 		return false;
-	optionAspectRatio = ratio;
 	logMsg("set aspect ratio:%.2f", ratio);
-	emuVideoLayer.setAspectRatio(ratio);
+	if(viewController().emuWindow().isLandscape())
+		emuVideoLayer.landscapeAspectRatio = ratio;
+	else
+		emuVideoLayer.portraitAspectRatio = ratio;
 	viewController().placeEmuViews();
 	viewController().postDrawToEmuWindows();
 	return true;
 }
 
-double EmuApp::videoAspectRatio() const
+float EmuApp::videoAspectRatio() const
 {
-	return optionAspectRatio;
+	return viewController().emuWindow().isLandscape() ? emuVideoLayer.landscapeAspectRatio : emuVideoLayer.portraitAspectRatio;
+}
+
+float EmuApp::defaultVideoAspectRatio() const
+{
+	return EmuSystem::aspectRatioInfos()[0].asFloat();
 }
 
 void EmuApp::setShowsTitleBar(bool on)
@@ -359,13 +316,13 @@ void EmuApp::setMenuOrientation(OrientationMask o)
 void EmuApp::setShowsBundledGames(bool on)
 {
 	optionShowBundledGames = on;
-	dispatchOnMainMenuItemOptionChanged();
+	viewController().mainMenu().reloadItems();
 }
 
 void EmuApp::setShowsBluetoothScanItems(bool on)
 {
 	optionShowBluetoothScan = on;
-	dispatchOnMainMenuItemOptionChanged();
+	viewController().mainMenu().reloadItems();
 }
 
 void EmuApp::setLayoutBehindSystemUI(bool on)

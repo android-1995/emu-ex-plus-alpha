@@ -71,7 +71,7 @@ MogaManager::~MogaManager()
 		return;
 	logMsg("deinit MOGA input system");
 	jMOGAExit(mogaHelper.jniEnv(), mogaHelper);
-	appContext().application().removeInputDevice(Input::Map::SYSTEM, DEVICE_ID, false);
+	appContext().application().removeInputDevice(appContext(), Input::Map::SYSTEM, DEVICE_ID, false);
 }
 
 AndroidInputDevice MogaManager::makeMOGADevice(const char *name)
@@ -107,13 +107,13 @@ void MogaManager::updateMOGAState(JNIEnv *env, bool connected, bool notify)
 		{
 			logMsg("MOGA connected");
 			const char *name = jMOGAGetState(env, mogaHelper, STATE_SELECTED_VERSION) == ACTION_VERSION_MOGAPRO ? "MOGA Pro Controller" : "MOGA Controller";
-			mogaDev = app.addAndroidInputDevice(makeMOGADevice(name), notify);
+			mogaDev = app.addAndroidInputDevice(appContext(), makeMOGADevice(name), notify);
 		}
 		else
 		{
 			logMsg("MOGA disconnected");
 			mogaDev = {};
-			app.removeInputDevice(Input::Map::SYSTEM, DEVICE_ID, notify);
+			app.removeInputDevice(appContext(), Input::Map::SYSTEM, DEVICE_ID, notify);
 		}
 	}
 }
@@ -140,7 +140,7 @@ void MogaManager::initMOGAJNIAndDevice(JNIEnv *env, jobject mogaHelper)
 				assert((uint32_t)keyCode < Keycode::COUNT);
 				ctx.endIdleByUserActivity();
 				Key key = keyCode & 0x1ff;
-				auto time = IG::Nanoseconds(timestamp);
+				auto time = SteadyClockTimePoint{Nanoseconds{timestamp}};
 				KeyEvent event{Map::SYSTEM, key, key, (action == AKEY_EVENT_ACTION_DOWN) ? Action::PUSHED : Action::RELEASED, 0, 0, Source::GAMEPAD, time, &mogaDev};
 				ctx.application().dispatchRepeatableKeyInputEvent(event);
 			})
@@ -154,7 +154,7 @@ void MogaManager::initMOGAJNIAndDevice(JNIEnv *env, jobject mogaHelper)
 				auto &mogaDev = *mogaManager.mogaDev;
 				auto ctx = mogaManager.appContext();
 				ctx.endIdleByUserActivity();
-				auto time = IG::Nanoseconds(timestamp);
+				auto time = SteadyClockTimePoint{Nanoseconds{timestamp}};
 				logMsg("MOGA motion event: %f %f %f %f %f %f %d", (double)x, (double)y, (double)z, (double)rz, (double)lTrigger, (double)rTrigger, (int)timestamp);
 				auto &win = ctx.mainWindow();
 				auto &axis = mogaDev.jsAxes();

@@ -22,33 +22,21 @@ namespace IG
 {
 
 template <class IO>
-off_t IOUtils<IO>::seekS(off_t offset)
+off_t IOUtils<IO>::seek(off_t offset)
 {
-	return static_cast<IO*>(this)->seek(offset, IOSeekMode::SET);
-}
-
-template <class IO>
-off_t IOUtils<IO>::seekE(off_t offset)
-{
-	return static_cast<IO*>(this)->seek(offset, IOSeekMode::END);
-}
-
-template <class IO>
-off_t IOUtils<IO>::seekC(off_t offset)
-{
-	return static_cast<IO*>(this)->seek(offset, IOSeekMode::CUR);
+	return static_cast<IO*>(this)->seek(offset, IOSeekMode::Set);
 }
 
 template <class IO>
 bool IOUtils<IO>::rewind()
 {
-	return seekS(0) != -1;
+	return seek(0) != -1;
 }
 
 template <class IO>
 off_t IOUtils<IO>::tell()
 {
-	return static_cast<IO*>(this)->seekC(0);
+	return static_cast<IO*>(this)->seek(0, IOSeekMode::Cur);
 }
 
 static IOBuffer makeBufferCopy(auto &io)
@@ -66,7 +54,7 @@ template <class IO>
 IOBuffer IOUtils<IO>::buffer(IOBufferMode mode)
 {
 	auto &io = *static_cast<IO*>(this);
-	if(mode == IOBufferMode::RELEASE)
+	if(mode == IOBufferMode::Release)
 	{
 		if constexpr(requires {io.releaseBuffer();})
 		{
@@ -92,10 +80,21 @@ ssize_t IOUtils<IO>::readAtPosGeneric(void *buff, size_t bytes, off_t offset)
 {
 	auto &io = *static_cast<IO*>(this);
 	auto savedOffset = io.tell();
-	io.seekS(offset);
+	io.seek(offset);
 	auto bytesRead = io.read(buff, bytes);
-	io.seekS(savedOffset);
+	io.seek(savedOffset);
 	return bytesRead;
+}
+
+template <class IO>
+ssize_t IOUtils<IO>::writeAtPosGeneric(const void *buff, size_t bytes, off_t offset)
+{
+	auto &io = *static_cast<IO*>(this);
+	auto savedOffset = io.tell();
+	io.seek(offset);
+	auto bytesWritten = io.write(buff, bytes);
+	io.seek(savedOffset);
+	return bytesWritten;
 }
 
 template <class IO>
@@ -112,17 +111,17 @@ FILE *IOUtils<IO>::toFileStream(const char *opentype)
 		[](void *cookie, char *buf, int size)
 		{
 			auto &io = *(IO*)cookie;
-			return (int)io.read(buf, size);
+			return int(io.read(buf, size));
 		},
 		[](void *cookie, const char *buf, int size)
 		{
 			auto &io = *(IO*)cookie;
-			return (int)io.write(buf, size);
+			return int(io.write(buf, size));
 		},
 		[](void *cookie, fpos_t offset, int whence)
 		{
 			auto &io = *(IO*)cookie;
-			return (fpos_t)io.seek(offset, (IOSeekMode)whence);
+			return fpos_t(io.seek(offset, (IOSeekMode)whence));
 		},
 		[](void *cookie)
 		{
@@ -136,7 +135,7 @@ FILE *IOUtils<IO>::toFileStream(const char *opentype)
 			[](void *cookie, char *buf, size_t size)
 			{
 				auto &io = *(IO*)cookie;
-				return (ssize_t)io.read(buf, size);
+				return io.read(buf, size);
 			},
 		.write =
 			[](void *cookie, const char *buf, size_t size)
@@ -147,7 +146,7 @@ FILE *IOUtils<IO>::toFileStream(const char *opentype)
 				{
 					bytesWritten = 0; // needs to return 0 for error
 				}
-				return (ssize_t)bytesWritten;
+				return bytesWritten;
 			},
 		.seek =
 			[](void *cookie, off64_t *position, int whence)
