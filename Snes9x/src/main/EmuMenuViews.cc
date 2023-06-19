@@ -292,7 +292,7 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 		patchesMenuName(appContext(), system().patchesDir), &defaultFace(),
 		[this](const Input::Event &e)
 		{
-			pushAndShow(makeViewWithName<UserPathSelectView>("Patches", system().userPath(system().patchesDir),
+			pushAndShow(makeViewWithName<UserPathSelectView>("补丁", system().userPath(system().patchesDir),
 				[this](CStringView path)
 				{
 					logMsg("set patches path:%s", path.data());
@@ -371,7 +371,7 @@ public:
 	{
 		loadStockItems();
 //		item.emplace_back(&cheatsPath);
-//		item.emplace_back(&patchesPath);
+		item.emplace_back(&patchesPath);
 		item.emplace_back(&satPath);
 		item.emplace_back(&bsxBios);
 		item.emplace_back(&sufamiBios);

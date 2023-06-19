@@ -109,7 +109,7 @@ inline auto cheatsMenuName(IG::ApplicationContext ctx, std::string_view userPath
 
 inline auto patchesMenuName(IG::ApplicationContext ctx, std::string_view userPath)
 {
-	return std::format("Patches: {}", std::string_view{userPathToDisplayName(ctx, userPath)});
+	return std::format("补丁: {}", std::string_view{userPathToDisplayName(ctx, userPath)});
 }
 
 inline auto palettesMenuName(IG::ApplicationContext ctx, std::string_view userPath)
