@@ -35,10 +35,9 @@ void ApplyDeemphasisComplete(pal* pal512);
 void FCEU_setDefaultPalettePtr(pal *ptr);
 void ApplyIPS(FILE *ips, FCEUFILE* fp);
 
-static uint8 XBufData[256 * 256 + 16]{};
 // Separate front & back buffers not needed for our video implementation
-uint8 *XBuf = XBufData;
-uint8 *XBackBuf = XBufData;
+uint8 *XBuf{};
+uint8 *XBackBuf{};
 uint8 *XDBuf{};
 uint8 *XDBackBuf{};
 int dendy = 0;
@@ -48,33 +47,32 @@ bool swapDuty = false;
 namespace EmuEx
 {
 
-const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2022\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nFCEUX Team\nfceux.com";
+const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2023\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nFCEUX Team\nfceux.com";
 bool EmuSystem::hasCheats = true;
 bool EmuSystem::hasPALVideoSystem = true;
-double EmuSystem::staticFrameTime = 16777215./ 1008307711.; // ~60.099Hz
-double EmuSystem::staticPalFrameTime = 16777215. / 838977920.; // ~50.00Hz
 bool EmuSystem::hasResetModes = true;
+bool EmuSystem::hasRectangularPixels = true;
 bool EmuApp::needsGlobalInstance = true;
 unsigned fceuCheats = 0;
 
 bool hasFDSBIOSExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".rom", ".bin", ".ROM", ".BIN");
+	return IG::endsWithAnyCaseless(name, ".rom", ".bin");
 }
 
 static bool hasFDSExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".fds", ".FDS");
+	return IG::endsWithAnyCaseless(name, ".fds");
 }
 
 static bool hasROMExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".nes", ".unf", ".unif", ".NES", ".UNF", ".UNIF");
+	return IG::endsWithAnyCaseless(name, ".nes", ".unf", ".unif");
 }
 
 static bool hasNESExtension(std::string_view name)
 {
-	return hasROMExtension(name) || hasFDSExtension(name);
+	return hasROMExtension(name) || hasFDSExtension(name) || endsWithAnyCaseless(name, ".nsf");
 }
 
 const char *EmuSystem::shortSystemName() const
@@ -88,7 +86,18 @@ const char *EmuSystem::systemName() const
 }
 
 EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter = hasNESExtension;
-EmuSystem::NameFilterFunc EmuSystem::defaultBenchmarkFsFilter = hasNESExtension;
+
+NesSystem::NesSystem(ApplicationContext ctx):
+	EmuSystem{ctx}
+{
+	XBuf = XBufData;
+	XBackBuf = XBufData;
+	backupSavestates = false;
+	if(!FCEUI_Initialize())
+	{
+		throw std::runtime_error{"Error in FCEUI_Initialize"};
+	}
+}
 
 void NesSystem::reset(EmuApp &app, ResetMode mode)
 {
@@ -137,13 +146,11 @@ void NesSystem::loadState(EmuApp &app, IG::CStringView path)
 
 void NesSystem::loadBackupMemory(EmuApp &app)
 {
-	if(!hasContent())
-		return;
 	if(isFDS)
 	{
 		FCEU_FDSReadModifiedDisk();
 	}
-	else
+	else if(currCartInfo)
 	{
 		FCEU_LoadGameSave(currCartInfo);
 	}
@@ -151,19 +158,17 @@ void NesSystem::loadBackupMemory(EmuApp &app)
 
 void NesSystem::onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags)
 {
-	if(!hasContent())
-		return;
 	if(isFDS)
 	{
 		FCEU_FDSWriteModifiedDisk();
 	}
-	else
+	else if(currCartInfo)
 	{
 		FCEU_SaveGameSave(currCartInfo);
 	}
 }
 
-IG::Time NesSystem::backupMemoryLastWriteTime(const EmuApp &app) const
+WallClockTimePoint NesSystem::backupMemoryLastWriteTime(const EmuApp &app) const
 {
 	return appContext().fileUriLastWriteTime(
 		app.contentSaveFilePath(isFDS ? ".fds.sav" : ".sav").c_str());
@@ -183,13 +188,13 @@ void FCEUD_GetPalette(uint8 index, uint8 *r, uint8 *g, uint8 *b)
 
 void NesSystem::setDefaultPalette(IO &io)
 {
-	auto bytesRead = io.read(defaultPal.data(), 512);
-	if(bytesRead < 192)
+	auto colors = io.read(std::span<pal>{defaultPal}).items;
+	if(colors < 64)
 	{
-		logErr("skipped palette with only %d bytes", (int)bytesRead);
+		logErr("skipped palette with only %d colors", (int)colors);
 		return;
 	}
-	if(bytesRead != 512)
+	if(colors != 512)
 	{
 		ApplyDeemphasisComplete(defaultPal.data());
 	}
@@ -207,14 +212,14 @@ void NesSystem::setDefaultPalette(IG::ApplicationContext ctx, IG::CStringView pa
 	if(palPath[0] != '/' && !IG::isUri(palPath))
 	{
 		// load as asset
-		IO io = ctx.openAsset(FS::pathString("palette", palPath), IO::AccessHint::ALL);
+		IO io = ctx.openAsset(FS::pathString("palette", palPath), IO::AccessHint::All);
 		if(!io)
 			return;
 		setDefaultPalette(io);
 	}
 	else
 	{
-		IO io = ctx.openFileUri(palPath, IO::AccessHint::ALL, OpenFlagsMask::TEST);
+		IO io = ctx.openFileUri(palPath, IO::AccessHint::All, OpenFlagsMask::Test);
 		if(!io)
 			return;
 		setDefaultPalette(io);
@@ -324,12 +329,12 @@ const char *regionToStr(int region)
 
 static int regionFromName(std::string_view name)
 {
-	if(IG::stringContainsAny(name, "(E)", "(e)", "(EU)", "(Europe)", "(PAL)",
+	if(IG::containsAny(name, "(E)", "(e)", "(EU)", "(Europe)", "(PAL)",
 		"(F)", "(f)", "(G)", "(g)", "(I)", "(i)"))
 	{
 		return 1; // PAL
 	}
-	else if(IG::stringContainsAny(name, "(RU)", "(ru)"))
+	else if(IG::containsAny(name, "(RU)", "(ru)"))
 	{
 		return 2; // Dendy
 	}
@@ -368,7 +373,7 @@ void NesSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 	{
 		ApplyIPS(ipsFile, file);
 	}
-	if(!FCEUI_LoadGameWithFile(file, contentFileName().data(), 0))
+	if(!FCEUI_LoadGameWithFileVirtual(file, contentFileName().data(), 0, false))
 	{
 		throw std::runtime_error("Error loading game");
 	}
@@ -389,12 +394,13 @@ bool NesSystem::onVideoRenderFormatChange(EmuVideo &video, IG::PixelFormat fmt)
 	return true;
 }
 
-void NesSystem::configAudioRate(IG::FloatSeconds frameTime, int rate)
+void NesSystem::configAudioRate(FrameTime outputFrameTime, int outputRate)
 {
-	const double systemFrameTime = videoSystem() == VideoSystem::PAL ? staticPalFrameTime : staticFrameTime;
-	double mixRate = std::round(rate / systemFrameTime * frameTime.count());
+	uint32 mixRate = std::round(audioMixRate(outputRate, outputFrameTime));
+	if(FSettings.SndRate == mixRate)
+		return;
+	logMsg("set sound mix rate:%d", (int)mixRate);
 	FCEUI_Sound(mixRate);
-	logMsg("set NES audio rate %d", FSettings.SndRate);
 }
 
 void emulateSound(EmuAudio *audio)
@@ -460,9 +466,9 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 {
 	const Gfx::LGradientStopDesc navViewGrad[] =
 	{
-		{ .0, Gfx::VertexColorPixelFormat.build(1. * .4, 0., 0., 1.) },
-		{ .3, Gfx::VertexColorPixelFormat.build(1. * .4, 0., 0., 1.) },
-		{ .97, Gfx::VertexColorPixelFormat.build(.5 * .4, 0., 0., 1.) },
+		{ .0, Gfx::PackedColor::format.build(1. * .4, 0., 0., 1.) },
+		{ .3, Gfx::PackedColor::format.build(1. * .4, 0., 0., 1.) },
+		{ .97, Gfx::PackedColor::format.build(.5 * .4, 0., 0., 1.) },
 		{ 1., view.separatorColor() },
 	};
 	view.setBackgroundGradient(navViewGrad);

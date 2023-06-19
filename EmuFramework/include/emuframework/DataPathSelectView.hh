@@ -32,14 +32,19 @@ enum class DataPathSelectMode: uint8_t
 	File, Folder
 };
 
+enum class ArchivePathSelectMode: uint8_t
+{
+	include, exclude
+};
+
 template<class T>
 concept FileChangeCallable = Callable<T, bool, CStringView, FS::file_type>;
 
-template<DataPathSelectMode mode>
-class DataPathSelectView : public TableView, public EmuAppHelper<DataPathSelectView<mode>>
+template<DataPathSelectMode mode, ArchivePathSelectMode archiveMode = ArchivePathSelectMode::include>
+class DataPathSelectView : public TableView, public EmuAppHelper<DataPathSelectView<mode, archiveMode>>
 {
 public:
-	using EmuAppHelper<DataPathSelectView<mode>>::app;
+	using EmuAppHelper<DataPathSelectView<mode, archiveMode>>::app;
 
 	enum class Mode: uint8_t
 	{
@@ -54,7 +59,7 @@ public:
 			"选择文件夹", &defaultFace(),
 			[=](View &view, const Input::Event &e)
 			{
-				auto fPicker = view.makeView<EmuFilePicker>(FSPicker::Mode::DIR, EmuSystem::NameFilterFunc{}, e);
+				auto fPicker = view.makeView<FilePicker>(FSPicker::Mode::DIR, EmuSystem::NameFilterFunc{}, e);
 				auto &thisView = asThis(view);
 				fPicker->setPath(thisView.searchDir, e);
 				fPicker->setOnSelectPath(
@@ -74,7 +79,8 @@ public:
 			[=](View &view, const Input::Event &e)
 			{
 				auto &thisView = asThis(view);
-				auto fPicker = view.makeView<EmuFilePicker>(FSPicker::Mode::FILE, thisView.fsFilter, e);
+				auto fPicker = view.makeView<FilePicker>(FSPicker::Mode::FILE, thisView.fsFilter, e,
+					archiveMode == ArchivePathSelectMode::include);
 				fPicker->setPath(thisView.searchDir, e);
 				fPicker->setOnSelectPath(
 					[=](FSPicker &picker, CStringView path, std::string_view displayName, const Input::Event &e)
@@ -126,7 +132,9 @@ protected:
 	static auto &asThis(View &view) { return static_cast<DataPathSelectView&>(view); }
 };
 
-using DataFileSelectView = DataPathSelectView<DataPathSelectMode::File>;
+template<ArchivePathSelectMode archiveMode = ArchivePathSelectMode::include>
+using DataFileSelectView = DataPathSelectView<DataPathSelectMode::File, archiveMode>;
+
 using DataFolderSelectView = DataPathSelectView<DataPathSelectMode::Folder>;
 
 }

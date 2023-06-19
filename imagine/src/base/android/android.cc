@@ -38,7 +38,6 @@
 #include <imagine/util/utility.h>
 #include <imagine/util/algorithm.h>
 #include <imagine/util/ScopeGuard.hh>
-#include <imagine/util/format.hh>
 #include "android.hh"
 #include "AndroidInputDevice.hh"
 
@@ -78,7 +77,7 @@ AndroidApplication::AndroidApplication(ApplicationInitParams initParams):
 	setNativeActivityCallbacks(initParams.nActivity);
 	initChoreographer(env, baseActivity, baseActivityClass, androidSDK);
 	initScreens(env, baseActivity, baseActivityClass, androidSDK, initParams.nActivity);
-	initInput(env, baseActivity, baseActivityClass, androidSDK);
+	initInput(ctx, env, baseActivity, baseActivityClass, androidSDK);
 	{
 		auto aConfig = AConfiguration_new();
 		auto freeConfig = IG::scopeGuard([&](){ AConfiguration_delete(aConfig); });
@@ -98,11 +97,8 @@ IG::PixelFormat makePixelFormatFromAndroidFormat(int32_t androidFormat)
 		case ANDROID_BITMAP_FORMAT_A_8: return PIXEL_FMT_I8;
 		default:
 		{
-			if(androidFormat == ANDROID_BITMAP_FORMAT_NONE)
-				return {};
-			else
-				logErr("unhandled format");
-			return PIXEL_FMT_RGBA8888;
+			logErr("unhandled format");
+			return PIXEL_FMT_I8;
 		}
 	}
 }
@@ -268,7 +264,7 @@ UniqueFileDescriptor AndroidApplication::openFileUriFd(JNIEnv *env, jobject base
 	{
 		if constexpr(Config::DEBUG_BUILD)
 			logErr("error opening URI:%s", uri.data());
-		if(to_underlying(openFlags & OpenFlagsMask::TEST))
+		if(to_underlying(openFlags & OpenFlagsMask::Test))
 			return -1;
 		else
 			throw std::system_error{ENOENT, std::system_category(), uri};
@@ -291,98 +287,98 @@ UniqueFileDescriptor ApplicationContext::openFileUriFd(CStringView uri, OpenFlag
 	return application().openFileUriFd(thisThreadJniEnv(), baseActivityObject(), uri, openFlags);
 }
 
-bool AndroidApplication::fileUriExists(JNIEnv *env, jobject baseActivity, IG::CStringView uri) const
+bool AndroidApplication::fileUriExists(JNIEnv *env, jobject baseActivity, CStringView uri) const
 {
 	bool exists = uriExists(env, baseActivity, env->NewStringUTF(uri));
 	logMsg("URI %s:%s", exists ? "exists" : "doesn't exist", uri.data());
 	return exists;
 }
 
-bool ApplicationContext::fileUriExists(IG::CStringView uri) const
+bool ApplicationContext::fileUriExists(CStringView uri) const
 {
 	if(androidSDK() < 19 || !IG::isUri(uri))
 		return FS::exists(uri);
 	return application().fileUriExists(thisThreadJniEnv(), baseActivityObject(), uri);
 }
 
-Seconds AndroidApplication::fileUriLastWriteTime(JNIEnv *env, jobject baseActivity, CStringView uri) const
+WallClockTimePoint AndroidApplication::fileUriLastWriteTime(JNIEnv *env, jobject baseActivity, CStringView uri) const
 {
-	return std::chrono::duration_cast<Seconds>(Milliseconds{uriLastModifiedTime(env, baseActivity, env->NewStringUTF(uri))});
+	return WallClockTimePoint{Milliseconds{uriLastModifiedTime(env, baseActivity, env->NewStringUTF(uri))}};
 }
 
-Seconds ApplicationContext::fileUriLastWriteTime(CStringView uri) const
+WallClockTimePoint ApplicationContext::fileUriLastWriteTime(CStringView uri) const
 {
 	if(androidSDK() < 19 || !IG::isUri(uri))
 		return FS::status(uri).lastWriteTime();
 	return application().fileUriLastWriteTime(thisThreadJniEnv(), baseActivityObject(), uri);
 }
 
-std::string AndroidApplication::fileUriFormatLastWriteTimeLocal(JNIEnv *env, jobject baseActivity, IG::CStringView uri) const
+std::string AndroidApplication::fileUriFormatLastWriteTimeLocal(JNIEnv *env, jobject baseActivity, CStringView uri) const
 {
 	//logMsg("getting modification time for URI:%s", uri.data());
 	return std::string{JNI::StringChars{env, uriLastModified(env, baseActivity, env->NewStringUTF(uri))}};
 }
 
-std::string ApplicationContext::fileUriFormatLastWriteTimeLocal(IG::CStringView uri) const
+std::string ApplicationContext::fileUriFormatLastWriteTimeLocal(CStringView uri) const
 {
 	if(androidSDK() < 19 || !IG::isUri(uri))
 		return FS::formatLastWriteTimeLocal(*this, uri);
 	return application().fileUriFormatLastWriteTimeLocal(thisThreadJniEnv(), baseActivityObject(), uri);
 }
 
-FS::FileString AndroidApplication::fileUriDisplayName(JNIEnv *env, jobject baseActivity, IG::CStringView uri) const
+FS::FileString AndroidApplication::fileUriDisplayName(JNIEnv *env, jobject baseActivity, CStringView uri) const
 {
 	//logMsg("getting display name for URI:%s", uri.data());
 	return FS::FileString{JNI::StringChars{env, uriDisplayName(env, baseActivity, env->NewStringUTF(uri))}};
 }
 
-FS::FileString ApplicationContext::fileUriDisplayName(IG::CStringView uri) const
+FS::FileString ApplicationContext::fileUriDisplayName(CStringView uri) const
 {
 	if(androidSDK() < 19 || !IG::isUri(uri))
 		return FS::displayName(uri);
 	return application().fileUriDisplayName(thisThreadJniEnv(), baseActivityObject(), uri);
 }
 
-bool AndroidApplication::removeFileUri(JNIEnv *env, jobject baseActivity, IG::CStringView uri, bool isDir) const
+bool AndroidApplication::removeFileUri(JNIEnv *env, jobject baseActivity, CStringView uri, bool isDir) const
 {
 	logMsg("removing %s URI:%s", isDir ? "directory" : "file", uri.data());
 	return deleteUri(env, baseActivity, env->NewStringUTF(uri), isDir);
 }
 
-bool ApplicationContext::removeFileUri(IG::CStringView uri) const
+bool ApplicationContext::removeFileUri(CStringView uri) const
 {
 	if(androidSDK() < 19 || !IG::isUri(uri))
 		return FS::remove(uri);
 	return application().removeFileUri(thisThreadJniEnv(), baseActivityObject(), uri, false);
 }
 
-bool AndroidApplication::renameFileUri(JNIEnv *env, jobject baseActivity, IG::CStringView oldUri, IG::CStringView newUri) const
+bool AndroidApplication::renameFileUri(JNIEnv *env, jobject baseActivity, CStringView oldUri, CStringView newUri) const
 {
 	logMsg("renaming file URI:%s -> %s", oldUri.data(), newUri.data());
 	return renameUri(env, baseActivity, env->NewStringUTF(oldUri), env->NewStringUTF(newUri));
 }
 
-bool ApplicationContext::renameFileUri(IG::CStringView oldUri, IG::CStringView newUri) const
+bool ApplicationContext::renameFileUri(CStringView oldUri, CStringView newUri) const
 {
 	if(androidSDK() < 24 || !IG::isUri(oldUri))
 		return FS::rename(oldUri, newUri);
 	return application().renameFileUri(thisThreadJniEnv(), baseActivityObject(), oldUri, newUri);
 }
 
-bool AndroidApplication::createDirectoryUri(JNIEnv *env, jobject baseActivity, IG::CStringView uri) const
+bool AndroidApplication::createDirectoryUri(JNIEnv *env, jobject baseActivity, CStringView uri) const
 {
 	logMsg("creating directory URI:%s", uri.data());
 	return createDirUri(env, baseActivity, env->NewStringUTF(uri));
 }
 
-bool ApplicationContext::createDirectoryUri(IG::CStringView uri) const
+bool ApplicationContext::createDirectoryUri(CStringView uri) const
 {
 	if(androidSDK() < 21 || !IG::isUri(uri))
 		return FS::create_directory(uri);
 	return application().createDirectoryUri(thisThreadJniEnv(), baseActivityObject(), uri);
 }
 
-bool ApplicationContext::removeDirectoryUri(IG::CStringView uri) const
+bool ApplicationContext::removeDirectoryUri(CStringView uri) const
 {
 	if(androidSDK() < 19 || !IG::isUri(uri))
 		return FS::remove(uri);
@@ -457,15 +453,15 @@ bool ApplicationContext::requestPermission(Permission p)
 	return requestPermission(env, baseActivity, permissionJStr);
 }
 
-std::string AndroidApplication::formatDateAndTime(JNIEnv *env, jclass baseActivityClass, WallClockTime time)
+std::string AndroidApplication::formatDateAndTime(JNIEnv *env, jclass baseActivityClass, WallClockTimePoint time)
 {
-	if(!time.count())
+	if(!hasTime(time))
 		return {};
 	return std::string{JNI::StringChars{env, jFormatDateTime(env, baseActivityClass,
-		std::chrono::duration_cast<Milliseconds>(time).count())}};
+		duration_cast<Milliseconds>(time.time_since_epoch()).count())}};
 }
 
-std::string ApplicationContext::formatDateAndTime(WallClockTime time)
+std::string ApplicationContext::formatDateAndTime(WallClockTimePoint time)
 {
 	auto env = thisThreadJniEnv();
 	return application().formatDateAndTime(env,
@@ -829,9 +825,9 @@ void AndroidApplication::initActivity(JNIEnv *env, jobject baseActivity, jclass 
 				}
 			},
 			{
-				"displayEnumerated", "(JLandroid/view/Display;IFILandroid/util/DisplayMetrics;)V",
+				"displayEnumerated", "(JLandroid/view/Display;IFJILandroid/util/DisplayMetrics;)V",
 				(void*)
-				+[](JNIEnv* env, jobject, jlong nActivityAddr, jobject disp, jint id, jfloat refreshRate, jint rotation, jobject metrics)
+				+[](JNIEnv* env, jobject, jlong nActivityAddr, jobject disp, jint id, jfloat refreshRate, jlong presentationDeadline, jint rotation, jobject metrics)
 				{
 					ApplicationContext ctx{(ANativeActivity*)nActivityAddr};
 					auto &app = ctx.application();
@@ -839,13 +835,13 @@ void AndroidApplication::initActivity(JNIEnv *env, jobject baseActivity, jclass 
 					if(!screen)
 					{
 						app.addScreen(ctx, std::make_unique<Screen>(ctx,
-							Screen::InitParams{env, disp, metrics, id, refreshRate, (Rotation)rotation}), false);
+							Screen::InitParams{env, disp, metrics, id, refreshRate, Nanoseconds{presentationDeadline}, Rotation(rotation)}), false);
 						return;
 					}
 					else
 					{
 						// already in list, update existing
-						screen->updateRefreshRate(refreshRate);
+						screen->updateFrameRate(refreshRate);
 					}
 				}
 			},
@@ -855,12 +851,13 @@ void AndroidApplication::initActivity(JNIEnv *env, jobject baseActivity, jclass 
 				+[](JNIEnv* env, jobject, jlong nUserData, jint devID, jobject jDev, jstring jName, jint src,
 					jint kbType, jint jsAxisBits, jint vendorProductId, jboolean isPowerButton)
 				{
-					auto &app = *((AndroidApplication*)nUserData);
+					ApplicationContext ctx{reinterpret_cast<ANativeActivity*>(nUserData)};
+					auto &app = ctx.application();
 					const char *name = env->GetStringUTFChars(jName, nullptr);
 					Input::AndroidInputDevice sysDev{env, jDev, devID, src,
 						name, kbType, (uint32_t)jsAxisBits, (uint32_t)vendorProductId, (bool)isPowerButton};
 					env->ReleaseStringUTFChars(jName, name);
-					auto devPtr = app.updateAndroidInputDevice(std::move(sysDev), false);
+					auto devPtr = app.updateAndroidInputDevice(ctx, std::move(sysDev), false);
 					// check for special device IDs
 					if(devID == -1)
 					{
@@ -1048,58 +1045,37 @@ bool AndroidApplication::hasFocus() const
 	return aHasFocus;
 }
 
-SustainedPerformanceType AndroidApplicationContext::sustainedPerformanceModeType() const
+bool ApplicationContext::hasSustainedPerformanceMode() const { return androidSDK() >= 24; }
+
+void ApplicationContext::setSustainedPerformanceMode(bool on)
 {
-	int sdk = static_cast<const ApplicationContext*>(this)->androidSDK();
-	if(sdk >= 24)
-	{
-		return SustainedPerformanceType::DEVICE;
-	}
-	if(Config::MACHINE_IS_GENERIC_ARMV7 && sdk >= 16)
-	{
-		return SustainedPerformanceType::NOOP;
-	}
-	return SustainedPerformanceType::NONE;
+	if(!hasSustainedPerformanceMode())
+		return;
+	logMsg("set sustained performance mode:%s", on ? "on" : "off");
+	auto env = mainThreadJniEnv();
+	auto baseActivity = baseActivityObject();
+	JNI::InstMethod<void(jboolean)> jSetSustainedPerformanceMode{env, baseActivity, "setSustainedPerformanceMode", "(Z)V"};
+	jSetSustainedPerformanceMode(env, baseActivity, on);
 }
 
-void AndroidApplicationContext::setSustainedPerformanceMode(bool on)
+void AndroidApplicationContext::setNoopThreadActive(bool on)
 {
-	switch(sustainedPerformanceModeType())
+	auto &ctx = *static_cast<ApplicationContext*>(this);
+	if(on && ctx.isRunning())
 	{
-		case SustainedPerformanceType::DEVICE:
-		{
-			logMsg("set sustained performance mode:%s", on ? "on" : "off");
-			auto env = mainThreadJniEnv();
-			auto baseActivity = baseActivityObject();
-			JNI::InstMethod<void(jboolean)> jSetSustainedPerformanceMode{env, baseActivity, "setSustainedPerformanceMode", "(Z)V"};
-			jSetSustainedPerformanceMode(env, baseActivity, on);
+		if(noopThread)
 			return;
-		}
-		case SustainedPerformanceType::NOOP:
-		{
-			if(!Config::MACHINE_IS_GENERIC_ARMV7)
-				return;
-			auto &ctx = *static_cast<ApplicationContext*>(this);
-			if(on && ctx.isRunning())
-			{
-				if(noopThread)
-					return;
-				ctx.addOnExit(
-					[](ApplicationContext, bool)
-					{
-						noopThread.stop();
-						return false;
-					}, -1000);
-				noopThread.start();
-			}
-			else
+		ctx.addOnExit(
+			[](ApplicationContext, bool)
 			{
 				noopThread.stop();
-			}
-			return;
-		}
-		default:
-			return;
+				return false;
+			}, -1000);
+		noopThread.start();
+	}
+	else
+	{
+		noopThread.stop();
 	}
 }
 
@@ -1253,13 +1229,13 @@ static void setNativeActivityCallbacks(ANativeActivity *nActivity)
 				logMsg("changed OS orientation");
 				app.setCurrentRotation(ctx, rotation, true);
 			}
-			app.updateInputConfig(aConfig);
+			app.updateInputConfig(ctx, aConfig);
 		};
 	nActivity->callbacks->onLowMemory =
 		[](ANativeActivity *nActivity)
 		{
 			ApplicationContext ctx{nActivity};
-			ctx.dispatchOnFreeCaches(ctx.isRunning());
+			ctx.application().onEvent(ctx, FreeCachesEvent{ctx.isRunning()});
 		};
 	nActivity->callbacks->onWindowFocusChanged =
 		[](ANativeActivity *nActivity, int focused)

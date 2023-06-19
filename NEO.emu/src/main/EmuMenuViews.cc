@@ -15,16 +15,16 @@
 
 #include <emuframework/SystemOptionView.hh>
 #include <emuframework/GUIOptionView.hh>
-#include <emuframework/EmuMainMenuView.hh>
-#include <emuframework/EmuSystemActionsView.hh>
+#include <emuframework/MainMenuView.hh>
+#include <emuframework/SystemActionsView.hh>
 #include <imagine/gui/AlertView.hh>
 #include <imagine/util/bitset.hh>
 #include <imagine/util/ScopeGuard.hh>
 #include "MainApp.hh"
 #include <imagine/fs/FS.hh>
 #include <imagine/io/IO.hh>
-#include <imagine/util/format.hh>
 #include <imagine/util/string.h>
+#include <format>
 
 extern "C"
 {
@@ -64,15 +64,17 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 	MultiChoiceMenuItem timer
 	{
 		"Emulate Timer", &defaultFace(),
-		[this](int idx, Gfx::Text &t)
 		{
-			if(idx == 2)
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
 			{
-				t.resetString(conf.raster ? "On" : "Off");
-				return true;
+				if(idx == 2)
+				{
+					t.resetString(conf.raster ? "On" : "Off");
+					return true;
+				}
+				else
+					return false;
 			}
-			else
-				return false;
 		},
 		std::min((int)system().optionTimerInt, 2),
 		timerItem
@@ -469,7 +471,7 @@ static FS::PathString gameFilePath(EmuApp &app, std::string_view name)
 
 constexpr static bool gameFileExists(std::string_view name, std::string_view nameList)
 {
-	return IG::stringContainsAny(nameList,
+	return IG::containsAny(nameList,
 		FS::FileString{name}.append(".zip"),
 		FS::FileString{name}.append(".7z"),
 		FS::FileString{name}.append(".rar"));
@@ -531,14 +533,9 @@ public:
 					{
 						if(entry.bugs)
 						{
-							auto ynAlertView = makeView<YesNoAlertView>(
-								"This game doesn't yet work properly, load anyway?");
-							ynAlertView->setOnYes(
-								[this, &entry](Input::Event e)
-								{
-									loadGame(entry, e);
-								});
-							app().pushAndShowModalView(std::move(ynAlertView), e);
+							app().pushAndShowModalView(makeView<YesNoAlertView>(
+								"This game doesn't yet work properly, load anyway?",
+								YesNoAlertView::Delegates{.onYes = [this, &entry](Input::Event e){ loadGame(entry, e); }}), e);
 						}
 						else
 						{
@@ -547,7 +544,7 @@ public:
 					}
 					else
 					{
-						app().postMessage(3, 1, fmt::format("{} not present", entry.name));
+						app().postMessage(3, 1, std::format("{} not present", entry.name));
 					}
 					return true;
 				});
@@ -623,7 +620,7 @@ public:
 	}*/
 };
 
-class CustomSystemActionsView : public EmuSystemActionsView
+class CustomSystemActionsView : public SystemActionsView
 {
 private:
 	TextMenuItem unibiosSwitches
@@ -658,7 +655,7 @@ private:
 	};
 
 public:
-	CustomSystemActionsView(ViewAttachParams attach): EmuSystemActionsView{attach, true}
+	CustomSystemActionsView(ViewAttachParams attach): SystemActionsView{attach, true}
 	{
 		item.emplace_back(&unibiosSwitches);
 		item.emplace_back(&options);
@@ -667,13 +664,13 @@ public:
 
 	void onShow()
 	{
-		EmuSystemActionsView::onShow();
+		SystemActionsView::onShow();
 		bool isUnibios = conf.system >= SYS_UNIBIOS && conf.system <= SYS_UNIBIOS_LAST;
 		unibiosSwitches.setActive(system().hasContent() && isUnibios);
 	}
 };
 
-class CustomMainMenuView : public EmuMainMenuView
+class CustomMainMenuView : public MainMenuView
 {
 private:
 	TextMenuItem gameList
@@ -691,7 +688,7 @@ private:
 		}
 	};
 
-	void reloadItems()
+	void reloadItems() final
 	{
 		item.clear();
 		loadFileBrowserItems();
@@ -700,10 +697,9 @@ private:
 	}
 
 public:
-	CustomMainMenuView(ViewAttachParams attach): EmuMainMenuView{attach, true}
+	CustomMainMenuView(ViewAttachParams attach): MainMenuView{attach, true}
 	{
 		reloadItems();
-		app().setOnMainMenuItemOptionChanged([this](){ reloadItems(); });
 	}
 };
 

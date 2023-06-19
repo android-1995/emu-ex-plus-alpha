@@ -36,13 +36,8 @@ namespace EmuEx
 {
 
 [[gnu::weak]] bool EmuSystem::inputHasKeyboard = false;
-[[gnu::weak]] bool EmuSystem::inputHasShortBtnTexture = false;
-[[gnu::weak]] int EmuSystem::inputLTriggerIndex = -1;
-[[gnu::weak]] int EmuSystem::inputRTriggerIndex = -1;
 [[gnu::weak]] bool EmuSystem::hasBundledGames = false;
 [[gnu::weak]] bool EmuSystem::hasPALVideoSystem = false;
-[[gnu::weak]] double EmuSystem::staticFrameTime = 1. / 60.;
-[[gnu::weak]] double EmuSystem::staticPalFrameTime = 1. / 50.;
 [[gnu::weak]] bool EmuSystem::canRenderRGBA8888 = true;
 [[gnu::weak]] bool EmuSystem::hasResetModes = false;
 [[gnu::weak]] bool EmuSystem::handlesArchiveFiles = false;
@@ -51,8 +46,8 @@ namespace EmuEx
 [[gnu::weak]] bool EmuSystem::hasSound = true;
 [[gnu::weak]] int EmuSystem::forcedSoundRate = 0;
 [[gnu::weak]] IG::Audio::SampleFormat EmuSystem::audioSampleFormat = IG::Audio::SampleFormats::i16;
-[[gnu::weak]] bool EmuSystem::constFrameRate = false;
-[[gnu::weak]] std::array<int, EmuSystem::MAX_FACE_BTNS> EmuSystem::vControllerImageMap{0, 1, 2, 3, 4, 5, 6, 7};
+[[gnu::weak]] FP EmuSystem::validFrameRateRange{minFrameRate, 80.};
+[[gnu::weak]] bool EmuSystem::hasRectangularPixels = false;
 
 bool EmuSystem::stateExists(int slot) const
 {
@@ -71,30 +66,25 @@ bool EmuApp::shouldOverwriteExistingState() const
 	return !optionConfirmOverwriteState || !system().stateExists(system().stateSlot());
 }
 
-EmuFrameTimeInfo EmuSystem::advanceFramesWithTime(IG::FrameTime time)
-{
-	return emuTiming.advanceFramesWithTime(time);
-}
-
 void EmuSystem::setSpeedMultiplier(EmuAudio &emuAudio, double speed)
 {
 	emuTiming.setSpeedMultiplier(speed);
 	emuAudio.setSpeedMultiplier(speed);
 }
 
-void EmuSystem::setupContentUriPaths(IG::CStringView uri, std::string_view displayName)
+void EmuSystem::setupContentUriPaths(CStringView uri, std::string_view displayName)
 {
 	contentFileName_ = displayName;
-	contentName_ = IG::stringWithoutDotExtension(contentFileName_);
+	contentName_ = IG::withoutDotExtension(contentFileName_);
 	contentLocation_ = uri;
 	contentDirectory_ = FS::dirnameUri(uri);
 	updateContentSaveDirectory();
 }
 
-void EmuSystem::setupContentFilePaths(IG::CStringView filePath, std::string_view displayName)
+void EmuSystem::setupContentFilePaths(CStringView filePath, std::string_view displayName)
 {
 	contentFileName_ = displayName;
-	contentName_ = IG::stringWithoutDotExtension(contentFileName_);
+	contentName_ = IG::withoutDotExtension(contentFileName_);
 	// find the realpath of the dirname portion separately in case the file is a symlink
 	auto fileDir = FS::dirname(filePath);
 	if(fileDir == ".")
@@ -177,7 +167,7 @@ FS::PathString EmuSystem::contentSaveFilePath(std::string_view ext) const
 	return FS::uriString(contentSaveDirectory(), FS::FileString{contentName()}.append(ext));
 }
 
-void EmuSystem::setUserSaveDirectory(IG::CStringView path)
+void EmuSystem::setUserSaveDirectory(CStringView path)
 {
 	logMsg("set user save path:%s", path.data());
 	userSaveDirectory_ = path;
@@ -244,12 +234,12 @@ void EmuSystem::closeRuntimeSystem(EmuApp &app)
 	{
 		app.video().clear();
 		app.audio().flush();
-		app.saveAutosave();
+		app.autosaveManager().save();
 		app.saveSessionOptions();
 		logMsg("closing game:%s", contentName_.data());
 		flushBackupMemory(app);
 		closeSystem();
-		app.cancelAutosaveStateTimer();
+		app.autosaveManager().cancelTimer();
 		state = State::OFF;
 	}
 	clearGamePaths();
@@ -270,7 +260,7 @@ void EmuSystem::pause(EmuApp &app)
 	if(isActive())
 		state = State::PAUSED;
 	app.audio().stop();
-	app.pauseAutosaveStateTimer();
+	app.autosaveManager().pauseTimer();
 	onStop();
 }
 
@@ -279,38 +269,46 @@ void EmuSystem::start(EmuApp &app)
 	state = State::ACTIVE;
 	if(inputHasKeyboard)
 		app.defaultVController().keyboard().setShiftActive(false);
-	clearInputBuffers(app.viewController().inputView());
+	clearInputBuffers(app.viewController().inputView);
 	resetFrameTime();
 	onStart();
 	app.startAudio();
-	app.startAutosaveStateTimer();
+	app.autosaveManager().startTimer();
 }
 
-IG::Time EmuSystem::benchmark(EmuVideo &video)
+SteadyClockTime EmuSystem::benchmark(EmuVideo &video)
 {
-	auto now = IG::steadyClockTimestamp();
+	auto before = SteadyClock::now();
 	for(auto i : iotaCount(180))
 	{
 		runFrame({}, &video, nullptr);
 	}
-	auto after = IG::steadyClockTimestamp();
-	return after-now;
+	return SteadyClock::now() - before;
 }
 
-void EmuSystem::configFrameTime(int rate)
+void EmuSystem::configFrameTime(int outputRate, FrameTime outputFrameTime)
 {
-	auto fTime = frameTime();
-	configAudioRate(fTime, rate);
-	audioFramesPerVideoFrame = std::ceil(rate * fTime.count());
-	audioFramesPerVideoFrameFloat = (double)rate * fTime.count();
+	if(!hasContent())
+		return;
+	configAudioRate(outputFrameTime, outputRate);
+	audioFramesPerVideoFrameFloat = outputRate * duration_cast<FloatSeconds>(outputFrameTime).count();
+	audioFramesPerVideoFrame = std::ceil(audioFramesPerVideoFrameFloat);
 	currentAudioFramesPerVideoFrame = audioFramesPerVideoFrameFloat;
-	emuTiming.setFrameTime(fTime);
+	emuTiming.setFrameTime(outputFrameTime);
 }
 
-void EmuSystem::configAudioPlayback(EmuAudio &emuAudio, int rate)
+void EmuSystem::onFrameTimeChanged()
 {
-	configFrameTime(rate);
-	emuAudio.setRate(rate);
+	logMsg("frame rate changed:%.2f", frameRate());
+	EmuApp::get(appContext()).configFrameTime();
+}
+
+double EmuSystem::audioMixRate(int outputRate, double inputFrameRate, FrameTime outputFrameTime)
+{
+	assumeExpr(outputRate > 0);
+	assumeExpr(inputFrameRate > 0);
+	assumeExpr(outputFrameTime.count() > 0);
+	return inputFrameRate * duration_cast<FloatSeconds>(outputFrameTime).count() * outputRate;
 }
 
 int EmuSystem::updateAudioFramesPerVideoFrame()
@@ -321,63 +319,12 @@ int EmuSystem::updateAudioFramesPerVideoFrame()
 	return wholeFrames;
 }
 
-double EmuSystem::frameRate() const
-{
-	return frameRate(videoSystem());
-}
-
-double EmuSystem::frameRate(VideoSystem system) const
-{
-	return 1. / frameTime(system).count();
-}
-
-IG::FloatSeconds EmuSystem::frameTime() const
-{
-	return frameTime(videoSystem());
-}
-
-IG::FloatSeconds EmuSystem::frameTime(VideoSystem system) const
-{
-	return frameTimeVar(system);
-}
-
-IG::FloatSeconds EmuSystem::defaultFrameTime(VideoSystem system)
-{
-	switch(system)
-	{
-		case VideoSystem::NATIVE_NTSC: return IG::FloatSeconds{staticFrameTime};
-		case VideoSystem::PAL: return IG::FloatSeconds{staticPalFrameTime};
-	}
-	return {};
-}
-
-bool EmuSystem::frameTimeIsValid(VideoSystem system, IG::FloatSeconds time)
-{
-	auto rate = 1. / time.count(); // convert to frames per second
-	switch(system)
-	{
-		case VideoSystem::NATIVE_NTSC:
-			return rate >= 55. && rate <= ((1. / staticFrameTime) + 5.);
-		case VideoSystem::PAL:
-			return rate >= 45. && rate <= ((1. / staticPalFrameTime) + 15.);
-	}
-	return false;
-}
-
-bool EmuSystem::setFrameTime(VideoSystem system, IG::FloatSeconds time)
-{
-	if(!frameTimeIsValid(system, time))
-		return false;
-	frameTimeVar(system) = time;
-	return true;
-}
-
 [[gnu::weak]] FS::PathString EmuSystem::willLoadContentFromPath(std::string_view path, std::string_view displayName)
 {
 	return FS::PathString{path};
 }
 
-void EmuSystem::closeAndSetupNew(IG::CStringView path, std::string_view displayName)
+void EmuSystem::closeAndSetupNew(CStringView path, std::string_view displayName)
 {
 	auto &app = EmuApp::get(appContext());
 	closeRuntimeSystem(app);
@@ -389,7 +336,7 @@ void EmuSystem::closeAndSetupNew(IG::CStringView path, std::string_view displayN
 	app.loadSessionOptions();
 }
 
-void EmuSystem::createWithMedia(IO io, IG::CStringView path, std::string_view displayName,
+void EmuSystem::createWithMedia(IO io, CStringView path, std::string_view displayName,
 	EmuSystemCreateParams params, OnLoadProgressDelegate onLoadProgress)
 {
 	if(io)
@@ -398,7 +345,7 @@ void EmuSystem::createWithMedia(IO io, IG::CStringView path, std::string_view di
 		loadContentFromPath(path, displayName, params, onLoadProgress);
 }
 
-void EmuSystem::loadContentFromPath(IG::CStringView pathStr, std::string_view displayName, EmuSystemCreateParams params, OnLoadProgressDelegate onLoadProgress)
+void EmuSystem::loadContentFromPath(CStringView pathStr, std::string_view displayName, EmuSystemCreateParams params, OnLoadProgressDelegate onLoadProgress)
 {
 	auto path = willLoadContentFromPath(pathStr, displayName);
 	if(!handlesGenericIO)
@@ -409,10 +356,10 @@ void EmuSystem::loadContentFromPath(IG::CStringView pathStr, std::string_view di
 		return;
 	}
 	logMsg("load from %s:%s", IG::isUri(path) ? "uri" : "path", path.data());
-	loadContentFromFile(appContext().openFileUri(path, IOAccessHint::SEQUENTIAL), path, displayName, params, onLoadProgress);
+	loadContentFromFile(appContext().openFileUri(path, IOAccessHint::Sequential), path, displayName, params, onLoadProgress);
 }
 
-void EmuSystem::loadContentFromFile(IO file, IG::CStringView path, std::string_view displayName, EmuSystemCreateParams params, OnLoadProgressDelegate onLoadProgress)
+void EmuSystem::loadContentFromFile(IO file, CStringView path, std::string_view displayName, EmuSystemCreateParams params, OnLoadProgressDelegate onLoadProgress)
 {
 	if(EmuApp::hasArchiveExtension(displayName))
 	{
@@ -429,7 +376,7 @@ void EmuSystem::loadContentFromFile(IO file, IG::CStringView path, std::string_v
 			if(EmuSystem::defaultFsFilter(name))
 			{
 				originalName = name;
-				io = entry.moveIO();
+				io = entry.releaseIO();
 				break;
 			}
 		}
@@ -493,12 +440,12 @@ void EmuSystem::setContentDisplayName(std::string_view name)
 	contentDisplayName_ = name;
 }
 
-FS::FileString EmuSystem::contentDisplayNameForPathDefaultImpl(IG::CStringView path) const
+FS::FileString EmuSystem::contentDisplayNameForPathDefaultImpl(CStringView path) const
 {
-	return IG::stringWithoutDotExtension<FS::FileString>(appContext().fileUriDisplayName(path));
+	return FS::FileString{IG::withoutDotExtension(appContext().fileUriDisplayName(path))};
 }
 
-void EmuSystem::setInitialLoadPath(IG::CStringView path)
+void EmuSystem::setInitialLoadPath(CStringView path)
 {
 	assert(contentName_.empty());
 	contentLocation_ = path;
@@ -531,11 +478,6 @@ void EmuSystem::sessionOptionSet()
 	sessionOptionsSet = true;
 }
 
-bool EmuSystem::inputHasTriggers()
-{
-	return inputLTriggerIndex != -1 && inputRTriggerIndex != -1;
-}
-
 void EmuSystem::flushBackupMemory(EmuApp &app, BackupMemoryDirtyFlags flags)
 {
 	onFlushBackupMemory(app, flags);
@@ -561,6 +503,37 @@ bool EmuSystem::updateBackupMemoryCounter()
 		}
 	}
 	return false;
+}
+
+FileIO EmuSystem::staticBackupMemoryFile(CStringView uri, size_t size, uint8_t initValue) const
+{
+	if(!size) [[unlikely]]
+		return {};
+	auto file = appContext().openFileUri(uri, IOAccessHint::Normal, OpenFlagsMask::CreateRW | OpenFlagsMask::Test);
+	if(!file) [[unlikely]]
+		return {};
+	auto fileSize = file.size();
+	if(fileSize != size)
+		file.truncate(size);
+	// size is static so try to use a mapped file for writing
+	bool isMapped = file.tryMap(IOAccessHint::Normal, OpenFlagsMask::CreateRW);
+	if(initValue && fileSize < size)
+	{
+		if(isMapped)
+		{
+			auto buff = file.map();
+			std::fill(&buff[fileSize], &buff[size], initValue);
+		}
+		else
+		{
+			size_t fillSize = size - fileSize;
+			uint8_t fillBuff[fillSize];
+			memset(fillBuff, initValue, fillSize);
+			logMsg("padding %zu bytes at offset %zu with value:0x%X", fillSize, fileSize, initValue);
+			file.write(fillBuff, fillSize, fileSize);
+		}
+	}
+	return file;
 }
 
 EmuSystem &gSystem() { return gApp().system(); }

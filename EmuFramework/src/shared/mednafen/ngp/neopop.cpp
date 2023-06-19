@@ -69,7 +69,7 @@ int32 ngpc_soundTS = 0;
 //static int32 main_timeaccum;
 static int32 z80_runtime;
 
-void applyVideoFormat(Mednafen::MDFN_PixelFormat format)
+void SetPixelFormat(Mednafen::MDFN_PixelFormat format)
 {
 	NGPGfx->set_pixel_format(format);
 }
@@ -84,8 +84,8 @@ static void Emulate(EmulateSpecStruct *espec)
 	espec->DisplayRect.h = 152;
 
 
-	NGPJoyLatch = *chee;
-	storeB(0x6F82, *chee);
+	//NGPJoyLatch = *chee;
+	//storeB(0x6F82, *chee);
 
 	MDFNMP_ApplyPeriodicCheats();
 

@@ -31,6 +31,7 @@
 #include <imagine/base/glDefs.hh>
 #include <imagine/util/concepts.hh>
 #include <optional>
+#include <type_traits>
 
 namespace IG
 {
@@ -43,10 +44,11 @@ class ErrorCode;
 class GLBufferConfigAttributes
 {
 public:
-	IG::PixelFormat pixelFormat{};
+	PixelFormat pixelFormat{};
 	bool useAlpha{};
 	bool useDepth{};
 	bool useStencil{};
+	bool translucentWindow{};
 };
 
 class GLContextAttributes
@@ -116,12 +118,14 @@ public:
 	void setCurrentContext(NativeGLDrawable) const;
 	void setCurrentDrawable(NativeGLDrawable) const;
 	void present(NativeGLDrawable) const;
+	void setSwapInterval(int);
 };
 
 class GLManager : public GLManagerImpl
 {
 public:
 	using GLManagerImpl::GLManagerImpl;
+	static constexpr bool hasSwapInterval = GLManagerImpl::hasSwapInterval;
 
 	GLManager(NativeDisplayConnection);
 	GLManager(NativeDisplayConnection, GL::API);
@@ -143,9 +147,11 @@ public:
 	bool hasNoErrorContextAttribute() const;
 	bool hasNoConfigContext() const;
 	bool hasSrgbColorSpace() const;
+	bool hasPresentationTime() const;
+	void setPresentationTime(NativeGLDrawable, SteadyClockTimePoint) const;
 	void logInfo() const;
 
-	static bool loadSymbol(IG::Pointer auto &symPtr, const char *name)
+	static bool loadSymbol(Pointer auto &symPtr, const char *name)
 	{
 		symPtr = reinterpret_cast<std::remove_reference_t<decltype(symPtr)>>(procAddress(name));
 		return symPtr;

@@ -20,26 +20,27 @@
 namespace EmuEx
 {
 
+using namespace IG;
+
 struct EmuFrameTimeInfo
 {
 	int advanced;
-	IG::FrameTime presentTime;
 };
 
 class EmuTiming
 {
 public:
-	EmuFrameTimeInfo advanceFramesWithTime(IG::FrameTime time);
-	void setFrameTime(IG::FloatSeconds time);
+	EmuFrameTimeInfo advanceFramesWithTime(SteadyClockTimePoint);
+	void setFrameTime(SteadyClockTime time);
 	void reset();
 	void setSpeedMultiplier(double newSpeed);
 
 protected:
-	IG::FloatSeconds timePerVideoFrame{};
-	IG::FloatSeconds timePerVideoFrameScaled{};
-	IG::FrameTime startFrameTime{};
+	SteadyClockTime timePerVideoFrame{};
+	SteadyClockTime timePerVideoFrameScaled{};
+	SteadyClockTimePoint startFrameTime{};
 	double speed = 1;
-	uint32_t lastFrame = 0;
+	int64_t lastFrame = 0;
 
 	void updateScaledFrameTime();
 };

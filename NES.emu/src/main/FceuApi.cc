@@ -36,6 +36,7 @@ bool turbo = 0;
 int closeFinishedMovie = 0;
 int StackAddrBackup = -1;
 int KillFCEUXonFrame = 0;
+int eoptions = 0;
 
 void FCEUI_Emulate(EmuEx::EmuSystemTaskContext taskCtx, EmuEx::NesSystem &sys, EmuEx::EmuVideo *video, int skip, EmuEx::EmuAudio *audio)
 {
@@ -213,7 +214,9 @@ void FCEUD_SetInput(bool fourscore, bool microphone, ESI port0, ESI port1, ESIFC
 int FCEUD_FDSReadBIOS(void *buff, uint32 size)
 {
 	using namespace EmuEx;
-	auto appCtx = EmuEx::gAppContext();
+	auto &sys = static_cast<NesSystem&>(EmuEx::gSystem());
+	auto appCtx = sys.appContext();
+	const auto &fdsBiosPath = sys.fdsBiosPath;
 	if(fdsBiosPath.empty())
 	{
 		throw std::runtime_error{"No FDS BIOS set"};
@@ -230,7 +233,7 @@ int FCEUD_FDSReadBIOS(void *buff, uint32 size)
 			if(hasFDSBIOSExtension(entry.name()))
 			{
 				logMsg("archive file entry:%s", entry.name().data());
-				auto io = entry.moveIO();
+				auto io = entry.releaseIO();
 				if(io.size() != size)
 				{
 					throw std::runtime_error{"Incompatible FDS BIOS"};
@@ -242,7 +245,7 @@ int FCEUD_FDSReadBIOS(void *buff, uint32 size)
 	}
 	else
 	{
-		auto io = appCtx.openFileUri(fdsBiosPath, IOAccessHint::ALL);
+		auto io = appCtx.openFileUri(fdsBiosPath, IOAccessHint::All);
 		if(io.size() != size)
 		{
 			throw std::runtime_error{"Incompatible FDS BIOS"};
@@ -279,11 +282,6 @@ void FCEU_DrawRecordingStatus(uint8* XBuf) {}
 void FCEU_DrawNumberRow(uint8 *XBuf, int *nstatus, int cur) {}
 void DrawTextTrans(uint8 *dest, uint32 width, uint8 *textmsg, uint8 fgcolor) {}
 void DrawTextTransWH(uint8 *dest, uint32 width, uint8 *textmsg, uint8 fgcolor, int max_w, int max_h, int border) {}
-
-// from nsf.cpp
-NSF_HEADER NSFHeader;
-void DoNSFFrame(void) {}
-int NSFLoad(const char *name, FCEUFILE *fp) { return 0; }
 
 // from debug.cpp
 volatile int datacount, undefinedcount;

@@ -1,50 +1,50 @@
 include $(IMAGINE_PATH)/make/imagineStaticLibBase.mk
 
-ifneq ($(filter linux ios android,$(ENV)),)
- emuFramework_onScreenControls := 1
-endif
-
-SRC += AudioOptionView.cc \
-AutosaveSlotView.cc \
-BundledGamesView.cc \
-ButtonConfigView.cc \
-Cheats.cc \
+SRC += \
+AutosaveManager.cc \
 ConfigFile.cc \
-CreditsView.cc \
 EmuApp.cc \
 EmuAudio.cc \
 EmuInput.cc \
-EmuInputView.cc \
-EmuLoadProgressView.cc \
-EmuMainMenuView.cc \
 EmuOptions.cc \
-EmuSystemActionsView.cc \
 EmuSystem.cc \
 EmuSystemTask.cc \
 EmuTiming.cc \
 EmuVideo.cc \
 EmuVideoLayer.cc \
-EmuView.cc \
-EmuViewController.cc \
-FilePathOptionView.cc \
-FilePicker.cc \
-GUIOptionView.cc \
-InputManagerView.cc \
+OutputTimingManager.cc \
 pathUtils.cc \
-RecentGameView.cc \
-StateSlotView.cc \
-SystemOptionView.cc \
 VideoImageEffect.cc \
 VideoImageOverlay.cc \
-VideoOptionView.cc
-
-ifeq ($(emuFramework_onScreenControls), 1)
- SRC += TouchConfigView.cc \
- vcontrols/VController.cc \
- vcontrols/VControllerButton.cc \
- vcontrols/VControllerGamepad.cc \
- vcontrols/VControllerKeyboard.cc
-endif
+gui/AudioOptionView.cc \
+gui/AutosaveSlotView.cc \
+gui/BundledGamesView.cc \
+gui/ButtonConfigView.cc \
+gui/Cheats.cc \
+gui/CPUAffinityView.cc \
+gui/CreditsView.cc \
+gui/EmuInputView.cc \
+gui/EmuView.cc \
+gui/EmuViewController.cc \
+gui/FilePathOptionView.cc \
+gui/FilePicker.cc \
+gui/GUIOptionView.cc \
+gui/InputManagerView.cc \
+gui/LoadProgressView.cc \
+gui/MainMenuView.cc \
+gui/PlaceVControlsView.cc \
+gui/PlaceVideoView.cc \
+gui/RecentGameView.cc \
+gui/StateSlotView.cc \
+gui/SystemActionsView.cc \
+gui/SystemOptionView.cc \
+gui/TouchConfigView.cc \
+gui/VideoOptionView.cc \
+vcontrols/VController.cc \
+vcontrols/VControllerButton.cc \
+vcontrols/VControllerButtonGroup.cc \
+vcontrols/VControllerDPad.cc \
+vcontrols/VControllerKeyboard.cc
 
 libName := emuframework$(libNameExt)
 ifndef RELEASE

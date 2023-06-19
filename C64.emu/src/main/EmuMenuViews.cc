@@ -18,8 +18,8 @@
 #include <emuframework/VideoOptionView.hh>
 #include <emuframework/FilePathOptionView.hh>
 #include <emuframework/DataPathSelectView.hh>
-#include <emuframework/EmuSystemActionsView.hh>
-#include <emuframework/EmuMainMenuView.hh>
+#include <emuframework/SystemActionsView.hh>
+#include <emuframework/MainMenuView.hh>
 #include <emuframework/FilePicker.hh>
 #include "MainApp.hh"
 #include "VicePlugin.hh"
@@ -28,8 +28,8 @@
 #include <imagine/gui/AlertView.hh>
 #include <imagine/fs/FS.hh>
 #include <imagine/io/IO.hh>
-#include <imagine/util/format.hh>
 #include <imagine/util/string.h>
+#include <imagine/util/format.hh>
 
 extern "C"
 {
@@ -193,7 +193,7 @@ public:
 			});
 		for(const auto &name : paletteName)
 		{
-			paletteItem.emplace_back(IG::stringWithoutDotExtension(name), &defaultFace(),
+			paletteItem.emplace_back(IG::withoutDotExtension(name), &defaultFace(),
 				[this, name = name.data()](Input::Event)
 				{
 					system().defaultPaletteName = name;
@@ -330,16 +330,16 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 						return false;
 					}
 					logMsg("set firmware path:%s", path.data());
-					systemFilePath.compile(sysPathMenuEntryStr(path), renderer(), projP);
+					systemFilePath.compile(sysPathMenuEntryStr(path), renderer());
 					auto &sysFilePath = system().sysFilePath;
 					sysFilePath[0] = path;
 					if(type == FS::file_type::none)
 					{
 						if constexpr(Config::envIsLinux)
-							app().postMessage(5, false, fmt::format("Using fallback paths:\n{}\n{}", sysFilePath[3], sysFilePath[4]));
+							app().postMessage(5, false, std::format("Using fallback paths:\n{}\n{}", sysFilePath[3], sysFilePath[4]));
 						else
 						{
-							app().postMessage(5, false, fmt::format("Using fallback paths:\n{}\n{}", sysFilePath[1], sysFilePath[2]));
+							app().postMessage(5, false, std::format("Using fallback paths:\n{}\n{}", sysFilePath[1], sysFilePath[2]));
 						}
 					}
 					return true;
@@ -354,20 +354,15 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 		"Download VICE System Files", &defaultFace(),
 		[this](Input::Event e)
 		{
-			auto ynAlertView = makeView<YesNoAlertView>(
-				"Open the C64.emu setup page? From there, download C64.emu.zip to your device and select it as an archive in the previous menu.");
-			ynAlertView->setOnYes(
-				[this](Input::Event e)
-				{
-					appContext().openURL("https://www.explusalpha.com/contents/c64-emu");
-				});
-			pushAndShowModal(std::move(ynAlertView), e);
+			pushAndShowModal(makeView<YesNoAlertView>(
+				"Open the C64.emu setup page? From there, download C64.emu.zip to your device and select it as an archive in the previous menu.",
+				YesNoAlertView::Delegates{.onYes = [this]{ appContext().openURL("https://www.explusalpha.com/contents/c64-emu"); }}), e);
 		}
 	};
 
 	std::string sysPathMenuEntryStr(IG::CStringView path)
 	{
-		return fmt::format("VICE System Files: {}", appContext().fileUriDisplayName(path));
+		return std::format("VICE System Files: {}", appContext().fileUriDisplayName(path));
 	}
 
 public:
@@ -485,13 +480,13 @@ private:
 
 	void updateTapeCounter()
 	{
-		tapeCounter.setName(fmt::format("Tape Counter: {}", EmuEx::tapeCounter));
+		tapeCounter.setName(std::format("Tape Counter: {}", EmuEx::tapeCounter));
 	}
 
 	void onShow() final
 	{
 		updateTapeCounter();
-		tapeCounter.compile(renderer(), projP);
+		tapeCounter.compile(renderer());
 	}
 };
 
@@ -501,7 +496,7 @@ private:
 	void updateTapeText()
 	{
 		auto name = system().plugin.tape_get_file_name(0);
-		tapeSlot.setName(fmt::format("Tape: {}", name ? appContext().fileUriDisplayName(name) : ""));
+		tapeSlot.setName(std::format("Tape: {}", name ? appContext().fileUriDisplayName(name) : ""));
 		datasetteControls.setActive(name);
 	}
 
@@ -509,13 +504,13 @@ public:
 	void onTapeMediaChange()
 	{
 		updateTapeText();
-		tapeSlot.compile(renderer(), projP);
+		tapeSlot.compile(renderer());
 	}
 
 	void addTapeFilePickerView(Input::Event e, bool dismissPreviousView)
 	{
 		app().pushAndShowModalView(
-			EmuFilePicker::makeForMediaChange(attachParams(), e, hasC64TapeExtension,
+			FilePicker::forMediaChange(attachParams(), e, hasC64TapeExtension,
 			[this, dismissPreviousView](FSPicker &picker, IG::CStringView path, std::string_view name, Input::Event e)
 			{
 				if(system().plugin.tape_image_attach(1, path.data()) == 0)
@@ -575,20 +570,20 @@ private:
 	void updateROMText()
 	{
 		auto name = system().plugin.cartridge_get_file_name(system().plugin.cart_getid_slotmain());
-		romSlot.setName(fmt::format("ROM: {}", name ? appContext().fileUriDisplayName(name) : ""));
+		romSlot.setName(std::format("ROM: {}", name ? appContext().fileUriDisplayName(name) : ""));
 	}
 
 public:
 	void onROMMediaChange()
 	{
 		updateROMText();
-		romSlot.compile(renderer(), projP);
+		romSlot.compile(renderer());
 	}
 
 	void addCartFilePickerView(Input::Event e, bool dismissPreviousView)
 	{
 		app().pushAndShowModalView(
-			EmuFilePicker::makeForMediaChange(attachParams(), e, hasC64CartExtension,
+			FilePicker::forMediaChange(attachParams(), e, hasC64CartExtension,
 			[this, dismissPreviousView](FSPicker &picker, IG::CStringView path, std::string_view name, Input::Event e)
 			{
 				if(system().plugin.cartridge_attach_image(systemCartType(system().currSystem), path.data()) == 0)
@@ -635,19 +630,19 @@ private:
 	void updateDiskText(int slot)
 	{
 		auto name = system().plugin.file_system_get_disk_name(slot+8, 0);
-		diskSlot[slot].setName(fmt::format("{}: {}", driveMenuPrefix[slot], name ? appContext().fileUriDisplayName(name) : ""));
+		diskSlot[slot].setName(std::format("{}: {}", driveMenuPrefix[slot], name ? appContext().fileUriDisplayName(name) : ""));
 	}
 
 	void onDiskMediaChange(int slot)
 	{
 		updateDiskText(slot);
-		diskSlot[slot].compile(renderer(), projP);
+		diskSlot[slot].compile(renderer());
 	}
 
 	void addDiskFilePickerView(Input::Event e, uint8_t slot, bool dismissPreviousView)
 	{
 		app().pushAndShowModalView(
-			EmuFilePicker::makeForMediaChange(attachParams(), e, hasC64DiskExtension,
+			FilePicker::forMediaChange(attachParams(), e, hasC64DiskExtension,
 			[this, slot, dismissPreviousView](FSPicker &picker, IG::CStringView path, std::string_view name, Input::Event e)
 			{
 				logMsg("inserting disk in unit %d", slot+8);
@@ -704,49 +699,57 @@ private:
 	MultiChoiceMenuItem drive8Type
 	{
 		"Drive 8 Type", &defaultFace(),
-		(MenuItem::Id)system().intResource(driveResName[0]),
-		driveTypeItem,
-		[this](MultiChoiceMenuItem &item, View &view, Input::Event e)
 		{
-			currDriveTypeSlot = 0;
-			item.defaultOnSelect(view, e);
-		}
+			.onSelect = [this](MultiChoiceMenuItem &item, View &view, Input::Event e)
+			{
+				currDriveTypeSlot = 0;
+				item.defaultOnSelect(view, e);
+			}
+		},
+		(MenuItem::Id)system().intResource(driveResName[0]),
+		driveTypeItem
 	};
 
 	MultiChoiceMenuItem drive9Type
 	{
 		"Drive 9 Type", &defaultFace(),
+		{
+			.onSelect = [this](MultiChoiceMenuItem &item, View &view, Input::Event e)
+			{
+				currDriveTypeSlot = 1;
+				item.defaultOnSelect(view, e);
+			}
+		},
 		(MenuItem::Id)system().intResource(driveResName[1]),
 		driveTypeItem,
-		[this](MultiChoiceMenuItem &item, View &view, Input::Event e)
-		{
-			currDriveTypeSlot = 1;
-			item.defaultOnSelect(view, e);
-		}
 	};
 
 	MultiChoiceMenuItem drive10Type
 	{
 		"Drive 10 Type", &defaultFace(),
-		(MenuItem::Id)system().intResource(driveResName[2]),
-		driveTypeItem,
-		[this](MultiChoiceMenuItem &item, View &view, Input::Event e)
 		{
-			currDriveTypeSlot = 2;
-			item.defaultOnSelect(view, e);
-		}
+			.onSelect = [this](MultiChoiceMenuItem &item, View &view, Input::Event e)
+			{
+				currDriveTypeSlot = 2;
+				item.defaultOnSelect(view, e);
+			}
+		},
+		(MenuItem::Id)system().intResource(driveResName[2]),
+		driveTypeItem
 	};
 
 	MultiChoiceMenuItem drive11Type
 	{
 		"Drive 11 Type", &defaultFace(),
-		(MenuItem::Id)system().intResource(driveResName[3]),
-		driveTypeItem,
-		[this](MultiChoiceMenuItem &item, View &view, Input::Event e)
 		{
-			currDriveTypeSlot = 3;
-			item.defaultOnSelect(view, e);
-		}
+			.onSelect = [this](MultiChoiceMenuItem &item, View &view, Input::Event e)
+			{
+				currDriveTypeSlot = 3;
+				item.defaultOnSelect(view, e);
+			}
+		},
+		(MenuItem::Id)system().intResource(driveResName[3]),
+		driveTypeItem
 	};
 
 	TextHeadingMenuItem mediaOptions{"Media Options", &defaultBoldFace()};
@@ -1059,7 +1062,7 @@ public:
 			});
 		for(const auto &name : paletteName)
 		{
-			paletteItem.emplace_back(IG::stringWithoutDotExtension(name), &defaultFace(),
+			paletteItem.emplace_back(IG::withoutDotExtension(name), &defaultFace(),
 				[this, name = name.data()](Input::Event)
 				{
 					system().sessionOptionSet();
@@ -1076,7 +1079,7 @@ public:
 	}
 };
 
-class CustomSystemActionsView : public EmuSystemActionsView, public MainAppHelper<CustomSystemActionsView>
+class CustomSystemActionsView : public SystemActionsView, public MainAppHelper<CustomSystemActionsView>
 {
 	using MainAppHelper<CustomSystemActionsView>::system;
 	using MainAppHelper<CustomSystemActionsView>::app;
@@ -1217,21 +1220,21 @@ class CustomSystemActionsView : public EmuSystemActionsView, public MainAppHelpe
 	}
 
 public:
-	CustomSystemActionsView(ViewAttachParams attach): EmuSystemActionsView{attach, true}
+	CustomSystemActionsView(ViewAttachParams attach): SystemActionsView{attach, true}
 	{
 		reloadItems();
 	}
 
 	void onShow() final
 	{
-		EmuSystemActionsView::onShow();
+		SystemActionsView::onShow();
 		c64IOControl.setActive(system().hasContent());
 		options.setActive(system().hasContent());
 		warpMode.setBoolValue(*system().plugin.warp_mode_enabled);
 	}
 };
 
-class CustomMainMenuView : public EmuMainMenuView, public MainAppHelper<CustomMainMenuView>
+class CustomMainMenuView : public MainMenuView, public MainAppHelper<CustomMainMenuView>
 {
 	using MainAppHelper<CustomMainMenuView>::app;
 	using MainAppHelper<CustomMainMenuView>::system;
@@ -1248,14 +1251,9 @@ class CustomMainMenuView : public EmuMainMenuView, public MainAppHelper<CustomMa
 					[this, i](View &view, Input::Event e)
 					{
 						system().optionViceSystem = i;
-						auto ynAlertView = makeView<YesNoAlertView>("Changing systems needs app restart, exit now?");
-						ynAlertView->setOnYes(
-							[this]()
-							{
-								appContext().exit();
-							});
 						view.dismiss(false);
-						app().pushAndShowModalView(std::move(ynAlertView), e);
+						app().pushAndShowModalView(makeView<YesNoAlertView>("Changing systems needs app restart, exit now?",
+							YesNoAlertView::Delegates{.onYes = [this]{ appContext().exit(); }}), e);
 					});
 			}
 			pushAndShow(std::move(multiChoiceView), e);
@@ -1282,13 +1280,13 @@ class CustomMainMenuView : public EmuMainMenuView, public MainAppHelper<CustomMa
 						}
 						newMediaName = str;
 						newMediaName.append(".d64");
-						auto fPicker = EmuFilePicker::makeForMediaCreation(attachParams());
+						auto fPicker = FilePicker::forMediaCreation(attachParams());
 						fPicker->setOnSelectPath(
 							[this](FSPicker &picker, CStringView path, std::string_view displayName, const Input::Event &e)
 							{
 								newMediaPath = FS::uriString(path, newMediaName);
 								picker.dismiss();
-								if(e.keyEvent() && e.asKeyEvent().isDefaultCancelButton())
+								if(e.keyEvent() && e.keyEvent()->isDefaultCancelButton())
 								{
 									// picker was cancelled
 									app().unpostMessage();
@@ -1296,13 +1294,14 @@ class CustomMainMenuView : public EmuMainMenuView, public MainAppHelper<CustomMa
 								}
 								if(appContext().fileUriExists(newMediaPath))
 								{
-									auto ynAlertView = makeView<YesNoAlertView>("Disk image already exists, overwrite?");
-									ynAlertView->setOnYes(
-										[this](Input::Event e)
+									app().pushAndShowModalView(makeView<YesNoAlertView>("Disk image already exists, overwrite?",
+										YesNoAlertView::Delegates
 										{
-											createDiskAndLaunch(newMediaPath.data(), newMediaName, e);
-										});
-									app().pushAndShowModalView(std::move(ynAlertView), e);
+											.onYes = [this](Input::Event e)
+											{
+												createDiskAndLaunch(newMediaPath.data(), newMediaName, e);
+											}
+										}), e);
 									return;
 								}
 								createDiskAndLaunch(newMediaPath.data(), newMediaName, e);
@@ -1358,13 +1357,13 @@ class CustomMainMenuView : public EmuMainMenuView, public MainAppHelper<CustomMa
 						}
 						newMediaName = str;
 						newMediaName.append(".tap");
-						auto fPicker = EmuFilePicker::makeForMediaCreation(attachParams());
+						auto fPicker = FilePicker::forMediaCreation(attachParams());
 						fPicker->setOnSelectPath(
 							[this](FSPicker &picker, CStringView path, std::string_view displayName, const Input::Event &e)
 							{
 								newMediaPath = FS::uriString(path, newMediaName);
 								picker.dismiss();
-								if(e.keyEvent() && e.asKeyEvent().isDefaultCancelButton())
+								if(e.keyEvent() && e.keyEvent()->isDefaultCancelButton())
 								{
 									// picker was cancelled
 									app().unpostMessage();
@@ -1372,14 +1371,14 @@ class CustomMainMenuView : public EmuMainMenuView, public MainAppHelper<CustomMa
 								}
 								if(appContext().fileUriExists(newMediaPath))
 								{
-									//EmuApp::printfMessage(3, true, "%s already exists");
-									auto ynAlertView = makeView<YesNoAlertView>("Tape image already exists, overwrite?");
-									ynAlertView->setOnYes(
-										[this](Input::Event e)
+									app().pushAndShowModalView(makeView<YesNoAlertView>("Tape image already exists, overwrite?",
+										YesNoAlertView::Delegates
 										{
-											createTapeAndLaunch(newMediaPath.data(), e);
-										});
-									app().pushAndShowModalView(std::move(ynAlertView), e);
+											.onYes = [this](Input::Event e)
+											{
+												createTapeAndLaunch(newMediaPath.data(), e);
+											}
+										}), e);
 									return;
 								}
 								createTapeAndLaunch(newMediaPath.data(), e);
@@ -1412,27 +1411,26 @@ class CustomMainMenuView : public EmuMainMenuView, public MainAppHelper<CustomMa
 		"Open Content (No Autostart)", &defaultFace(),
 		[this](Input::Event e)
 		{
-			pushAndShow(EmuFilePicker::makeForLoading(attachParams(), e, false, {SYSTEM_FLAG_NO_AUTOSTART}), e, false);
+			pushAndShow(FilePicker::forLoading(attachParams(), e, false, {SYSTEM_FLAG_NO_AUTOSTART}), e, false);
 		}
 	};
 
-	void reloadItems()
+	void reloadItems() final
 	{
 		item.clear();
 		loadFileBrowserItems();
 		item.emplace_back(&loadNoAutostart);
 		item.emplace_back(&startWithBlankDisk);
 		item.emplace_back(&startWithBlankTape);
-		systemPlugin.setName(fmt::format("System: {}", VicePlugin::systemName(system().currSystem)));
+		systemPlugin.setName(std::format("System: {}", VicePlugin::systemName(system().currSystem)));
 		item.emplace_back(&systemPlugin);
 		loadStandardItems();
 	}
 
 public:
-	CustomMainMenuView(ViewAttachParams attach): EmuMainMenuView{attach, true}
+	CustomMainMenuView(ViewAttachParams attach): MainMenuView{attach, true}
 	{
 		reloadItems();
-		app().setOnMainMenuItemOptionChanged([this](){ reloadItems(); });
 	}
 };
 

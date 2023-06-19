@@ -17,7 +17,7 @@
 
 #include <imagine/gui/MenuItem.hh>
 #include <imagine/gui/TableView.hh>
-#include <utility>
+#include <imagine/util/utility.h>
 #include <vector>
 #include <cassert>
 
@@ -35,21 +35,22 @@ public:
 
 	TextTableView(ViewAttachParams attach, size_t itemsHint): TextTableView{UTF16String{}, attach, itemsHint} {}
 
-	void appendItem(UTF16Convertible auto &&name, TextMenuItem::SelectDelegate del)
+	TextMenuItem &appendItem(UTF16Convertible auto &&name, TextMenuItem::SelectDelegate del)
 	{
-		textItem.emplace_back(IG_forward(name), &defaultFace(), del);
+		return textItem.emplace_back(IG_forward(name), &defaultFace(), del);
 	}
 
-	void setItem(size_t idx, UTF16Convertible auto &&name, TextMenuItem::SelectDelegate del)
+	TextMenuItem &setItem(size_t idx, UTF16Convertible auto &&name, TextMenuItem::SelectDelegate del)
 	{
 		assert(idx < textItem.size());
 		textItem[idx] = {IG_forward(name), &defaultFace(), del};
+		return textItem[idx];
 	}
 
 	TextMenuItem &item(size_t idx);
 	void setItems(size_t items);
 	void onAddedToController(ViewController *, const Input::Event &) override;
-	void drawElement(Gfx::RendererCommands &__restrict__ cmds, size_t i, MenuItem &item, Gfx::GCRect rect, float xIndent) const override;
+	void drawElement(Gfx::RendererCommands &__restrict__ cmds, size_t i, MenuItem &item, WRect rect, int xIndent) const override;
 
 protected:
 	std::vector<TextMenuItem> textItem{};

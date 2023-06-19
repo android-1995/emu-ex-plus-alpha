@@ -127,6 +127,13 @@ RendererTask::operator bool() const
 	return GLTask::operator bool();
 }
 
+void GLRendererTask::updateDrawable(Drawable drawable, IRect viewportRect, int swapInterval)
+{
+	context.setCurrentDrawable(drawable);
+	context.setSwapInterval(swapInterval);
+	glViewport(viewportRect.x, viewportRect.y, viewportRect.x2, viewportRect.y2);
+}
+
 void RendererTask::updateDrawableForSurfaceChange(Window &win, WindowSurfaceChange change)
 {
 	auto &data = winData(win);
@@ -140,14 +147,11 @@ void RendererTask::updateDrawableForSurfaceChange(Window &win, WindowSurfaceChan
 			if(change.surfaceResized())
 			{
 				GLTask::run(
-					[this, drawable = (Drawable)drawable, v = data.viewportRect](TaskContext ctx)
+					[this, drawable = (Drawable)drawable, v = data.viewportRect, swapInterval = data.swapInterval](TaskContext ctx)
 					{
-						// reset the drawable if it's currently in use
-						if(GLManager::hasCurrentDrawable(drawable))
-						{
-							context.setCurrentDrawable(drawable);
-							glViewport(v.x, v.y, v.x2, v.y2);
-						}
+						// reset and clear the drawable
+						updateDrawable(drawable, v, swapInterval);
+						glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 					});
 			}
 			return;
@@ -157,12 +161,30 @@ void RendererTask::updateDrawableForSurfaceChange(Window &win, WindowSurfaceChan
 	}
 }
 
+void RendererTask::setPresentMode(Window &win, PresentMode mode)
+{
+	if(!GLManager::hasSwapInterval)
+		return;
+	auto swapInterval = renderer().toSwapInterval(win, mode);
+	auto &data = winData(win);
+	if(data.swapInterval == swapInterval)
+		return;
+	data.swapInterval = swapInterval;
+	if(!data.drawable)
+		return;
+	logMsg("setting swap interval:%d for drawable:%p", swapInterval, Drawable(data.drawable));
+	GLTask::run([this, drawable = Drawable(data.drawable), v = data.viewportRect, swapInterval](TaskContext ctx)
+	{
+		updateDrawable(drawable, v, swapInterval);
+	});
+}
+
 void RendererTask::setDefaultViewport(Window &win, Viewport v)
 {
 	renderer().setDefaultViewport(win, v);
 	auto &data = winData(win);
 	GLTask::run(
-		[this, drawable = (Drawable)data.drawable, v = asYUpRelRect(v)](TaskContext ctx)
+		[drawable = (Drawable)data.drawable, v = asYUpRelRect(v)](TaskContext ctx)
 		{
 			// update viewport if drawable is currently in use
 			if(GLManager::hasCurrentDrawable(drawable))
@@ -346,6 +368,8 @@ void RendererTask::setDebugOutput(bool on)
 			support.setGLDebugOutput(on);
 		});
 }
+
+ThreadId RendererTask::threadId() const { return threadId_; }
 
 RendererCommands GLRendererTask::makeRendererCommands(GLTask::TaskContext taskCtx, bool manageSemaphore,
 	bool notifyWindowAfterPresent, Window &win)

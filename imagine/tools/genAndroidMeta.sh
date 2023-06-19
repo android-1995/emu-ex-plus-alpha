@@ -8,9 +8,6 @@ do
 		--name=*)
 			name=$optarg
 		;;
-		--id=*)
-			id=$optarg
-		;;
 		--version=*)
 			version=$optarg
 		;;
@@ -90,12 +87,6 @@ then
 	exit 1
 fi
 
-if [ ! $id ]
-then
-	echo "error: no id specified"
-	exit 1
-fi
-
 if [ ! $version ]
 then
 	echo "error: no version specified"
@@ -172,8 +163,7 @@ uiChanges='mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenL
 
 # start XML
 echo "<?xml version=\"1.0\" encoding=\"utf-8\"?>
-<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"
-		package=\"$id\""  > $outPath
+<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"" > $outPath
 
 echo '		android:installLocation="auto"' >> $outPath
 
@@ -215,6 +205,7 @@ fi
 
 echo '	<supports-screens android:largeScreens="true" android:xlargeScreens="true" />' >> $outPath
 echo '	<uses-feature android:name="android.hardware.touchscreen" android:required="false" />' >> $outPath
+echo '	<uses-feature android:name="android.hardware.type.pc" android:required="false" />' >> $outPath
 
 intentFilters="<action android:name=\"android.intent.action.MAIN\" />
 				<category android:name=\"android.intent.category.LAUNCHER\" />
@@ -235,6 +226,7 @@ then
 				<action android:name="android.intent.action.VIEW" />
 				<category android:name="android.intent.category.DEFAULT" />
 				<category android:name="android.intent.category.BROWSABLE" />
+				<category android:name="android.intent.category.OPENABLE" />
 '
 	for type in $intentMimeTypes
 	do
@@ -251,7 +243,9 @@ then
 				<action android:name="android.intent.action.VIEW" />
 				<category android:name="android.intent.category.DEFAULT" />
 				<category android:name="android.intent.category.BROWSABLE" />
+				<category android:name="android.intent.category.OPENABLE" />
 				<data android:scheme="file" />
+				<data android:scheme="content" />
 				<data android:mimeType="*/*" />
 				<data android:host="*" />
 '
