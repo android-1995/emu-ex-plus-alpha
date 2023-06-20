@@ -283,7 +283,7 @@ void GUIOptionView::loadStockItems()
 	{
 		item.emplace_back(&backNav);
 	}
-	item.emplace_back(&systemActionsIsDefaultMenu);
+//	item.emplace_back(&systemActionsIsDefaultMenu);
 	item.emplace_back(&fontSize);
 	item.emplace_back(&idleDisplayPowerSave);
 //	if(used(lowProfileOSNav))
