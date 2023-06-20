@@ -178,7 +178,7 @@ GUIOptionView::GUIOptionView(ViewAttachParams attach, bool customMenu):
 	{
 		"默认菜单", &defaultFace(),
 		(bool)app().systemActionsIsDefaultMenuOption().val,
-		"上次使用", "游戏菜单",
+		"上次使用", "系统操作",
 		[this](BoolMenuItem &item)
 		{
 			app().systemActionsIsDefaultMenuOption() = item.flipBoolValue(*this);
