@@ -26,6 +26,7 @@
 
 #include <vector>
 #include <span>
+#include <string_view>
 
 namespace IG::Data
 {
@@ -43,7 +44,6 @@ namespace IG::Gfx
 
 class RendererTask;
 class Program;
-class Projection;
 
 struct TextureBufferModeDesc
 {
@@ -58,7 +58,7 @@ struct TextureBufferModeDesc
 
 struct DrawableConfig
 {
-	IG::PixelFormat pixelFormat{};
+	PixelFormat pixelFormat{};
 	ColorSpace colorSpace{};
 	constexpr bool operator ==(const DrawableConfig&) const = default;
 	explicit constexpr operator bool() const { return (bool)pixelFormat || (bool)colorSpace; }
@@ -92,11 +92,11 @@ public:
 	NativeWindowFormat nativeWindowFormat() const;
 	void setWindowValidOrientations(Window &, OrientationMask);
 	void animateWindowRotation(Window &, float srcAngle, float destAngle);
-	Projection projection(const Window &, Viewport, Mat4) const;
-	static ClipRect makeClipRect(const Window &win, IG::WindowRect rect);
+	float projectionRollAngle(const Window &) const;
+	static ClipRect makeClipRect(const Window &win, WindowRect rect);
 	bool supportsSyncFences() const;
-	void setPresentationTime(Window &, IG::FrameTime time) const;
 	bool supportsPresentationTime() const;
+	PresentMode evalPresentMode(const Window &, PresentMode) const;
 	int maxSwapChainImages() const;
 	void setCorrectnessChecks(bool on);
 	std::vector<DrawableConfigDesc> supportedDrawableConfigs() const;
@@ -115,7 +115,7 @@ public:
 	// resources
 
 	Texture makeTexture(TextureConfig);
-	Texture makeTexture(IG::Data::PixmapSource, TextureSamplerConfig samplerConf = {}, bool makeMipmaps = true);
+	Texture makeTexture(Data::PixmapSource, TextureSamplerConfig samplerConf = {}, bool makeMipmaps = true);
 	PixmapBufferTexture makePixmapBufferTexture(TextureConfig config, TextureBufferMode mode = {}, bool singleBuffer = false);
 	std::vector<TextureBufferModeDesc> textureBufferModes();
 	TextureBufferMode makeValidTextureBufferMode(TextureBufferMode mode = {});
@@ -125,7 +125,7 @@ public:
 
 	bool supportsColorSpace() const;
 	bool hasSrgbColorSpaceWriteControl() const;
-	static ColorSpace supportedColorSpace(IG::PixelFormat, ColorSpace wantedColorSpace);
+	static ColorSpace supportedColorSpace(PixelFormat, ColorSpace wantedColorSpace);
 
 	// optional features
 

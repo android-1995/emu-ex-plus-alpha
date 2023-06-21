@@ -1,17 +1,17 @@
-/*  This file is part of NGP.emu.
+/*  This file is part of Swan.emu.
 
-	NGP.emu is free software: you can redistribute it and/or modify
+	Swan.emu is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
 
-	NGP.emu is distributed in the hope that it will be useful,
+	Swan.emu is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with NGP.emu.  If not, see <http://www.gnu.org/licenses/> */
+	along with Swan.emu.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <imagine/util/preprocessor/repeat.h>
 #include <emuframework/EmuInput.hh>
@@ -19,7 +19,7 @@
 namespace EmuEx::Controls
 {
 
-constexpr int gamepadKeys = 21;
+constexpr int gamepadKeys = 27;
 const int systemTotalKeys = gameActionKeys + gamepadKeys;
 
 constexpr std::array<const std::string_view, gamepadKeys> gamepadName
@@ -45,6 +45,12 @@ constexpr std::array<const std::string_view, gamepadKeys> gamepadName
 	"Turbo Y2",
 	"Turbo Y3",
 	"Turbo Y4",
+	"A",
+	"B",
+	"Y1 ↷ X1",
+	"Y2 ↷ X2",
+	"Y3 ↷ X3",
+	"Y4 ↷ X4",
 };
 
 constexpr int gamepadKeyOffset = gameActionKeys;

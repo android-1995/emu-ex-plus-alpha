@@ -42,8 +42,7 @@ SimpleFrameTimer::SimpleFrameTimer(Screen &screen, EventLoop loop):
 				}
 			}
 			requested = false;
-			auto timestamp = IG::steadyClockTimestamp();
-			if(screen.frameUpdate(timestamp))
+			if(screen.frameUpdate(SteadyClock::now()))
 				scheduleVSync();
 			return true;
 		}
@@ -75,13 +74,13 @@ void SimpleFrameTimer::cancel()
 	keepTimer = false;
 }
 
-void SimpleFrameTimer::setFrameTime(IG::FloatSeconds time)
+void SimpleFrameTimer::setFrameRate(FrameRate rate)
 {
-	logMsg("set frame rate:%.2f", 1. / time.count());
-	interval = std::chrono::duration_cast<IG::Nanoseconds>(time);
+	interval = fromHz<Nanoseconds>(rate);
+	logMsg("set frame rate:%.2f (timer interval:%ldns)", rate, long(interval.count()));
 	if(timer.isArmed())
 	{
-		timer.runIn(IG::Nanoseconds(1), interval, eventLoop);
+		timer.runIn(Nanoseconds{1}, interval, eventLoop);
 	}
 }
 

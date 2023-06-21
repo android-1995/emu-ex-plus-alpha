@@ -20,6 +20,7 @@
 #include <imagine/time/Time.hh>
 #include <imagine/thread/Thread.hh>
 #include <imagine/util/math/Point2D.hh>
+#include <imagine/util/math/int.hh>
 #include <imagine/util/ranges.hh>
 #include <imagine/logger/logger.h>
 #include <cstdlib>
@@ -27,9 +28,6 @@
 #include <dlfcn.h>
 #if defined __unix__ || defined __APPLE__
 #include <unistd.h>
-#endif
-#ifdef __linux__
-#include <sys/resource.h>
 #endif
 #ifdef __ANDROID__
 #include <android/log.h>
@@ -110,64 +108,27 @@ void GLManager::resetCurrentContext() const
 	display().resetCurrentContext();
 }
 
-FrameTime FrameParams::presentTime() const
+SteadyClockTimePoint FrameParams::presentTime(int frames) const
 {
-	return timestamp_ + std::chrono::duration_cast<FrameTime>(frameTime_);
+	if(frames <= 1)
+		return {};
+	return frameTime * frames + timestamp;
 }
 
-uint32_t FrameParams::elapsedFrames(FrameTime lastTimestamp) const
+int FrameParams::elapsedFrames(SteadyClockTimePoint lastTimestamp) const
 {
-	return elapsedFrames(timestamp_, lastTimestamp, frameTime_);
+	return elapsedFrames(timestamp, lastTimestamp, frameTime);
 }
 
-uint32_t FrameParams::elapsedFrames(FrameTime timestamp, FrameTime lastTimestamp, FloatSeconds frameTime)
+int FrameParams::elapsedFrames(SteadyClockTimePoint timestamp, SteadyClockTimePoint lastTimestamp, SteadyClockTime frameTime)
 {
-	if(!lastTimestamp.count())
+	if(!hasTime(lastTimestamp))
 		return 1;
 	assumeExpr(timestamp >= lastTimestamp);
 	assumeExpr(frameTime.count() > 0);
-	FrameTime diff = timestamp - lastTimestamp;
-	auto elapsed = (uint32_t)std::round(FloatSeconds(diff) / frameTime);
-	return std::max(elapsed, 1u);
-}
-
-void setThisThreadPriority(int nice)
-{
-	#ifdef __linux__
-	assert(nice > -20);
-	auto tid = gettid();
-	if(setpriority(PRIO_PROCESS, tid, nice) == -1)
-	{
-		if(Config::DEBUG_BUILD)
-		{
-			logErr("error:%s setting thread:0x%X nice level:%d", strerror(errno), (unsigned)tid, nice);
-		}
-	}
-	else
-	{
-		//logDMsg("set thread:0x%X nice level:%d", (unsigned)tid, nice);
-	}
-	#endif
-}
-
-int thisThreadPriority()
-{
-	#ifdef __linux__
-	return getpriority(PRIO_PROCESS, gettid());
-	#else
-	return 0;
-	#endif
-}
-
-ThreadId thisThreadId()
-{
-	#ifdef __linux__
-	return gettid();
-	#else
-	uint64_t id{};
-	pthread_threadid_np(nullptr, &id);
-	return id;
-	#endif
+	auto diff = timestamp - lastTimestamp;
+	auto elapsed = divRoundClosestPositive(diff.count(), frameTime.count());
+	return std::max(elapsed, decltype(elapsed){1});
 }
 
 WRect Viewport::relRect(WP pos, WP size, _2DOrigin posOrigin, _2DOrigin screenOrigin) const

@@ -34,17 +34,18 @@ public:
 protected:
 	TextMenuItem autosaveTimerItem[4];
 	MultiChoiceMenuItem autosaveTimer;
-	TextMenuItem autosaveLaunchItem[3];
+	TextMenuItem autosaveLaunchItem[2];//删除了2两个选项
 	MultiChoiceMenuItem autosaveLaunch;
+	BoolMenuItem autosaveContent;
 	BoolMenuItem confirmOverwriteState;
-	TextMenuItem fastSlowModeSpeedItem[8];
-	MultiChoiceMenuItem fastSlowModeSpeed;
+	TextMenuItem fastModeSpeedItem[6];
+	MultiChoiceMenuItem fastModeSpeed;
+	TextMenuItem slowModeSpeedItem[3];
+	MultiChoiceMenuItem slowModeSpeed;
 	IG_UseMemberIf(Config::envIsAndroid, BoolMenuItem, performanceMode);
-	StaticArrayList<MenuItem*, 24> item;
-
-	TextMenuItem::SelectDelegate setAutosaveTimerDel();
-	TextMenuItem::SelectDelegate setAutosaveLaunchDel();
-	TextMenuItem::SelectDelegate setFastSlowModeSpeedDel();
+	IG_UseMemberIf(Config::envIsAndroid && Config::DEBUG_BUILD, BoolMenuItem, noopThread);
+	IG_UseMemberIf(Config::cpuAffinity, TextMenuItem, cpuAffinity);
+	StaticArrayList<MenuItem*, 28> item;
 };
 
 }

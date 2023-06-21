@@ -21,6 +21,7 @@
 #include <cstddef>
 #include <iterator>
 #include <string_view>
+#include <memory>
 #if __has_include(<jni.h>)
 #include <jni.h>
 #else
@@ -283,7 +284,7 @@ protected:
 		}
 	};
 
-	std::unique_ptr<std::remove_pointer_t<jobject>, GlobalRefDeleter> obj{};
+	std::unique_ptr<std::remove_pointer_t<jobject>, GlobalRefDeleter> obj;
 
 	static void deleteGlobalRef(JNIEnv *, jobject);
 };
@@ -341,7 +342,7 @@ protected:
 		}
 	};
 
-	std::unique_ptr<std::remove_pointer_t<jobject>, BitmapDeleter> bitmap{};
+	std::unique_ptr<std::remove_pointer_t<jobject>, BitmapDeleter> bitmap;
 
 	static void deleteBitmap(JNIEnv *, jobject bitmap, JNI::InstMethod<void()> recycle);
 };

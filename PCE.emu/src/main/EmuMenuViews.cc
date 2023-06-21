@@ -18,8 +18,9 @@
 #include <emuframework/VideoOptionView.hh>
 #include <emuframework/FilePathOptionView.hh>
 #include <emuframework/DataPathSelectView.hh>
-#include <emuframework/EmuSystemActionsView.hh>
+#include <emuframework/SystemActionsView.hh>
 #include <emuframework/EmuInput.hh>
+#include <mednafen-emuex/MDFNUtils.hh>
 #include "MainApp.hh"
 #include <imagine/fs/FS.hh>
 #include <imagine/gui/AlertView.hh>
@@ -104,10 +105,12 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 	MultiChoiceMenuItem emuCore
 	{
 		"模拟核心", &defaultFace(),
-		[this](size_t idx, Gfx::Text &t)
 		{
-			t.resetString(asModuleString(system().resolvedCore()));
-			return true;
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
+			{
+				t.resetString(asModuleString(system().resolvedCore()));
+				return true;
+			}
 		},
 		(MenuItem::Id)system().core,
 		emuCoreItems
@@ -120,17 +123,18 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 			auto c = EmuCore(item.id());
 			if(c == system().core)
 				return true;
-			auto ynAlertView = makeView<YesNoAlertView>(changeEmuCoreText);
-			ynAlertView->setOnYes(
-				[this, c](const Input::Event &e)
+			pushAndShowModal(makeView<YesNoAlertView>(changeEmuCoreText,
+				YesNoAlertView::Delegates
 				{
-					system().sessionOptionSet();
-					system().core = c;
-					emuCore.setSelected((MenuItem::Id)c);
-					dismissPrevious();
-					app().promptSystemReloadDueToSetOption(attachParams(), e);
-				});
-			pushAndShowModal(std::move(ynAlertView), e, false);
+					.onYes = [this, c](const Input::Event &e)
+					{
+						system().sessionOptionSet();
+						system().core = c;
+						emuCore.setSelected((MenuItem::Id)c);
+						dismissPrevious();
+						app().promptSystemReloadDueToSetOption(attachParams(), e);
+					}
+				}), e, false);
 			return false;
 		};
 	}
@@ -155,7 +159,7 @@ public:
 	{}
 };
 
-class CustomSystemActionsView : public EmuSystemActionsView
+class CustomSystemActionsView : public SystemActionsView
 {
 private:
 	TextMenuItem options
@@ -165,7 +169,7 @@ private:
 	};
 
 public:
-	CustomSystemActionsView(ViewAttachParams attach): EmuSystemActionsView{attach, true}
+	CustomSystemActionsView(ViewAttachParams attach): SystemActionsView{attach, true}
 	{
 		item.emplace_back(&options);
 		loadStandardItems();
@@ -182,13 +186,13 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 		biosMenuEntryStr(system().sysCardPath), &defaultFace(),
 		[this](Input::Event e)
 		{
-			pushAndShow(makeViewWithName<DataFileSelectView>("系统卡",
+			pushAndShow(makeViewWithName<DataFileSelectView<>>("系统卡",
 				app().validSearchPath(FS::dirnameUri(system().sysCardPath)),
 				[this](CStringView path, FS::file_type type)
 				{
 					system().sysCardPath = path;
 					logMsg("set system card:%s", system().sysCardPath.data());
-					sysCardPath.compile(biosMenuEntryStr(path), renderer(), projP);
+					sysCardPath.compile(biosMenuEntryStr(path), renderer());
 					return true;
 				}, hasHuCardExtension), e);
 		}
@@ -196,7 +200,7 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 
 	std::string biosMenuEntryStr(std::string_view path) const
 	{
-		return fmt::format("系统卡: {}", appContext().fileUriDisplayName(path));
+		return std::format("系统卡: {}", appContext().fileUriDisplayName(path));
 	}
 
 public:
@@ -306,10 +310,12 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper<Cus
 	MultiChoiceMenuItem emuCore
 	{
 		"模拟核心", &defaultFace(),
-		[this](size_t idx, Gfx::Text &t)
 		{
-			t.resetString(asModuleString(system().resolvedDefaultCore()));
-			return true;
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
+			{
+				t.resetString(asModuleString(system().resolvedDefaultCore()));
+				return true;
+			}
 		},
 		(MenuItem::Id)system().defaultCore,
 		emuCoreItems
@@ -322,18 +328,21 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper<Cus
 			auto c = EmuCore(item.id());
 			if(c == system().defaultCore)
 				return true;
-			auto ynAlertView = makeView<YesNoAlertView>(changeEmuCoreText);
-			ynAlertView->setOnYes(
-				[this, c]
+			pushAndShowModal(makeView<YesNoAlertView>(changeEmuCoreText,
+				YesNoAlertView::Delegates
 				{
-					system().defaultCore = c;
-					emuCore.setSelected((MenuItem::Id)c);
-					dismissPrevious();
-				});
-			pushAndShowModal(std::move(ynAlertView), e, false);
+					.onYes = [this, c]
+					{
+						system().defaultCore = c;
+						emuCore.setSelected((MenuItem::Id)c);
+						dismissPrevious();
+					}
+				}), e, false);
 			return false;
 		};
 	}
+
+	BoolMenuItem saveFilenameType = saveFilenameTypeMenuItem(*this, system());
 
 public:
 	CustomSystemOptionView(ViewAttachParams attach): SystemOptionView{attach, true}
@@ -341,6 +350,7 @@ public:
 		loadStockItems();
 		item.emplace_back(&emuCore);
 		item.emplace_back(&cdSpeed);
+		item.emplace_back(&saveFilenameType);
 	}
 };
 
@@ -415,10 +425,12 @@ class CustomAudioOptionView : public AudioOptionView, public MainAppHelper<Custo
 		return
 		{
 			desc(type).name, &defaultFace(),
-			[=, this](size_t idx, Gfx::Text &t)
 			{
-				t.resetString(fmt::format("{}%", system().volume(type)));
-				return true;
+				.onSetDisplayString = [this, type](auto idx, Gfx::Text &t)
+				{
+					t.resetString(std::format("{}%", system().volume(type)));
+					return true;
+				}
 			},
 			(MenuItem::Id)system().volume(type),
 			volumeLevelItem[desc(type).idx]

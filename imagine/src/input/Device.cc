@@ -15,7 +15,7 @@
 
 #include <imagine/input/Device.hh>
 #include <imagine/input/Input.hh>
-#ifdef CONFIG_BLUETOOTH
+#ifdef CONFIG_INPUT_BLUETOOTH
 #include <imagine/bluetooth/Wiimote.hh>
 #include <imagine/bluetooth/Zeemote.hh>
 #include <imagine/bluetooth/IControlPad.hh>
@@ -536,7 +536,7 @@ static std::pair<Key, Key> joystickKeys(Map map, AxisId axisId)
 	switch(map)
 	{
 		case Map::SYSTEM: return joystickKeys(axisId);
-		#ifdef CONFIG_BLUETOOTH
+		#ifdef CONFIG_INPUT_BLUETOOTH
 		case Map::WIIMOTE:
 		case Map::WII_CC: return ::IG::Wiimote::joystickKeys(map, axisId);
 		case Map::ICONTROLPAD: return ::IG::IControlPad::joystickKeys(axisId);
@@ -638,7 +638,7 @@ uint32_t Axis::idBit() const
 	}
 }
 
-bool Axis::update(float pos, Map map, Time time, const Device &dev, Window &win, bool normalized)
+bool Axis::update(float pos, Map map, SteadyClockTimePoint time, const Device &dev, Window &win, bool normalized)
 {
 	if(!normalized)
 		pos *= scaler;
@@ -667,7 +667,7 @@ AxisKeyEmu::UpdateKeys AxisKeyEmu::update(float pos)
 	return keys;
 }
 
-bool AxisKeyEmu::dispatch(float pos, Map map, Time time, const Device &dev, Window &win)
+bool AxisKeyEmu::dispatch(float pos, Map map, SteadyClockTimePoint time, const Device &dev, Window &win)
 {
 	auto updateKeys = update(pos);
 	auto src = Source::GAMEPAD;

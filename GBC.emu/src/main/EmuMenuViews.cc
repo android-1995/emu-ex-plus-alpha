@@ -18,7 +18,7 @@
 #include <emuframework/VideoOptionView.hh>
 #include <emuframework/FilePathOptionView.hh>
 #include <emuframework/UserPathSelectView.hh>
-#include <emuframework/EmuSystemActionsView.hh>
+#include <emuframework/SystemActionsView.hh>
 #include "EmuCheatViews.hh"
 #include "Palette.hh"
 #include "MainApp.hh"
@@ -171,7 +171,7 @@ public:
 	{}
 };
 
-class CustomSystemActionsView : public EmuSystemActionsView
+class CustomSystemActionsView : public SystemActionsView
 {
 	TextMenuItem options
 	{
@@ -186,7 +186,7 @@ class CustomSystemActionsView : public EmuSystemActionsView
 	};
 
 public:
-	CustomSystemActionsView(ViewAttachParams attach): EmuSystemActionsView{attach, true}
+	CustomSystemActionsView(ViewAttachParams attach): SystemActionsView{attach, true}
 	{
 		item.emplace_back(&options);
 		loadStandardItems();
@@ -207,7 +207,7 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 				{
 					logMsg("set cheats path:%s", path.data());
 					system().cheatsDir = path;
-					cheatsPath.compile(cheatsMenuName(appContext(), path), renderer(), projP);
+					cheatsPath.compile(cheatsMenuName(appContext(), path), renderer());
 				}), e);
 		}
 	};

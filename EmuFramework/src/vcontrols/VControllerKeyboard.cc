@@ -26,61 +26,61 @@ namespace EmuEx
 void VControllerKeyboard::updateImg(Gfx::Renderer &r)
 {
 	if(mode_ == VControllerKbMode::LAYOUT_2)
-		spr.setUVBounds({{0., .5}, {texXEnd, 1.}});
+		spr.setUVBounds(spr.remapTexCoordRect({{0., .5}, {texXEnd, 1.}}));
 	else
-		spr.setUVBounds({{}, {texXEnd, .5}});
+		spr.setUVBounds(spr.remapTexCoordRect({{}, {texXEnd, .5}}));
 }
 
 void VControllerKeyboard::setImg(Gfx::Renderer &r, Gfx::TextureSpan img)
 {
-	spr = {{{-.5, -.5}, {.5, .5}}, img};
-	texXEnd = img.uvBounds().x2;
+	spr.set(img);
+	texXEnd = img.bounds.x2;
 	updateImg(r);
 }
 
-void VControllerKeyboard::place(float btnSize, float yOffset, Gfx::ProjectionPlane projP)
+void VControllerKeyboard::place(int btnSize, int yOffset, WRect viewBounds)
 {
-	float xSize, ySize;
-	IG::setSizesWithRatioX(xSize, ySize, 3./2., std::min(btnSize*10, projP.width()));
-	float vArea = projP.height() - yOffset*2;
+	int xSize, ySize;
+	setSizesWithRatioX(xSize, ySize, 3./2., std::min(btnSize*10, viewBounds.xSize()));
+	int vArea = viewBounds.ySize() - yOffset * 2;
 	if(ySize > vArea)
 	{
 		IG::setSizesWithRatioY(xSize, ySize, 3./2., vArea);
 	}
-	Gfx::GCRect boundGC {{}, {xSize, ySize}};
-	boundGC.setPos({0., projP.bounds().y + yOffset}, CB2DO);
-	spr.setPos(boundGC);
-	bound = projP.projectRect(boundGC);
+	WRect bounds {{}, {xSize, ySize}};
+	bounds.setPos({viewBounds.xCenter(), viewBounds.y2 - yOffset}, CB2DO);
+	spr.setPos(bounds);
+	bound = bounds;
 	keyXSize = std::max(bound.xSize() / VKEY_COLS, 1);
 	keyYSize = std::max(bound.ySize() / KEY_ROWS, 1);
 	logMsg("key size %dx%d", keyXSize, keyYSize);
 }
 
-void VControllerKeyboard::draw(Gfx::RendererCommands &cmds, Gfx::ProjectionPlane projP) const
+void VControllerKeyboard::draw(Gfx::RendererCommands &__restrict__ cmds) const
 {
 	auto &basicEffect = cmds.basicEffect();
 	spr.draw(cmds, basicEffect);
 	if(selected.x != -1)
 	{
-		cmds.setColor(.2, .71, .9, 1./3.);
+		cmds.setColor({.2, .71, .9, 1./3.});
 		basicEffect.disableTexture(cmds);
 		IG::WindowRect rect{};
 		rect.x = bound.x + (selected.x * keyXSize);
 		rect.x2 = bound.x + ((selected.x2 + 1) * keyXSize);
 		rect.y = bound.y + (selected.y * keyYSize);
 		rect.y2 = rect.y + keyYSize;
-		Gfx::GeomRect::draw(cmds, rect, projP);
+		cmds.drawRect(rect);
 	}
 	if(shiftIsActive() && mode_ == VControllerKbMode::LAYOUT_1)
 	{
-		cmds.setColor(.2, .71, .9, 1./2.);
+		cmds.setColor({.2, .71, .9, 1./2.});
 		basicEffect.disableTexture(cmds);
 		IG::WindowRect rect{};
 		rect.x = bound.x + (shiftRect.x * keyXSize);
 		rect.x2 = bound.x + ((shiftRect.x2 + 1) * keyXSize);
 		rect.y = bound.y + (shiftRect.y * keyYSize);
 		rect.y2 = rect.y + keyYSize;
-		Gfx::GeomRect::draw(cmds, rect, projP);
+		cmds.drawRect(rect);
 	}
 }
 

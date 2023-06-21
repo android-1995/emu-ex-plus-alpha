@@ -40,10 +40,10 @@ constexpr int MAP_POPULATE = 0;
 static auto flagsString(OpenFlagsMask openFlags)
 {
 	IG::StaticString<5> logFlagsStr{};
-	if(to_underlying(openFlags & OpenFlagsMask::READ)) logFlagsStr += 'r';
-	if(to_underlying(openFlags & OpenFlagsMask::WRITE)) logFlagsStr += 'w';
-	if(to_underlying(openFlags & OpenFlagsMask::CREATE)) logFlagsStr += 'c';
-	if(to_underlying(openFlags & OpenFlagsMask::TRUNCATE)) logFlagsStr += 't';
+	if(to_underlying(openFlags & OpenFlagsMask::Read)) logFlagsStr += 'r';
+	if(to_underlying(openFlags & OpenFlagsMask::Write)) logFlagsStr += 'w';
+	if(to_underlying(openFlags & OpenFlagsMask::Create)) logFlagsStr += 'c';
+	if(to_underlying(openFlags & OpenFlagsMask::Truncate)) logFlagsStr += 't';
 	return logFlagsStr;
 }
 
@@ -55,16 +55,16 @@ static auto protectionFlagsString(int flags)
 	return logFlagsStr;
 }
 
-PosixIO::PosixIO(IG::CStringView path, OpenFlagsMask openFlags)
+PosixIO::PosixIO(CStringView path, OpenFlagsMask openFlags)
 {
 	constexpr mode_t defaultOpenMode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
 	int flags = 0;
 	mode_t openMode{};
 
 	// setup flags
-	if(to_underlying(openFlags & OpenFlagsMask::WRITE))
+	if(to_underlying(openFlags & OpenFlagsMask::Write))
 	{
-		if(to_underlying(openFlags & OpenFlagsMask::READ))
+		if(to_underlying(openFlags & OpenFlagsMask::Read))
 		{
 			flags |= O_RDWR;
 		}
@@ -77,11 +77,11 @@ PosixIO::PosixIO(IG::CStringView path, OpenFlagsMask openFlags)
 	{
 		flags |= O_RDONLY;
 	}
-	if(to_underlying(openFlags & OpenFlagsMask::CREATE))
+	if(to_underlying(openFlags & OpenFlagsMask::Create))
 	{
 		flags |= O_CREAT;
 		openMode = defaultOpenMode;
-		if(to_underlying(openFlags & OpenFlagsMask::TRUNCATE))
+		if(to_underlying(openFlags & OpenFlagsMask::Truncate))
 		{
 			flags |= O_TRUNC;
 		}
@@ -91,7 +91,7 @@ PosixIO::PosixIO(IG::CStringView path, OpenFlagsMask openFlags)
 	{
 		if constexpr(Config::DEBUG_BUILD)
 			logErr("error opening file (%s) @ %s:%s", flagsString(openFlags).data(), path.data(), strerror(errno));
-		if(to_underlying(openFlags & OpenFlagsMask::TEST))
+		if(to_underlying(openFlags & OpenFlagsMask::Test))
 			return;
 		else
 			throw std::system_error{errno, std::system_category(), path};
@@ -100,39 +100,49 @@ PosixIO::PosixIO(IG::CStringView path, OpenFlagsMask openFlags)
 		logMsg("opened (%s) fd:%d @ %s", flagsString(openFlags).data(), fd(), path.data());
 }
 
-ssize_t PosixIO::read(void *buff, size_t bytes)
+ssize_t PosixIO::read(void *buff, size_t bytes, std::optional<off_t> offset)
 {
-	auto bytesRead = ::read(fd(), buff, bytes);
-	if(bytesRead == -1) [[unlikely]]
+	if(offset)
 	{
-		if(Config::DEBUG_BUILD && errno != EAGAIN)
-			logErr("error reading %zu bytes", bytes);
+		auto bytesRead = ::pread(fd(), buff, bytes, *offset);
+		if(bytesRead == -1) [[unlikely]]
+		{
+			logErr("error reading %zu bytes at offset %lld", bytes, (long long)*offset);
+		}
+		return bytesRead;
 	}
 	else
 	{
-		//logMsg("read %zd bytes out of %zu requested from fd_: %d", bytesRead, bytes, fd_);
+		auto bytesRead = ::read(fd(), buff, bytes);
+		if(bytesRead == -1) [[unlikely]]
+		{
+			if(Config::DEBUG_BUILD && errno != EAGAIN)
+				logErr("error reading %zu bytes", bytes);
+		}
+		return bytesRead;
 	}
-	return bytesRead;
 }
 
-ssize_t PosixIO::readAtPos(void *buff, size_t bytes, off_t offset)
+ssize_t PosixIO::write(const void *buff, size_t bytes, std::optional<off_t> offset)
 {
-	auto bytesRead = ::pread(fd(), buff, bytes, offset);
-	if(bytesRead == -1) [[unlikely]]
+	if(offset)
 	{
-		logErr("error reading %zu bytes at offset %lld", bytes, (long long)offset);
+		auto bytesWritten = ::pwrite(fd(), buff, bytes, *offset);
+		if(bytesWritten == -1)
+		{
+			logErr("error writing %zu bytes at offset %lld", bytes, (long long)*offset);
+		}
+		return bytesWritten;
 	}
-	return bytesRead;
-}
-
-ssize_t PosixIO::write(const void *buff, size_t bytes)
-{
-	auto bytesWritten = ::write(fd(), buff, bytes);
-	if(bytesWritten == -1)
+	else
 	{
-		logErr("error writing %zu bytes", bytes);
+		auto bytesWritten = ::write(fd(), buff, bytes);
+		if(bytesWritten == -1)
+		{
+			logErr("error writing %zu bytes", bytes);
+		}
+		return bytesWritten;
 	}
-	return bytesWritten;
 }
 
 bool PosixIO::truncate(off_t offset)
@@ -183,9 +193,9 @@ static int adviceToFAdv(IOAdvice advice)
 	switch(advice)
 	{
 		default: return POSIX_FADV_NORMAL;
-		case IOAdvice::SEQUENTIAL: return POSIX_FADV_SEQUENTIAL;
-		case IOAdvice::RANDOM: return POSIX_FADV_RANDOM;
-		case IOAdvice::WILLNEED: return POSIX_FADV_WILLNEED;
+		case IOAdvice::Sequential: return POSIX_FADV_SEQUENTIAL;
+		case IOAdvice::Random: return POSIX_FADV_RANDOM;
+		case IOAdvice::WillNeed: return POSIX_FADV_WILLNEED;
 	}
 }
 #endif
@@ -193,7 +203,7 @@ static int adviceToFAdv(IOAdvice advice)
 void PosixIO::advise(off_t offset, size_t bytes, Advice advice)
 {
 	#ifdef __APPLE__
-	if(advice == Advice::SEQUENTIAL || advice == Advice::WILLNEED)
+	if(advice == Advice::Sequential || advice == Advice::WillNeed)
 		fcntl(fd(), F_RDAHEAD, 1);
 	#else
 		#if _XOPEN_SOURCE >= 600 || _POSIX_C_SOURCE >= 200112L
@@ -221,16 +231,16 @@ IOBuffer PosixIO::releaseBuffer()
 		flags = 0;
 	}
 	bool isWritable = (flags & O_WRONLY) || (flags & O_RDWR);
-	return mapRange(0, size(), isWritable ? MAP_WRITE : 0);
+	return mapRange(0, size(), isWritable ? IOMapFlagsMask::Write : IOMapFlagsMask{});
 }
 
-IOBuffer PosixIO::mapRange(off_t start, size_t size, MapFlags mapFlags)
+IOBuffer PosixIO::mapRange(off_t start, size_t size, IOMapFlagsMask mapFlags)
 {
 	int flags = MAP_SHARED;
-	if(mapFlags & MAP_POPULATE_PAGES)
+	if(to_underlying(mapFlags & IOMapFlagsMask::PopulatePages))
 		flags |= MAP_POPULATE;
 	int prot = PROT_READ;
-	if(mapFlags & MAP_WRITE)
+	if(to_underlying(mapFlags & IOMapFlagsMask::Write))
 		prot |= PROT_WRITE;
 	void *data = mmap(nullptr, size, prot, flags, fd(), start);
 	if(data == MAP_FAILED) [[unlikely]]

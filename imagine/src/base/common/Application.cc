@@ -66,11 +66,10 @@ Window &BaseApplication::mainWindow() const
 
 Screen &BaseApplication::addScreen(ApplicationContext ctx, std::unique_ptr<Screen> ptr, bool notify)
 {
-	auto &screen = *ptr.get();
-	screen_.emplace_back(std::move(ptr));
-	if(notify && onScreenChange_)
-		onScreenChange_(ctx, screen, ScreenChange::Action::ADDED);
-	return screen;
+	auto &newScreen = screen_.emplace_back(std::move(ptr));
+	if(notify)
+		onEvent(ctx, ScreenChangeEvent{*newScreen, ScreenChange::added});
+	return *newScreen;
 }
 
 Screen *BaseApplication::findScreen(ScreenId id) const
@@ -86,8 +85,8 @@ Screen *BaseApplication::findScreen(ScreenId id) const
 std::unique_ptr<Screen> BaseApplication::removeScreen(ApplicationContext ctx, ScreenId id, bool notify)
 {
 	auto removedScreen = IG::moveOutIf(screen_, [&](const auto &s){ return *s == id; });
-	if(notify && removedScreen && onScreenChange_)
-		onScreenChange_(ctx, *removedScreen, ScreenChange::Action::REMOVED);
+	if(notify && removedScreen)
+		onEvent(ctx, ScreenChangeEvent{*removedScreen, ScreenChange::removed});
 	return removedScreen;
 }
 
@@ -170,11 +169,6 @@ bool BaseApplication::isExiting() const
 	return activityState() == ActivityState::EXITING;
 }
 
-void BaseApplication::setOnInterProcessMessage(InterProcessMessageDelegate del)
-{
-	onInterProcessMessage_ = del;
-}
-
 bool BaseApplication::addOnResume(ResumeDelegate del, int priority)
 {
 	return onResume_.add(del, priority);
@@ -188,11 +182,6 @@ bool BaseApplication::removeOnResume(ResumeDelegate del)
 bool BaseApplication::containsOnResume(ResumeDelegate del) const
 {
 	return onResume_.contains(del);
-}
-
-void BaseApplication::setOnFreeCaches(FreeCachesDelegate del)
-{
-	onFreeCaches_ = del;
 }
 
 bool BaseApplication::addOnExit(ExitDelegate del, int priority)
@@ -212,17 +201,12 @@ bool BaseApplication::containsOnExit(ExitDelegate del) const
 
 void BaseApplication::dispatchOnInterProcessMessage(ApplicationContext ctx, const char *filename)
 {
-	onInterProcessMessage_.callCopySafe(ctx, filename);
+	onEvent.callCopy(ctx, InterProcessMessageEvent{filename});
 }
 
-bool BaseApplication::hasOnInterProcessMessage() const
+void BaseApplication::dispatchOnScreenChange(ApplicationContext ctx, Screen &s, ScreenChange change)
 {
-	return (bool)onInterProcessMessage_;
-}
-
-void BaseApplication::setOnScreenChange(ScreenChangeDelegate del)
-{
-	onScreenChange_ = del;
+	onEvent(ctx, ScreenChangeEvent{s, change});
 }
 
 void BaseApplication::dispatchOnResume(ApplicationContext ctx, bool focused)
@@ -232,7 +216,7 @@ void BaseApplication::dispatchOnResume(ApplicationContext ctx, bool focused)
 
 void BaseApplication::dispatchOnFreeCaches(ApplicationContext ctx, bool running)
 {
-	onFreeCaches_.callCopySafe(ctx, running);
+	onEvent.callCopy(ctx, FreeCachesEvent{running});
 }
 
 void BaseApplication::dispatchOnExit(ApplicationContext ctx, bool backgrounded)
@@ -246,8 +230,8 @@ void BaseApplication::dispatchOnExit(ApplicationContext ctx, bool backgrounded)
 		{
 			win->resetAppData();
 			win->resetRendererData();
-			// surface should be destroyed by reseting renderer data so remove surface change delegate
-			win->setOnSurfaceChange(nullptr);
+			// surface should be destroyed by reseting renderer data so skip surface change event
+			win->onEvent = delegateFuncDefaultInit;
 		}
 	}
 }

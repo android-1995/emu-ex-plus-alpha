@@ -43,14 +43,14 @@ FSPicker::FSPicker(ViewAttachParams attach, Gfx::TextureSpan backRes, Gfx::Textu
 	auto nav = makeView<BasicNavView>
 		(
 			&face(),
-			isSingleDirectoryMode() ? nullptr : backRes,
+			isSingleDirectoryMode() ? Gfx::TextureSpan{} : backRes,
 			closeRes
 		);
 	const Gfx::LGradientStopDesc fsNavViewGrad[]
 	{
-		{ .0, Gfx::VertexColorPixelFormat.build(1. * .4, 1. * .4, 1. * .4, 1.) },
-		{ .3, Gfx::VertexColorPixelFormat.build(1. * .4, 1. * .4, 1. * .4, 1.) },
-		{ .97, Gfx::VertexColorPixelFormat.build(.35 * .4, .35 * .4, .35 * .4, 1.) },
+		{ .0, Gfx::PackedColor::format.build(1. * .4, 1. * .4, 1. * .4, 1.) },
+		{ .3, Gfx::PackedColor::format.build(1. * .4, 1. * .4, 1. * .4, 1.) },
+		{ .97, Gfx::PackedColor::format.build(.35 * .4, .35 * .4, .35 * .4, 1.) },
 		{ 1., nav->separatorColor() },
 	};
 	nav->setBackgroundGradient(fsNavViewGrad);
@@ -79,14 +79,24 @@ FSPicker::FSPicker(ViewAttachParams attach, Gfx::TextureSpan backRes, Gfx::Textu
 
 void FSPicker::place()
 {
-	controller.place(viewRect(), displayRect(), projP);
+	controller.place(viewRect(), displayRect());
 	if(dirListThread.isWorking())
 		return;
-	msgText.compile(renderer(), projP);
+	msgText.compile(renderer());
 }
 
-void FSPicker::changeDirByInput(IG::CStringView path, FS::RootPathInfo rootInfo, const Input::Event &e)
+void FSPicker::changeDirByInput(CStringView path, FS::RootPathInfo rootInfo, const Input::Event &e,
+	DepthMode depthMode)
 {
+	if(depthMode == DepthMode::reset)
+		depthCount = 0;
+	else if(depthMode == DepthMode::decrement)
+	{
+		if(depthCount > 0)
+			depthCount--;
+	}
+	else // increment
+		depthCount++;
 	setPath(path, std::move(rootInfo), e);
 	place();
 	postDraw();
@@ -126,10 +136,13 @@ bool FSPicker::inputEvent(const Input::Event &e)
 {
 	if(e.keyEvent())
 	{
-		auto &keyEv = e.asKeyEvent();
+		auto &keyEv = *e.keyEvent();
 		if(keyEv.pushed(Input::DefaultKey::CANCEL))
 		{
-			dismiss();
+			if(depthCount > 0)
+				onLeftNavBtn(e);
+			else
+				dismiss();
 			return true;
 		}
 		else if(controller.viewHasFocus() && keyEv.pushed(Input::DefaultKey::LEFT))
@@ -167,12 +180,8 @@ void FSPicker::draw(Gfx::RendererCommands &__restrict__ cmds)
 		else
 		{
 			using namespace IG::Gfx;
-			cmds.set(ColorName::WHITE);
 			cmds.basicEffect().enableAlphaTexture(cmds);
-			auto textRect = controller.top().viewRect();
-			if(IG::isOdd(textRect.ySize()))
-				textRect.y2--;
-			msgText.draw(cmds, projP.unProjectRect(textRect).pos(C2DO), C2DO, projP);
+			msgText.draw(cmds, controller.top().viewRect().pos(C2DO), C2DO, ColorName::WHITE);
 		}
 	}
 	controller.navView()->draw(cmds);
@@ -189,6 +198,7 @@ void FSPicker::setEmptyPath(std::string_view message)
 	dirListThread.stop();
 	dirListEvent.cancel();
 	root = {};
+	depthCount = 0;
 	dir.clear();
 	msgText.resetString(message);
 	if(mode_ == Mode::FILE_IN_DIR)
@@ -206,7 +216,7 @@ void FSPicker::setEmptyPath()
 	setEmptyPath("未设置文件夹");
 }
 
-void FSPicker::setPath(IG::CStringView path, FS::RootPathInfo rootInfo, const Input::Event &e)
+void FSPicker::setPath(CStringView path, FS::RootPathInfo rootInfo, const Input::Event &e)
 {
 	if(!strlen(path))
 	{
@@ -235,7 +245,7 @@ void FSPicker::setPath(IG::CStringView path, FS::RootPathInfo rootInfo, const In
 		logMsg("root info:%d:%s", (int)rootInfo.length, rootInfo.name.data());
 		root.info = rootInfo;
 		if(pathLen > rootInfo.length)
-			rootedPath = IG::format<FS::PathString>("{}{}", rootInfo.name, &path[rootInfo.length]);
+			rootedPath = format<FS::PathString>("{}{}", rootInfo.name, &path[rootInfo.length]);
 		else
 			rootedPath = rootInfo.name;
 	}
@@ -253,17 +263,17 @@ void FSPicker::setPath(IG::CStringView path, FS::RootPathInfo rootInfo, const In
 	onChangePath_.callSafe(*this, e);
 }
 
-void FSPicker::setPath(IG::CStringView path, FS::RootPathInfo rootInfo)
+void FSPicker::setPath(CStringView path, FS::RootPathInfo rootInfo)
 {
 	return setPath(path, std::move(rootInfo), appContext().defaultInputEvent());
 }
 
-void FSPicker::setPath(IG::CStringView path, const Input::Event &e)
+void FSPicker::setPath(CStringView path, const Input::Event &e)
 {
 	return setPath(path, appContext().rootPathInfo(path), e);
 }
 
-void FSPicker::setPath(IG::CStringView path)
+void FSPicker::setPath(CStringView path)
 {
 	return setPath(path, appContext().rootPathInfo(path));
 }
@@ -291,7 +301,7 @@ bool FSPicker::isSingleDirectoryMode() const
 void FSPicker::goUpDirectory(const Input::Event &e)
 {
 	clearSelection();
-	changeDirByInput(FS::dirnameUri(root.path), root.info, e);
+	changeDirByInput(FS::dirnameUri(root.path), root.info, e, DepthMode::decrement);
 }
 
 bool FSPicker::isAtRoot() const
@@ -332,13 +342,13 @@ void FSPicker::pushFileLocationsView(const Input::Event &e)
 			[this](View &view, const Input::Event &e)
 			{
 				if(!appContext().showSystemPathPicker(
-					[this, &view](IG::CStringView uri, IG::CStringView displayName)
+					[this, &view](CStringView uri, CStringView displayName)
 					{
 						view.dismiss();
 						if(mode_ == Mode::DIR)
 							onSelectPath_.callCopy(*this, uri, displayName, appContext().defaultInputEvent());
 						else
-							changeDirByInput(uri, appContext().rootPathInfo(uri), appContext().defaultInputEvent());
+							changeDirByInput(uri, appContext().rootPathInfo(uri), appContext().defaultInputEvent(), DepthMode::reset);
 					}))
 				{
 					setEmptyPath(failedSystemPickerMsg);
@@ -352,7 +362,7 @@ void FSPicker::pushFileLocationsView(const Input::Event &e)
 			[this](View &view, const Input::Event &e)
 			{
 				if(!appContext().showSystemDocumentPicker(
-					[this, &view](IG::CStringView uri, IG::CStringView displayName)
+					[this, &view](CStringView uri, CStringView displayName)
 					{
 						onSelectPath_.callCopy(*this, uri, displayName, appContext().defaultInputEvent());
 					}))
@@ -373,7 +383,7 @@ void FSPicker::pushFileLocationsView(const Input::Event &e)
 					if(!ctx.requestPermission(Permission::WRITE_EXT_STORAGE))
 						return;
 				}
-				changeDirByInput(loc.root.path, loc.root.info, e);
+				changeDirByInput(loc.root.path, loc.root.info, e, DepthMode::reset);
 				view.dismiss();
 			});
 	}
@@ -382,7 +392,7 @@ void FSPicker::pushFileLocationsView(const Input::Event &e)
 		view->appendItem("Root Filesystem",
 			[this](View &view, const Input::Event &e)
 			{
-				changeDirByInput("/", {}, e);
+				changeDirByInput("/", {}, e, DepthMode::reset);
 				view.dismiss();
 			});
 	}
@@ -390,7 +400,7 @@ void FSPicker::pushFileLocationsView(const Input::Event &e)
 		[this](const Input::Event &e)
 		{
 			auto textInputView = makeView<CollectTextInputView>(
-				"输入文件夹路径", root.path, nullptr,
+				"输入文件夹路径", root.path, Gfx::TextureSpan{},
 				[this](CollectTextInputView &view, const char *str)
 				{
 					if(!str || !strlen(str))
@@ -398,7 +408,7 @@ void FSPicker::pushFileLocationsView(const Input::Event &e)
 						view.dismiss();
 						return false;
 					}
-					changeDirByInput(str, appContext().rootPathInfo(str), appContext().defaultInputEvent());
+					changeDirByInput(str, appContext().rootPathInfo(str), appContext().defaultInputEvent(), DepthMode::reset);
 					dismissPrevious();
 					view.dismiss();
 					return false;
@@ -458,7 +468,7 @@ void FSPicker::startDirectoryListThread(CStringView path)
 	}, std::string{path});
 }
 
-void FSPicker::listDirectory(IG::CStringView path, ThreadStop &stop)
+void FSPicker::listDirectory(CStringView path, ThreadStop &stop)
 {
 	try
 	{
@@ -472,12 +482,7 @@ void FSPicker::listDirectory(IG::CStringView path, ThreadStop &stop)
 					return false;
 				}
 				bool isDir = entry.type() == FS::file_type::directory;
-				if(mode_ == Mode::DIR) // filter non-directories
-				{
-					if(!isDir)
-						return true;
-				}
-				else if(mode_ == Mode::FILE_IN_DIR) // filter directories
+				if(mode_ == Mode::FILE_IN_DIR) // filter directories
 				{
 					if(isDir)
 						return true;
@@ -493,6 +498,8 @@ void FSPicker::listDirectory(IG::CStringView path, ThreadStop &stop)
 				auto &item = dir.emplace_back(FileEntry{std::string{entry.path()}, {entry.name(), &face(), nullptr}});
 				if(isDir)
 					item.text.setFlags(item.text.flags() | FileEntry::IS_DIR_FLAG);
+				if(mode_ == Mode::DIR && !isDir)
+					item.text.setActive(false);
 				return true;
 			});
 		std::sort(dir.begin(), dir.end(),
@@ -503,37 +510,39 @@ void FSPicker::listDirectory(IG::CStringView path, ThreadStop &stop)
 				else if(!e1.isDir() && e2.isDir())
 					return false;
 				else
-					return IG::stringNoCaseLexCompare(e1.path, e2.path);
+					return caselessLexCompare(e1.path, e2.path);
 			});
 		if(dir.size())
 		{
 			for(auto &d : dir)
 			{
+				if(!d.text.active())
+					continue;
 				if(d.isDir())
 				{
-					d.text.setOnSelect(
+					d.text.onSelect =
 						[this, &dirPath = d.path](const Input::Event &e)
 						{
 							assert(!isSingleDirectoryMode());
 							auto path = std::move(dirPath);
 							logMsg("entering dir:%s", path.data());
 							changeDirByInput(path, root.info, e);
-						});
+						};
 				}
 				else
 				{
-					d.text.setOnSelect(
+					d.text.onSelect =
 						[this, &dirPath = d.path](const Input::Event &e)
 						{
 							onSelectPath_.callCopy(*this, dirPath, appContext().fileUriDisplayName(dirPath), e);
-						});
+						};
 				}
 			}
 			msgText.resetString();
 		}
 		else // no entries, show a message instead
 		{
-			msgText.resetString("空的文件夹");
+			msgText.resetString("空文件夹");
 		}
 	}
 	catch(std::system_error &err)
@@ -541,7 +550,7 @@ void FSPicker::listDirectory(IG::CStringView path, ThreadStop &stop)
 		logErr("can't open %s", path.data());
 		auto ec = err.code();
 		std::string_view extraMsg = mode_ == Mode::FILE_IN_DIR ? "" : "\n从顶部栏中选择一条路径";
-		msgText.resetString(fmt::format("无法打开目录:\n{}{}", ec.message(), extraMsg));
+		msgText.resetString(std::format("无法打开目录:\n{}{}", ec.message(), extraMsg));
 	}
 }
 

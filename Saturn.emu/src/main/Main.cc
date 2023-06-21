@@ -140,8 +140,9 @@ static void SNDImagineUpdateAudio(u32 *leftchanbuffer, u32 *rightchanbuffer, u32
 namespace EmuEx
 {
 
-const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2012-2022\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nYabause Team\nyabause.org";
+const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2012-2023\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nYabause Team\nyabause.org";
 bool EmuSystem::handlesGenericIO = false;
+bool EmuSystem::hasRectangularPixels = true;
 static EmuSystemTaskContext emuSysTask{};
 static EmuAudio *emuAudio{};
 static EmuVideo *emuVideo{};
@@ -149,12 +150,12 @@ PerPad_struct *pad[2];
 
 static bool hasCDExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".cue", ".iso", ".bin", ".CUE", ".ISO", ".BIN");
+	return IG::endsWithAnyCaseless(name, ".cue", ".iso", ".bin");
 }
 
 bool hasBIOSExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".bin", ".BIN");
+	return IG::endsWithAnyCaseless(name, ".bin");
 }
 
 static FS::PathString bupPath{};
@@ -202,7 +203,6 @@ const char *EmuSystem::systemName() const
 }
 
 EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter = hasCDExtension;
-EmuSystem::NameFilterFunc EmuSystem::defaultBenchmarkFsFilter = hasCDExtension;
 
 static constexpr auto pixFmt = IG::PIXEL_FMT_RGBA8888;
 
@@ -304,9 +304,9 @@ void SaturnSystem::loadContent(IO &, EmuSystemCreateParams, OnLoadProgressDelega
 	ScspSetFrameAccurate(1);
 }
 
-void SaturnSystem::configAudioRate(IG::FloatSeconds frameTime, int rate)
+void SaturnSystem::configAudioRate(FrameTime outputFrameTime, int outputRate)
 {
-	// TODO: use frameTime
+	// TODO
 }
 
 void SaturnSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio *audio)
@@ -323,9 +323,9 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 {
 	const Gfx::LGradientStopDesc navViewGrad[] =
 	{
-		{ .0, Gfx::VertexColorPixelFormat.build(.8 * .4, 0., 0., 1.) },
-		{ .3, Gfx::VertexColorPixelFormat.build(.8 * .4, 0., 0., 1.) },
-		{ .97, Gfx::VertexColorPixelFormat.build(.2 * .4, 0., 0., 1.) },
+		{ .0, Gfx::PackedColor::format.build(.8 * .4, 0., 0., 1.) },
+		{ .3, Gfx::PackedColor::format.build(.8 * .4, 0., 0., 1.) },
+		{ .97, Gfx::PackedColor::format.build(.2 * .4, 0., 0., 1.) },
 		{ 1., view.separatorColor() },
 	};
 	view.setBackgroundGradient(navViewGrad);

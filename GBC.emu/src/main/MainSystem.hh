@@ -39,6 +39,8 @@ public:
 	GbcInput gbcInput;
 	std::unique_ptr<Resampler> resampler;
 	const GBPalette *gameBuiltinPalette{};
+	FileIO saveFileIO;
+	FileIO rtcFileIO;
 	std::string cheatsDir;
 	uint64_t totalSamples{};
 	uint32_t totalFrames{};
@@ -50,22 +52,13 @@ public:
 	Byte1Option optionReportAsGba{CFGKEY_REPORT_AS_GBA, 0};
 	Byte1Option optionAudioResampler{CFGKEY_AUDIO_RESAMPLER, 1};
 	Byte1Option optionFullGbcSaturation{CFGKEY_FULL_GBC_SATURATION, 0};
+	static constexpr FloatSeconds gbFrameTimeSecs{70224. / 4194304.}; // ~59.7275Hz
+	static constexpr auto gbFrameTime{round<FrameTime>(gbFrameTimeSecs)};
 
 	GbcSystem(ApplicationContext ctx):
 		EmuSystem{ctx}
 	{
 		gbEmu.setInputGetter(&gbcInput);
-		gbEmu.setSaveStreamDelegates(
-			[ctx](std::string_view filenameExt) -> IG::IFStream
-			{
-				auto &app = EmuApp::get(ctx);
-				return {ctx.openFileUri(app.contentSaveFilePath(filenameExt), IOAccessHint::ALL, OpenFlagsMask::TEST)};
-			},
-			[ctx](std::string_view filenameExt) -> IG::OFStream
-			{
-				auto &app = EmuApp::get(ctx);
-				return {ctx.openFileUri(app.contentSaveFilePath(filenameExt), OpenFlagsMask::NEW | OpenFlagsMask::TEST)};
-			});
 	}
 	void applyGBPalette();
 	void applyCheats();
@@ -83,15 +76,16 @@ public:
 	void reset(EmuApp &, ResetMode mode);
 	void clearInputBuffers(EmuInputView &view);
 	void handleInputAction(EmuApp *, InputAction);
-	unsigned translateInputAction(unsigned input, bool &turbo);
-	VController::Map vControllerMap(int player);
-	void configAudioRate(FloatSeconds frameTime, int rate);
+	InputAction translateInputAction(InputAction);
+	SystemInputDeviceDesc inputDeviceDesc(int idx) const;
+	FrameTime frameTime() const { return gbFrameTime; }
+	void configAudioRate(FrameTime outputFrameTime, int outputRate);
 	static std::span<const AspectRatioInfo> aspectRatioInfos();
 
 	// optional API functions
 	void loadBackupMemory(EmuApp &);
 	void onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags);
-	IG::Time backupMemoryLastWriteTime(const EmuApp &) const;
+	WallClockTimePoint backupMemoryLastWriteTime(const EmuApp &) const;
 	void closeSystem();
 	void onOptionsLoaded();
 	bool resetSessionOptions(EmuApp &);

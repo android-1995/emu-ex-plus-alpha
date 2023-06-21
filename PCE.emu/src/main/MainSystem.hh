@@ -1,5 +1,20 @@
 #pragma once
 
+/*  This file is part of PCE.emu.
+
+	PCE.emu is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	PCE.emu is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with PCE.emu.  If not, see <http://www.gnu.org/licenses/> */
+
 #include <imagine/base/ApplicationContext.hh>
 #include <emuframework/Option.hh>
 #include <emuframework/EmuSystem.hh>
@@ -22,7 +37,8 @@ namespace MDFN_IEN_PCE_FAST
 {
 extern vce_t vce;
 
-void applySoundFormat(double rate);
+void SetSoundRate(double rate);
+double GetSoundRate();
 void PCECD_Drive_SetDisc(bool tray_open, CDInterface* cdif, bool no_emu_side_effects = false) MDFN_COLD;
 }
 
@@ -32,7 +48,8 @@ class VCE;
 
 extern VCE *vce;
 
-void applySoundFormat(double rate);
+bool SetSoundRate(double rate);
+double GetSoundRate();
 }
 
 namespace EmuEx::Controls
@@ -53,6 +70,7 @@ enum
 	CFGKEY_NO_SPRITE_LIMIT = 281, CFGKEY_CD_SPEED = 282,
 	CFGKEY_CDDA_VOLUME = 283, CFGKEY_ADPCM_VOLUME = 284,
 	CFGKEY_ADPCM_FILTER = 285, CFGKEY_EMU_CORE = 286,
+	CFGKEY_NO_MD5_FILENAMES = 287,
 };
 
 void set6ButtonPadEnabled(EmuApp &, bool);
@@ -86,7 +104,7 @@ public:
 	static constexpr int maxFrameBuffWidth = 1365, maxFrameBuffHeight = 270;
 	alignas(8) uint32_t pixBuff[maxFrameBuffWidth * maxFrameBuffHeight];
 	IG::MutablePixmapView mSurfacePix;
-	bool prevUsing263Lines{};
+	bool configuredFor263Lines{};
 	std::vector<CDInterface *> CDInterfaces;
 	FS::PathString sysCardPath;
 	Byte1Option optionArcadeCard{CFGKEY_ARCADE_CARD, 1};
@@ -99,6 +117,7 @@ public:
 	bool noSpriteLimit{};
 	bool correctLineAspect{};
 	bool adpcmFilter{};
+	bool noMD5InFilenames{};
 	EmuCore defaultCore{};
 	EmuCore core{};
 
@@ -130,16 +149,17 @@ public:
 	void reset(EmuApp &, ResetMode mode);
 	void clearInputBuffers(EmuInputView &view);
 	void handleInputAction(EmuApp *, InputAction);
-	unsigned translateInputAction(unsigned input, bool &turbo);
-	VController::Map vControllerMap(int player);
-	void configAudioRate(FloatSeconds frameTime, int rate);
+	InputAction translateInputAction(InputAction);
+	SystemInputDeviceDesc inputDeviceDesc(int idx) const;
+	FrameTime frameTime() const;
+	void configAudioRate(FrameTime outputFrameTime, int outputRate);
 	static std::span<const AspectRatioInfo> aspectRatioInfos();
 
 	// optional API functions
 	void closeSystem();
 	void loadBackupMemory(EmuApp &);
 	void onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags);
-	IG::Time backupMemoryLastWriteTime(const EmuApp &) const;
+	WallClockTimePoint backupMemoryLastWriteTime(const EmuApp &) const;
 	bool onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat);
 	WP multiresVideoBaseSize() const;
 	void onSessionOptionsLoaded(EmuApp &);

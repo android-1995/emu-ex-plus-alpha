@@ -21,6 +21,7 @@
 #include <imagine/base/Window.hh>
 #include <imagine/input/Input.hh>
 #include <imagine/util/math/space.hh>
+#include <imagine/util/math/int.hh>
 #include <imagine/logger/logger.h>
 
 namespace IG
@@ -28,12 +29,12 @@ namespace IG
 
 Gfx::Renderer &ViewAttachParams::renderer() const
 {
-	return rendererTask().renderer();
+	return rendererTask.renderer();
 }
 
 ApplicationContext ViewAttachParams::appContext() const
 {
-	return window().appContext();
+	return window.appContext();
 }
 
 void ViewController::pushAndShow(std::unique_ptr<View> v, const Input::Event &e)
@@ -72,53 +73,19 @@ bool ViewController::moveFocusToNextView(const Input::Event &, _2DOrigin)
 	return false;
 };
 
-ViewManager::ViewManager(Gfx::Renderer &r) {}
-
-void ViewManager::setDefaultFace(Gfx::GlyphTextureSet face)
-{
-	defaultFace_ = std::move(face);
-}
-
-void ViewManager::setDefaultBoldFace(Gfx::GlyphTextureSet face)
-{
-	defaultBoldFace_ = std::move(face);
-}
-
-Gfx::GlyphTextureSet &ViewManager::defaultFace()
-{
-	return defaultFace_;
-}
-
-Gfx::GlyphTextureSet &ViewManager::defaultBoldFace()
-{
-	return defaultBoldFace_;
-}
-
-void ViewManager::setNeedsBackControl(std::optional<bool> opt)
-{
-	if(!opt)
-		return;
-	needsBackControl_ = *opt;
-}
-
 std::optional<bool> ViewManager::needsBackControlOption() const
 {
-	if(!needsBackControlIsMutable || needsBackControl() == needsBackControlDefault)
+	if(!needsBackControlIsMutable || needsBackControl == needsBackControlDefault)
 		return {};
-	return needsBackControl();
+	return needsBackControl;
 }
 
-float ViewManager::tableXIndent() const
+void ViewManager::setTableXIndentMM(float indentMM, const Window &win)
 {
-	return tableXIndent_;
-}
-
-void ViewManager::setTableXIndentMM(float indentMM, const Window &win, Gfx::ProjectionPlane projP)
-{
-	auto oldIndent = std::exchange(tableXIndent_, projP.unprojectXSize(win.widthMMInPixels(indentMM)));
-	if(!IG::valIsWithinStretch(tableXIndent_, oldIndent, 0.001f))
+	auto oldIndent = std::exchange(tableXIndentPx, win.widthMMInPixels(indentMM));
+	if(tableXIndentPx != oldIndent)
 	{
-		logDMsg("setting X indent:%.2fmm (%f as coordinate)", indentMM, tableXIndent_);
+		logDMsg("setting X indent:%.2fmm (%d as pixels)", indentMM, tableXIndentPx);
 	}
 }
 
@@ -131,9 +98,9 @@ float ViewManager::defaultTableXIndentMM(const Window &win)
 		4.;
 }
 
-void ViewManager::setTableXIndentToDefault(const Window &win, Gfx::ProjectionPlane projP)
+void ViewManager::setTableXIndentToDefault(const Window &win)
 {
-	setTableXIndentMM(defaultTableXIndentMM(win), win, projP);
+	setTableXIndentMM(defaultTableXIndentMM(win), win);
 }
 
 void View::pushAndShow(std::unique_ptr<View> v, const Input::Event &e, bool needsNavView, bool isModal)
@@ -177,19 +144,18 @@ void View::dismissPrevious()
 	}
 }
 
-Gfx::GlyphTextureSet &View::defaultFace()
-{
-	return manager().defaultFace();
-}
+Gfx::GlyphTextureSet &View::defaultFace() { return manager().defaultFace; }
 
-Gfx::GlyphTextureSet &View::defaultBoldFace()
-{
-	return manager().defaultBoldFace();
-}
+Gfx::GlyphTextureSet &View::defaultBoldFace() { return manager().defaultBoldFace; }
 
 Gfx::Color View::menuTextColor(bool isSelected)
 {
-	return isSelected ? Gfx::color(0.f, .8f, 1.f) : Gfx::color(Gfx::ColorName::WHITE);
+	return isSelected ? Gfx::Color{0.f, .8f, 1.f} : Gfx::Color(Gfx::ColorName::WHITE);
+}
+
+int View::navBarHeight(const Gfx::GlyphTextureSet &face)
+{
+	return makeEvenRoundedUp(int(face.nominalHeight() * 1.75f));
 }
 
 void View::clearSelection() {}
@@ -204,21 +170,15 @@ void View::prepareDraw() {}
 
 void View::setFocus(bool) {}
 
-void View::setViewRect(WindowRect viewRect, WindowRect displayRect, Gfx::ProjectionPlane projP)
+void View::setViewRect(WindowRect viewRect, WindowRect displayRect)
 {
 	this->viewRect_ = viewRect;
 	this->displayRect_ = displayRect;
-	this->projP = projP;
 }
 
-void View::setViewRect(WindowRect viewRect, Gfx::ProjectionPlane projP)
+void View::setViewRect(WindowRect viewRect)
 {
-	setViewRect(viewRect, viewRect, projP);
-}
-
-void View::setViewRect(Gfx::ProjectionPlane projP)
-{
-	setViewRect(projP.windowBounds(), projP);
+	setViewRect(viewRect, viewRect);
 }
 
 void View::postDraw()

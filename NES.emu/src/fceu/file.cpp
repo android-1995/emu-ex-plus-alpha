@@ -69,7 +69,7 @@ void ApplyIPS(FILE *ips, FCEUFILE* fp)
 
 	if(!ips) return;
 
-	char* buf = (char*)FCEU_dmalloc(fp->size);
+	char* buf = (char*)FCEU_malloc(fp->size);
 	memcpy(buf,fp->EnsureMemorystream()->buf(),fp->size);
 
 
@@ -108,13 +108,7 @@ void ApplyIPS(FILE *ips, FCEUFILE* fp)
 			if((offset+size)>(uint32)fp->size)
 			{
 				// Probably a little slow.
-				char *newbuf=(char *)realloc(buf,offset+size);
-				if(!newbuf)
-				{
-					free(buf); buf=NULL;
-					FCEU_printf("  Oops.  IPS patch %d(type RLE) goes beyond end of file.  Could not allocate memory.\n",count);
-					goto end;
-				}
+				char *newbuf=(char *)FCEU_realloc(buf,offset+size);
 				buf=newbuf;
 				memset(buf+fp->size,0,offset+size-fp->size);
 				fp->size=offset+size;
@@ -133,17 +127,15 @@ void ApplyIPS(FILE *ips, FCEUFILE* fp)
 			if((offset+size)>(uint32)fp->size)
 			{
 				// Probably a little slow.
-				char *newbuf=(char *)realloc(buf,offset+size);
-				if(!newbuf)
-				{
-					free(buf); buf=NULL;
-					FCEU_printf("  Oops.  IPS patch %d(type normal) goes beyond end of file.  Could not allocate memory.\n",count);
-					goto end;
-				}
+				char *newbuf=(char *)FCEU_realloc(buf,offset+size);
 				buf=newbuf;
 				memset(buf+fp->size,0,offset+size-fp->size);
+				fp->size=offset+size;
 			}
-			fread(buf+offset,1,size,ips);
+			if ( fread(buf+offset,1,size,ips) != static_cast<size_t>(size) )
+			{
+				FCEU_printf(" Warn IPS data read came up short!\n");
+			}
 		}
 		count++;
 	}
@@ -328,9 +320,9 @@ FCEUFILE * FCEU_fopen(const char *path, const char *ipsfn, const char *mode, cha
 			{
 				uint32 magic;
 
-				magic = fp->fgetc();
-				magic|=fp->fgetc()<<8;
-				magic|=fp->fgetc()<<16;
+				magic = (fp->fgetc() & 0x00ff);
+				magic|= (fp->fgetc() & 0x00ff) << 8;
+				magic|= (fp->fgetc() & 0x00ff) << 16;
 				fp->fseek(0,SEEK_SET);
 
 				if(magic==0x088b1f) {
@@ -340,7 +332,7 @@ FCEUFILE * FCEU_fopen(const char *path, const char *ipsfn, const char *mode, cha
 					if(gzfile) {
 						delete fp;
 
-						int size;
+						size_t size;
 						for(size=0; gzgetc(gzfile) != EOF; size++) {}
 						EMUFILE_MEMORY* ms = new EMUFILE_MEMORY(size);
 						gzseek(gzfile,0,SEEK_SET);
@@ -459,11 +451,10 @@ int FCEU_fisarchive(FCEUFILE *fp)
 std::string GetMfn() //Retrieves the movie filename from curMovieFilename (for adding to savestate and auto-save files)
 {
 	std::string movieFilenamePart;
-	extern char curMovieFilename[512];
-	if(*curMovieFilename)
+	if (!curMovieFilename.empty())
 		{
 		char drv[PATH_MAX], dir[PATH_MAX], name[PATH_MAX], ext[PATH_MAX];
-		splitpath(curMovieFilename,drv,dir,name,ext);
+		splitpath(curMovieFilename.c_str(),drv,dir,name,ext);
 		movieFilenamePart = std::string(".") + name;
 		}
 	return movieFilenamePart;
@@ -480,9 +471,9 @@ const char *FCEUI_GetBaseDirectory(void)
 	return BaseDirectory.c_str();
 }
 
-static const char *odirs[FCEUIOD__COUNT]{};     // odirs, odors. ^_^
+static char *odirs[FCEUIOD__COUNT]={0,0,0,0,0,0,0,0,0,0,0,0,0};     // odirs, odors. ^_^
 
-void FCEUI_SetDirOverride(int which, const char *n)
+void FCEUI_SetDirOverride(int which, char *n)
 {
 	//	FCEU_PrintError("odirs[%d]=%s->%s", which, odirs[which], n);
 	if (which < FCEUIOD__COUNT)
@@ -497,7 +488,7 @@ void FCEUI_SetDirOverride(int which, const char *n)
 		va_list ap;
 		int ret;
 
-		if(!(*strp=(char*)FCEU_dmalloc(2048))) //mbg merge 7/17/06 cast to char*
+		if(!(*strp=(char*)FCEU_malloc(2048))) //mbg merge 7/17/06 cast to char*
 			return(0);
 		va_start(ap,fmt);
 		ret=vsnprintf(*strp,2048,fmt,ap);
@@ -702,7 +693,7 @@ std::string FCEU_MakeFName(int type, int id1, const char *cd1)
 			break;
 		case FCEUMKF_FDS:
 			if(odirs[FCEUIOD_NV])
-				sprintf(ret,"%s" PSS "%s.fds.sav",odirs[FCEUIOD_NV],FileBase);
+				sprintf(ret,"%s" PSS "%s.fds",odirs[FCEUIOD_NV],FileBase);
 			else
 				sprintf(ret,"%s" PSS "sav" PSS "%s.fds",BaseDirectory.c_str(),FileBase);
 			break;

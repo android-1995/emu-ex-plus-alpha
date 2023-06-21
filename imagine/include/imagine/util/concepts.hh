@@ -32,6 +32,9 @@ concept Pointer = std::is_pointer_v<T>;
 template <class T>
 concept NotPointer = !Pointer<T>;
 
+template <class T, size_t size>
+concept PointerOfSize = Pointer<T> && sizeof(std::remove_pointer_t<T>) == size;
+
 template <class T>
 concept PointerDecayable = Pointer<std::decay_t<T>>;
 
@@ -99,5 +102,9 @@ concept ValidInvokeArgs =
 
 template <class T>
 concept Const = std::is_const_v<T>;
+
+constexpr auto &indirect(Pointer auto &obj) { return *obj; }
+
+constexpr auto &indirect(NotPointer auto &obj) { return obj; }
 
 }

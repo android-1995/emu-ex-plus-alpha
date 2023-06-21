@@ -64,21 +64,10 @@ void TableView::setAlign(_2DOrigin align)
 
 void TableView::prepareDraw()
 {
-	if(!yCellSize)
-		return;
-	ssize_t cells_ = items(*this);
-	if(!cells_)
-		return;
-	int startYCell = std::min(scrollOffset() / yCellSize, (int)cells_);
-	size_t endYCell = std::clamp(startYCell + visibleCells, 0, (int)cells_);
-	if(startYCell < 0)
+	auto &r = renderer();
+	for(auto i : iotaCount(items(*this)))
 	{
-		// skip non-existent cells
-		startYCell = 0;
-	}
-	for(size_t i = startYCell; i < endYCell; i++)
-	{
-		item(*this, i).prepareDraw(renderer());
+		item(*this, i).prepareDraw(r);
 	}
 }
 
@@ -109,10 +98,10 @@ void TableView::draw(Gfx::RendererCommands &__restrict__ cmds)
 	cmds.basicEffect().disableTexture(cmds);
 	int selectedCellY = INT_MAX;
 	{
-		StaticArrayList<ColQuad, 80> vRect;
+		StaticArrayList<IColQuad, 80> vRect;
 		StaticArrayList<std::array<VertexIndex, 6>, vRect.capacity()> vRectIdx;
-		const auto headingColor = VertexColorPixelFormat.build(.4, .4, .4, 1.);
-		const auto regularColor = VertexColorPixelFormat.build(.2, .2, .2, 1.);
+		const auto headingColor = PackedColor::format.build(.4, .4, .4, 1.);
+		const auto regularColor = PackedColor::format.build(.2, .2, .2, 1.);
 		auto regularYSize = std::max(1, window().heightMMInPixels(.2));
 		auto headingYSize = std::max(2, window().heightMMInPixels(.4));
 		for(size_t i = startYCell; i < endYCell; i++)
@@ -131,8 +120,8 @@ void TableView::draw(Gfx::RendererCommands &__restrict__ cmds)
 					color = headingColor;
 				}
 				vRectIdx.emplace_back(makeRectIndexArray(vRect.size()));
-				auto rect = IG::makeWindowRectRel({x, y-1}, {viewRect().xSize(), ySize});
-				vRect.emplace_back(projP.unProjectRect(rect), color);
+				auto rect = makeWindowRectRel({x, y-1}, {viewRect().xSize(), ySize}).as<int16_t>();
+				vRect.emplace_back(IColQuad::RectInitParams{.bounds = rect, .color = color});
 			}
 			y += yCellSize;
 			if(vRect.size() == vRect.capacity()) [[unlikely]]
@@ -141,7 +130,7 @@ void TableView::draw(Gfx::RendererCommands &__restrict__ cmds)
 		if(vRect.size())
 		{
 			cmds.set(BlendMode::OFF);
-			cmds.set(ColorName::WHITE);
+			cmds.setColor(ColorName::WHITE);
 			drawQuads(cmds, vRect, vRectIdx);
 		}
 	}
@@ -154,20 +143,20 @@ void TableView::draw(Gfx::RendererCommands &__restrict__ cmds)
 	{
 		cmds.set(BlendMode::ALPHA);
 		if(hasFocus)
-			cmds.setColor(.2, .71, .9, 1./3.);
+			cmds.setColor({.2, .71, .9, 1./3.});
 		else
-			cmds.setColor(.2 / 3., .71 / 3., .9 / 3., 1./3.);
+			cmds.setColor({.2 / 3., .71 / 3., .9 / 3., 1./3.});
 		auto rect = IG::makeWindowRectRel({x, selectedCellY}, {viewRect().xSize(), yCellSize-1});
-		GeomRect::draw(cmds, rect, projP);
+		cmds.drawRect(rect);
 	}
 
 	// draw elements
 	y = yStart;
-	auto xIndent = manager().tableXIndent();
+	auto xIndent = manager().tableXIndentPx;
 	for(size_t i = startYCell; i < endYCell; i++)
 	{
 		auto rect = IG::makeWindowRectRel({x, y}, {viewRect().xSize(), yCellSize});
-		drawElement(cmds, i, item(*this, i), projP.unProjectRect(rect), xIndent);
+		drawElement(cmds, i, item(*this, i), rect, xIndent);
 		y += yCellSize;
 	}
 	cmds.setClipTest(false);
@@ -179,7 +168,7 @@ void TableView::place()
 	for(auto i : iotaCount(cells_))
 	{
 		//logMsg("compile item %d", i);
-		item(*this, i).compile(renderer(), projP);
+		item(*this, i).compile(renderer());
 	}
 	if(cells_)
 	{
@@ -493,11 +482,11 @@ bool TableView::handleTableInput(const Input::Event &e, bool &movedSelected)
 	}, e);
 }
 
-void TableView::drawElement(Gfx::RendererCommands &__restrict__ cmds, size_t i, MenuItem &item, Gfx::GCRect rect, float xIndent) const
+void TableView::drawElement(Gfx::RendererCommands &__restrict__ cmds, size_t i, MenuItem &item, WRect rect, int xIndent) const
 {
-	static constexpr auto highlightColor = Gfx::color(0.f, .8f, 1.f);
-	item.draw(cmds, rect.x, rect.pos(C2DO).y, rect.xSize(), rect.ySize(), xIndent, align, projP,
-		item.highlighted() ? highlightColor : Gfx::color(Gfx::ColorName::WHITE));
+	static constexpr Gfx::Color highlightColor{0.f, .8f, 1.f};
+	item.draw(cmds, rect.x, rect.pos(C2DO).y, rect.xSize(), rect.ySize(), xIndent, align,
+		item.highlighted() ? highlightColor : Gfx::Color(Gfx::ColorName::WHITE));
 }
 
 void TableView::onSelectElement(const Input::Event &e, size_t i, MenuItem &item)

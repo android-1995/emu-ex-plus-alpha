@@ -17,7 +17,7 @@
 #include <emuframework/AudioOptionView.hh>
 #include <emuframework/FilePathOptionView.hh>
 #include <emuframework/DataPathSelectView.hh>
-#include <emuframework/EmuSystemActionsView.hh>
+#include <emuframework/SystemActionsView.hh>
 #include <emuframework/FilePicker.hh>
 #include <imagine/gui/AlertView.hh>
 #include <imagine/gui/TextTableView.hh>
@@ -87,7 +87,7 @@ static std::vector<FS::FileString> machinesNames(IG::ApplicationContext ctx, std
 	std::sort(machineName.begin(), machineName.end(),
 		[](const FS::FileString &n1, const FS::FileString &n2)
 		{
-			return IG::stringNoCaseLexCompare(n1, n2);
+			return IG::caselessLexCompare(n1, n2);
 		});
 	// remove any duplicates
 	auto dupeEraseIt = std::unique(machineName.begin(), machineName.end());
@@ -120,26 +120,28 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper<Cus
 	MultiChoiceMenuItem msxMachine
 	{
 		"Default Machine Type", &defaultFace(),
-		[](int idx, Gfx::Text &t)
 		{
-			if(idx == -1)
+			.onSetDisplayString = [](auto idx, Gfx::Text &t)
 			{
-				t.resetString("None");
-				return true;
+				if(idx == -1)
+				{
+					t.resetString("None");
+					return true;
+				}
+				return false;
+			},
+			.onSelect = [this](MultiChoiceMenuItem &item, View &view, Input::Event e)
+			{
+				if(!msxMachineItem.size())
+				{
+					logErr("no machines definitions are present");
+					return;
+				}
+				item.defaultOnSelect(view, e);
 			}
-			return false;
 		},
 		0,
-		msxMachineItem,
-		[this](MultiChoiceMenuItem &item, View &view, Input::Event e)
-		{
-			if(!msxMachineItem.size())
-			{
-				logErr("no machines definitions are present");
-				return;
-			}
-			item.defaultOnSelect(view, e);
-		}
+		msxMachineItem
 	};
 
 	void reloadMachineItem()
@@ -186,7 +188,7 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 
 	std::string machinePathMenuEntryStr(IG::CStringView path) const
 	{
-		return fmt::format("BIOS: {}", appContext().fileUriDisplayName(path));
+		return std::format("BIOS: {}", appContext().fileUriDisplayName(path));
 	}
 
 	TextMenuItem machineFilePath
@@ -204,10 +206,10 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 						return false;
 					}
 					system().firmwarePath = path;
-					machineFilePath.compile(machinePathMenuEntryStr(path), renderer(), projP);
+					machineFilePath.compile(machinePathMenuEntryStr(path), renderer());
 					if(type == FS::file_type::none)
 					{
-						app().postMessage(4, false, fmt::format("Using fallback path:\n{}", machineBasePath(system())));
+						app().postMessage(4, false, std::format("Using fallback path:\n{}", machineBasePath(system())));
 					}
 					return true;
 				}), e);
@@ -248,7 +250,7 @@ public:
 
 	void updateHDText(int slot)
 	{
-		hdSlot[slot].setName(fmt::format("{} {}", hdSlotPrefix[slot], hdName[slot]));
+		hdSlot[slot].setName(std::format("{} {}", hdSlotPrefix[slot], hdName[slot]));
 	}
 
 	void updateHDStatusFromCartSlot(int cartSlot)
@@ -265,12 +267,12 @@ public:
 	{
 		hdName[slot] = name;
 		updateHDText(slot);
-		hdSlot[slot].compile(renderer(), projP);
+		hdSlot[slot].compile(renderer());
 	}
 
 	void addHDFilePickerView(Input::Event e, uint8_t slot, bool dismissPreviousView)
 	{
-		auto fPicker = EmuFilePicker::makeForMediaChange(attachParams(), e,
+		auto fPicker = FilePicker::forMediaChange(attachParams(), e,
 			MsxMediaFilePicker::fsFilter(MsxMediaFilePicker::DISK),
 			[this, slot, dismissPreviousView](FSPicker &picker, std::string_view path, std::string_view name, Input::Event e)
 			{
@@ -326,20 +328,20 @@ public:
 
 	void updateROMText(int slot)
 	{
-		romSlot[slot].setName(fmt::format("{} {}", romSlotPrefix[slot], system().cartName[slot]));
+		romSlot[slot].setName(std::format("{} {}", romSlotPrefix[slot], system().cartName[slot]));
 	}
 
 	void onROMMediaChange(std::string_view name, int slot)
 	{
 		system().cartName[slot] = name;
 		updateROMText(slot);
-		romSlot[slot].compile(renderer(), projP);
+		romSlot[slot].compile(renderer());
 		updateHDStatusFromCartSlot(slot);
 	}
 
 	void addROMFilePickerView(Input::Event e, uint8_t slot, bool dismissPreviousView)
 	{
-		auto fPicker = EmuFilePicker::makeForMediaChange(attachParams(), e,
+		auto fPicker = FilePicker::forMediaChange(attachParams(), e,
 			MsxMediaFilePicker::fsFilter(MsxMediaFilePicker::ROM),
 			[this, slot, dismissPreviousView](FSPicker &picker, std::string_view path, std::string_view name, Input::Event e)
 			{
@@ -408,19 +410,19 @@ public:
 
 	void updateDiskText(int slot)
 	{
-		diskSlot[slot].setName(fmt::format("{} {}", diskSlotPrefix[slot], system().diskName[slot]));
+		diskSlot[slot].setName(std::format("{} {}", diskSlotPrefix[slot], system().diskName[slot]));
 	}
 
 	void onDiskMediaChange(std::string_view name, int slot)
 	{
 		system().diskName[slot] = name;
 		updateDiskText(slot);
-		diskSlot[slot].compile(renderer(), projP);
+		diskSlot[slot].compile(renderer());
 	}
 
 	void addDiskFilePickerView(Input::Event e, uint8_t slot, bool dismissPreviousView)
 	{
-		auto fPicker = EmuFilePicker::makeForMediaChange(attachParams(), e,
+		auto fPicker = FilePicker::forMediaChange(attachParams(), e,
 			MsxMediaFilePicker::fsFilter(MsxMediaFilePicker::DISK),
 			[this, slot, dismissPreviousView](FSPicker &picker, std::string_view path, std::string_view name, Input::Event e)
 			{
@@ -511,7 +513,7 @@ const char *MsxIOControlView::romSlotPrefix[2] {"ROM1:", "ROM2:"};
 const char *MsxIOControlView::diskSlotPrefix[2] {"Disk1:", "Disk2:"};
 const char *MsxIOControlView::hdSlotPrefix[4] {"IDE1-M:", "IDE1-S:", "IDE2-M:", "IDE2-S:"};
 
-class CustomSystemActionsView : public EmuSystemActionsView, public MainAppHelper<CustomSystemActionsView>
+class CustomSystemActionsView : public SystemActionsView, public MainAppHelper<CustomSystemActionsView>
 {
 	using MainAppHelper<CustomSystemActionsView>::system;
 	using MainAppHelper<CustomSystemActionsView>::app;
@@ -539,25 +541,27 @@ private:
 	MultiChoiceMenuItem msxMachine
 	{
 		"Machine Type", &defaultFace(),
-		[this](int idx, Gfx::Text &t)
 		{
-			if(idx == -1)
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
 			{
-				t.resetString("None");
-				return true;
+				if(idx == -1)
+				{
+					t.resetString("None");
+					return true;
+				}
+				return false;
+			},
+			.onSelect = [this](MultiChoiceMenuItem &item, View &view, Input::Event e)
+			{
+				if(!msxMachineItem.size())
+				{
+					return;
+				}
+				item.defaultOnSelect(view, e);
 			}
-			return false;
 		},
 		0,
-		msxMachineItem,
-		[this](MultiChoiceMenuItem &item, View &view, Input::Event e)
-		{
-			if(!msxMachineItem.size())
-			{
-				return;
-			}
-			item.defaultOnSelect(view, e);
-		}
+		msxMachineItem
 	};
 
 	void reloadMachineItem()
@@ -569,26 +573,27 @@ private:
 			msxMachineItem.emplace_back(name, &defaultFace(),
 			[this, name = name.data()](Input::Event e)
 			{
-				auto ynAlertView = makeView<YesNoAlertView>("Change machine type and reset emulation?");
-				ynAlertView->setOnYes(
-					[this, name]()
+				app().pushAndShowModalView(makeView<YesNoAlertView>("Change machine type and reset emulation?",
+					YesNoAlertView::Delegates
 					{
-						try
+						.onYes = [this, name]
 						{
-							system().setCurrentMachineName(app(), name);
+							try
+							{
+								system().setCurrentMachineName(app(), name);
+							}
+							catch(std::exception &err)
+							{
+								app().postMessage(3, true, err.what());
+								return;
+							}
+							auto machineName = currentMachineName();
+							system().optionSessionMachineNameStr = machineName;
+							msxMachine.setSelected(machineIndex(msxMachineName, machineName));
+							system().sessionOptionSet();
+							dismissPrevious();
 						}
-						catch(std::exception &err)
-						{
-							app().postMessage(3, true, err.what());
-							return;
-						}
-						auto machineName = currentMachineName();
-						system().optionSessionMachineNameStr = machineName;
-						msxMachine.setSelected(machineIndex(msxMachineName, machineName));
-						system().sessionOptionSet();
-						dismissPrevious();
-					});
-				app().pushAndShowModalView(std::move(ynAlertView), e);
+					}), e);
 				return false;
 			});
 		}
@@ -605,14 +610,14 @@ private:
 	}
 
 public:
-	CustomSystemActionsView(ViewAttachParams attach): EmuSystemActionsView{attach, true}
+	CustomSystemActionsView(ViewAttachParams attach): SystemActionsView{attach, true}
 	{
 		reloadItems();
 	}
 
 	void onShow()
 	{
-		EmuSystemActionsView::onShow();
+		SystemActionsView::onShow();
 		msxIOControl.setActive(system().hasContent() && system().activeBoardType == BOARD_MSX);
 		msxMachine.setSelected(machineIndex(msxMachineName, currentMachineName()));
 	}
@@ -731,10 +736,12 @@ protected:
 		return
 		{
 			"Volume", &defaultFace(),
-			[this, type](uint32_t idx, Gfx::Text &t)
 			{
-				t.resetString(fmt::format("{}%", mixerVolumeOption(type)));
-				return true;
+				.onSetDisplayString = [this, type](auto idx, Gfx::Text &t)
+				{
+					t.resetString(std::format("{}%", mixerVolumeOption(type)));
+					return true;
+				}
 			},
 			1,
 			volumeLevelItem[idx]
@@ -802,10 +809,12 @@ protected:
 		return
 		{
 			"Pan", &defaultFace(),
-			[this, type](uint32_t idx, Gfx::Text &t)
 			{
-				t.resetString(fmt::format("{}%", mixerPanOption(type)));
-				return true;
+				.onSetDisplayString = [this, type](auto idx, Gfx::Text &t)
+				{
+					t.resetString(std::format("{}%", mixerPanOption(type)));
+					return true;
+				}
 			},
 			1,
 			panLevelItem[idx]

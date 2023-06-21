@@ -1,12 +1,11 @@
+#include <emuframework/EmuApp.hh>
+#include "MainSystem.hh"
 #ifndef SNES9X_VERSION_1_4
 #include <apu/apu.h>
 #include <apu/bapu/snes/snes.hpp>
 #include <ppu.h>
 #include <fxemu.h>
 #endif
-#include <emuframework/EmuApp.hh>
-#include "MainSystem.hh"
-#include <snes9x.h>
 
 namespace EmuEx
 {
@@ -23,7 +22,6 @@ std::span<const AspectRatioInfo> Snes9xSystem::aspectRatioInfos()
 	static constexpr AspectRatioInfo aspectRatioInfo[]
 	{
 		{"4:3 (Original)", {4, 3}},
-		{"8:7", {8, 7}},
 		EMU_SYSTEM_DEFAULT_ASPECT_RATIO_INFO_INIT
 	};
 	return aspectRatioInfo;

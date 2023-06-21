@@ -19,7 +19,7 @@
 #include <imagine/font/Font.hh>
 #include <imagine/gfx/Texture.hh>
 #include <imagine/util/container/VMemArray.hh>
-#include <system_error>
+#include <string_view>
 
 namespace IG::Gfx
 {
@@ -28,17 +28,15 @@ constexpr auto glyphSamplerConfig = SamplerConfigs::noMipClamp;
 
 struct GlyphEntry
 {
-	Texture glyph_{};
-	GlyphMetrics metrics{};
-
-	constexpr const Texture &glyph() const { return glyph_; }
+	Texture glyph;
+	GlyphMetrics metrics;
 };
 
 struct GlyphSetMetrics
 {
-	int nominalHeight{};
-	int spaceSize{};
-	int yLineStart{};
+	int16_t nominalHeight{};
+	int16_t spaceSize{};
+	int16_t yLineStart{};
 };
 
 class GlyphTextureSet
@@ -53,7 +51,7 @@ public:
 	{
 		return precache(r, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789");
 	}
-	GlyphEntry *glyphEntry(Renderer &r, int c, bool allowCache = true);
+	const GlyphEntry *glyphEntry(Renderer &r, int c, bool allowCache = true);
 	GlyphSetMetrics metrics() const { return metrics_; }
 	int nominalHeight() const { return metrics().nominalHeight; }
 	void freeCaches(uint32_t rangeToFreeBits);
@@ -69,7 +67,7 @@ private:
 
 	void calcMetrics(Renderer &r);
 	void resetGlyphTable();
-	std::errc cacheChar(Renderer &r, int c, int tableIdx);
+	bool cacheChar(Renderer &r, int c, int tableIdx);
 };
 
 }

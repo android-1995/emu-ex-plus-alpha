@@ -20,6 +20,7 @@
 #include <imagine/input/DragTracker.hh>
 #include <imagine/gfx/GfxSprite.hh>
 #include <imagine/gfx/Texture.hh>
+#include <imagine/util/variant.hh>
 #include <vector>
 #include <span>
 #include <optional>
@@ -39,6 +40,10 @@ using namespace IG;
 class VController;
 class EmuApp;
 class EmuViewController;
+struct SystemInputDeviceDesc;
+struct InputComponentDesc;
+enum class InputComponent : uint8_t;
+enum class AltSpeedMode;
 struct WindowData;
 
 enum class VControllerState : uint8_t
@@ -48,44 +53,74 @@ enum class VControllerState : uint8_t
 
 struct VControllerLayoutPosition
 {
-	IG::WP pos{};
+	SP pos{-1, -1};
 	_2DOrigin origin{LT2DO};
-	VControllerState state{};
 
 	constexpr VControllerLayoutPosition() = default;
-	constexpr VControllerLayoutPosition(_2DOrigin origin, IG::WP pos, VControllerState state = {}):
-		pos{pos}, origin{origin}, state{state} {}
+	constexpr VControllerLayoutPosition(_2DOrigin origin, WP pos):
+		pos{pos.as<int16_t>()}, origin{origin} {}
+
+	static VControllerLayoutPosition fromPixelPos(WP pos, WP size, WindowRect viewBounds);
+	WP toPixelPos(WindowRect viewBounds) const;
 };
+
+constexpr int16_t defaultDPadDeadzoneMM100x = 135;
+constexpr float defaultDPadDiagonalSensitivity = .57f;
+constexpr int8_t defaultButtonSpacingMM = 2;
 
 class VControllerDPad
 {
 public:
+	struct Config
+	{
+		std::array<unsigned, 4> keys{};
+		float diagonalSensitivity{defaultDPadDiagonalSensitivity};
+		int16_t deadzoneMM100x{defaultDPadDeadzoneMM100x};
+		bool visualizeBounds{};
+
+		void validate(const EmuApp &);
+	};
+
 	constexpr VControllerDPad() = default;
-	void setImg(Gfx::Renderer &r, Gfx::Texture &dpadR, float texHeight);
-	void draw(Gfx::RendererCommands &cmds) const;
-	void setBoundingAreaVisible(Gfx::Renderer &r, bool on, Gfx::ProjectionPlane);
-	int getInput(IG::WP c) const;
-	IG::WindowRect bounds() const;
-	void setPos(IG::WP pos, IG::WindowRect viewBounds, Gfx::ProjectionPlane);
-	void setSize(Gfx::Renderer &r, int sizeInPixels, Gfx::ProjectionPlane);
-	void setDeadzone(Gfx::Renderer &r, int newDeadzone, Gfx::ProjectionPlane);
-	void setDiagonalSensitivity(Gfx::Renderer &r, float newDiagonalSensitivity, Gfx::ProjectionPlane);
-	constexpr VControllerState state() const { return state_; }
-	constexpr void setState(VControllerState state) { state_ = state; }
+	constexpr VControllerDPad(std::span<const unsigned, 4> keys):
+		config{.keys{keys[0], keys[1], keys[2], keys[3]}} {}
+	constexpr VControllerDPad(const Config &config): config{config} {}
+	void setImage(Gfx::TextureSpan);
+	void draw(Gfx::RendererCommands &__restrict__, float alpha) const;
+	void setShowBounds(Gfx::Renderer &r, bool on);
+	bool showBounds() const { return config.visualizeBounds; }
+	std::array<int, 2> getInput(WP c) const;
+	WRect bounds() const { return padBaseArea; }
+	WRect realBounds() const { return padArea; }
+	void setPos(WP pos, WindowRect viewBounds);
+	void setSize(Gfx::Renderer &, int sizeInPixels);
+	bool setDeadzone(Gfx::Renderer &, int newDeadzone, const Window &);
+	auto deadzone() const { return config.deadzoneMM100x; }
+	bool setDiagonalSensitivity(Gfx::Renderer &, float newDiagonalSensitivity);
+	auto diagonalSensitivity() const { return config.diagonalSensitivity; }
+	std::string name(const EmuApp &) const { return "D-Pad"; }
+	void updateMeasurements(const Window &win);
+	void transposeKeysForPlayer(const EmuApp &, int player);
+
+	static size_t configSize()
+	{
+		return sizeof(Config::keys) +
+			sizeof(Config::diagonalSensitivity) +
+			sizeof(Config::deadzoneMM100x) +
+			sizeof(Config::visualizeBounds);
+	}
 
 protected:
 	Gfx::Sprite spr;
 	Gfx::Sprite mapSpr;
 	Gfx::Texture mapImg;
-	Gfx::GCRect padBase;
-	IG::WindowRect padBaseArea, padArea;
-	int deadzone{};
-	float diagonalSensitivity = 1.;
+	WRect padBaseArea, padArea;
+	int deadzonePixels{};
 	int btnSizePixels{};
-	VControllerState state_{VControllerState::SHOWN};
-	bool visualizeBounds{};
+public:
+	Config config;
 
-	void updateBoundingAreaGfx(Gfx::Renderer &, Gfx::ProjectionPlane);
+	void updateBoundingAreaGfx(Gfx::Renderer &);
 };
 
 enum class VControllerKbMode: uint8_t
@@ -106,15 +141,15 @@ public:
 	constexpr VControllerKeyboard() = default;
 	void updateImg(Gfx::Renderer &r);
 	void setImg(Gfx::Renderer &r, Gfx::TextureSpan img);
-	void place(float btnSize, float yOffset, Gfx::ProjectionPlane);
-	void draw(Gfx::RendererCommands &cmds, Gfx::ProjectionPlane) const;
-	int getInput(IG::WP c) const;
+	void place(int btnSize, int yOffset, WRect viewBounds);
+	void draw(Gfx::RendererCommands &__restrict__) const;
+	int getInput(WP c) const;
 	unsigned translateInput(int idx) const;
 	bool keyInput(VController &v, Gfx::Renderer &r, const Input::KeyEvent &e);
-	[[nodiscard]] IG::WindowRect selectKey(unsigned x, unsigned y);
+	[[nodiscard]] WindowRect selectKey(unsigned x, unsigned y);
 	void selectKeyRel(int x, int y);
 	void unselectKey();
-	[[nodiscard]] IG::WindowRect extendKeySelection(IG::WindowRect);
+	[[nodiscard]] WindowRect extendKeySelection(WindowRect);
 	unsigned currentKey() const;
 	unsigned currentKey(int x, int y) const;
 	VControllerKbMode mode() const { return mode_; }
@@ -127,112 +162,309 @@ public:
 	bool shiftIsActive() const;
 
 protected:
-	Gfx::Sprite spr{};
-	IG::WindowRect bound{};
+	Gfx::Sprite spr;
+	WRect bound;
 	int keyXSize{}, keyYSize{};
-	IG::WindowRect selected{{-1, -1}, {-1, -1}};
-	IG::WindowRect shiftRect{{-1, -1}, {-1, -1}};
+	WRect selected{{-1, -1}, {-1, -1}};
+	WRect shiftRect{{-1, -1}, {-1, -1}};
 	float texXEnd{};
 	KeyTable table{};
 	VControllerKbMode mode_{};
 };
 
-using FaceButtonImageMap = std::array<int, MAX_FACE_BTNS>;
-
 class VControllerButton
 {
 public:
-	constexpr VControllerButton() = default;
-	void setPos(IG::WP pos, IG::WindowRect viewBounds, Gfx::ProjectionPlane, _2DOrigin = C2DO);
-	void setSize(IG::WP size, IG::WP extendedSize = {});
-	void setImage(Gfx::TextureSpan img, float aspectRatio = 1.f);
-	void setState(VControllerState state);
-	void setShowBounds(bool);
-	void setShouldSkipLayout(bool);
-	void setEnabled(bool);
-	constexpr bool showBounds() const {return showBoundingArea; }
-	constexpr IG::WindowRect bounds() const { return bounds_; }
-	constexpr IG::WindowRect realBounds() const { return extendedBounds_; }
-	constexpr VControllerState state() const { return state_; }
-	constexpr bool shouldSkipLayout() const { return skipLayout; }
-	constexpr const Gfx::Sprite &sprite() const { return spr; }
-	constexpr bool isEnabled() const { return !disabled; }
-	void draw(Gfx::RendererCommands &cmds, std::optional<Gfx::Color>, bool showHidden) const;
+	constexpr VControllerButton(unsigned key): key{key} {}
+	void setPos(WP pos, WRect viewBounds, _2DOrigin = C2DO);
+	void setSize(WP size, WP extendedSize = {});
+	void setImage(Gfx::TextureSpan, int aR = 1);
+	WRect bounds() const { return bounds_; }
+	WRect realBounds() const { return extendedBounds_; }
+	const Gfx::Sprite &sprite() const { return spr; }
+	void drawBounds(Gfx::RendererCommands &__restrict__, float alpha) const;
+	void drawSprite(Gfx::RendererCommands &__restrict__, float alpha) const;
+	std::string name(const EmuApp &) const;
+	bool overlaps(WP windowPos) const { return enabled && realBounds().overlaps(windowPos); }
 
 protected:
-	Gfx::Sprite spr{};
-	IG::WindowRect bounds_{};
-	IG::WindowRect extendedBounds_{};
-	float aspectRatio{};
-	VControllerState state_ = VControllerState::SHOWN;
+	Gfx::Sprite spr;
+	WRect bounds_{};
+	WRect extendedBounds_{};
+	int aspectRatio{1};
+public:
+	Gfx::Color color{};
+	unsigned key{};
+	bool enabled = true;
 	bool skipLayout{};
-	bool disabled{};
-	bool showBoundingArea{};
 };
 
 class VControllerButtonGroup
 {
 public:
-	VControllerButtonGroup(int size);
-	std::vector<VControllerButton> &buttons();
-	const std::vector<VControllerButton> &buttons() const;
-	void setPos(IG::WP pos, IG::WindowRect viewBounds, Gfx::ProjectionPlane);
-	void setState(VControllerState state);
-	void setButtonSize(IG::WP size, IG::WP extendedSize = {});
-	void setStaggerType(uint8_t);
-	void setSpacing(int16_t);
-	void setShowBounds(bool);
-	constexpr IG::WindowRect bounds() const { return bounds_; }
-	constexpr VControllerState state() const { return state_; }
-	int rows() const;
-	int buttonsToLayout() const;
-	int buttonsPerRow() const;
-	std::array<int, 2> findButtonIndices(IG::WP windowPos) const;
-	void draw(Gfx::RendererCommands &cmds, Gfx::ProjectionPlane projP, bool showHidden) const;
+	struct LayoutConfig
+	{
+		int8_t rowItems{1};
+		int8_t spacingMM{defaultButtonSpacingMM};
+		int8_t xPadding{};
+		int8_t yPadding{};
+		uint8_t staggerType{2};
+		_2DOrigin origin{};
+		bool showBoundingArea{};
+	};
 
+	struct Config
+	{
+		std::vector<unsigned> keys{};
+		LayoutConfig layout{};
+
+		void validate(const EmuApp &);
+	};
+
+	constexpr VControllerButtonGroup() = default;
+	VControllerButtonGroup(std::span<const unsigned> buttonCodes, _2DOrigin layoutOrigin, int8_t rowItems);
+	VControllerButtonGroup(const Config &);
+	Config config() const;
+	void setPos(WP pos, WindowRect viewBounds);
+	void setButtonSize(int sizePx);
+	void setStaggerType(uint8_t);
+	auto stagger() const { return layout.staggerType; }
+	bool setSpacing(int8_t spacingMM, const Window &);
+	auto spacing() const { return layout.spacingMM; }
+	WP paddingPixels() const { return {int(spacingPixels + btnSize * (layout.xPadding / 100.f)), int(spacingPixels + btnSize * (layout.yPadding / 100.f))}; }
+	bool showsBounds() const { return layout.showBoundingArea; }
+	void setShowBounds(bool on) { layout.showBoundingArea = on; }
+	auto bounds() const { return bounds_; }
+	WRect paddingRect() const { return {{int(-paddingPixels().x), int(-paddingPixels().y)}, {int(paddingPixels().x), int(paddingPixels().y)}}; }
+	WRect realBounds() const { return bounds() + paddingRect(); }
+	int rows() const;
+	std::array<int, 2> findButtonIndices(WP windowPos) const;
+	void draw(Gfx::RendererCommands &__restrict__, float alpha) const;
+	std::string name(const EmuApp &) const;
+	void updateMeasurements(const Window &win);
+	void transposeKeysForPlayer(const EmuApp &, int player);
+
+	static size_t layoutConfigSize()
+	{
+		return sizeof(LayoutConfig::rowItems) +
+			sizeof(LayoutConfig::spacingMM) +
+			sizeof(LayoutConfig::xPadding) +
+			sizeof(LayoutConfig::yPadding) +
+			sizeof(LayoutConfig::staggerType) +
+			sizeof(_2DOrigin::PackedType) +
+			sizeof(LayoutConfig::showBoundingArea);
+	}
+
+	size_t configSize() const
+	{
+		return 1 + buttons.size() * sizeof(unsigned) + layoutConfigSize();
+	}
+
+	std::vector<VControllerButton> buttons;
 protected:
-	std::vector<VControllerButton> btns{};
-	IG::WindowRect bounds_{};
-	IG::WP btnSize{};
+	WRect bounds_;
+	int btnSize{};
+	int spacingPixels{};
 	int16_t btnStagger{};
 	int16_t btnRowShift{};
-	uint16_t btnSpace{};
-	VControllerState state_ = VControllerState::SHOWN;
-	uint8_t btnStaggerType = 2;
-	bool showBoundingArea{};
+
+	void drawButtons(Gfx::RendererCommands &__restrict__, float alpha) const;
+public:
+	LayoutConfig layout{};
 };
 
-class VControllerGamepad
+class VControllerUIButtonGroup
 {
 public:
-	VControllerGamepad(int faceButtons, int centerButtons);
-	VControllerDPad &dPad() { return dp; }
-	const VControllerDPad &dPad() const { return dp; }
-	VControllerButtonGroup &centerButtons() { return centerBtns; }
-	const VControllerButtonGroup &centerButtons() const { return centerBtns; }
-	VControllerButtonGroup &faceButtons() { return faceBtns; }
-	const VControllerButtonGroup &faceButtons() const { return faceBtns; }
-	VControllerButton &lTrigger() const { return *lTriggerPtr; }
-	VControllerButton &rTrigger() const { return *rTriggerPtr; }
-	void setFaceButtonSize(Gfx::Renderer &, IG::WP sizeInPixels, IG::WP extraSizePixels, Gfx::ProjectionPlane);
-	void setBoundingAreaVisible(Gfx::Renderer &r, bool on, Gfx::ProjectionPlane);
-	void setImg(Gfx::Renderer &r, Gfx::Texture &pics);
-	void setFaceButtonMapping(Gfx::Renderer &, Gfx::Texture &, FaceButtonImageMap map);
-	void drawDPads(Gfx::RendererCommands &cmds, bool showHidden, Gfx::ProjectionPlane) const;
-	void drawButtons(Gfx::RendererCommands &cmds, bool showHidden, Gfx::ProjectionPlane) const;
-	void draw(Gfx::RendererCommands &cmds, bool showHidden, Gfx::ProjectionPlane) const;
-	void setSpacingPixels(int);
-	void setStaggerType(int);
-	void setTriggersInline(bool on);
-	bool triggersInline() const;
-	int faceButtonRows() const;
+	struct LayoutConfig
+	{
+		int8_t rowItems{1};
+		_2DOrigin origin{};
+	};
 
-private:
-	VControllerDPad dp{};
-	VControllerButtonGroup centerBtns;
-	VControllerButtonGroup faceBtns;
-	VControllerButton *lTriggerPtr{};
-	VControllerButton *rTriggerPtr{};
+	struct Config
+	{
+		std::vector<unsigned> keys{};
+		LayoutConfig layout{};
+
+		void validate(const EmuApp &);
+	};
+
+	constexpr VControllerUIButtonGroup() = default;
+	VControllerUIButtonGroup(std::span<const unsigned> buttonCodes, _2DOrigin layoutOrigin);
+	VControllerUIButtonGroup(const Config &);
+	Config config() const;
+	void setPos(WP pos, WindowRect viewBounds);
+	void setButtonSize(int sizePx);
+	auto bounds() const { return bounds_; }
+	WRect realBounds() const { return bounds(); }
+	int rows() const;
+	void draw(Gfx::RendererCommands &__restrict__, float alpha) const;
+	std::string name(const EmuApp &) const;
+
+	static size_t layoutConfigSize()
+	{
+		return sizeof(LayoutConfig::rowItems) +
+			sizeof(_2DOrigin::PackedType);
+	}
+
+	size_t configSize() const
+	{
+		return 1 + buttons.size() * sizeof(unsigned) + layoutConfigSize();
+	}
+
+	std::vector<VControllerButton> buttons;
+protected:
+	WRect bounds_{};
+	int btnSize{};
+public:
+	LayoutConfig layout{};
+};
+
+using VControllerElementVariant = std::variant<VControllerButtonGroup, VControllerUIButtonGroup, VControllerDPad>;
+
+class VControllerElement : public VControllerElementVariant
+{
+public:
+	using VControllerElementVariant::VControllerElementVariant;
+
+	std::array<VControllerLayoutPosition, 2> layoutPos;
+	VControllerState state{VControllerState::SHOWN};
+
+	constexpr auto dPad() { return std::get_if<VControllerDPad>(this); }
+	constexpr auto dPad() const { return std::get_if<VControllerDPad>(this); }
+	constexpr auto buttonGroup() { return std::get_if<VControllerButtonGroup>(this); }
+	constexpr auto buttonGroup() const { return std::get_if<VControllerButtonGroup>(this); }
+	constexpr auto uiButtonGroup() { return std::get_if<VControllerUIButtonGroup>(this); }
+	constexpr auto uiButtonGroup() const { return std::get_if<VControllerUIButtonGroup>(this); }
+
+	size_t configSize() const
+	{
+		return (sizeof(VControllerLayoutPosition::pos) + sizeof(_2DOrigin::PackedType)) * 2
+			+ sizeof(state)
+			+ visit([](auto &e){ return e.configSize(); }, *this);
+	}
+
+	WRect bounds() const { return visit([](auto &e){ return e.bounds(); }, *this); }
+	WRect realBounds() const { return visit([](auto &e){ return e.realBounds(); }, *this); }
+	void setPos(WP pos, WRect viewBounds) { visit([&](auto &e){ e.setPos(pos, viewBounds); }, *this); }
+
+	static bool shouldDraw(VControllerState state, bool showHidden)
+	{
+		return state == VControllerState::SHOWN || (showHidden && state != VControllerState::OFF);
+	}
+
+	void draw(Gfx::RendererCommands &__restrict__ cmds, float alpha, bool showHidden) const
+	{
+		if(!shouldDraw(state, showHidden))
+			return;
+		visit([&](auto &e){ e.draw(cmds, alpha); }, *this);
+	}
+
+	void place(WRect viewBounds, WRect windowBounds, int layoutIdx)
+	{
+		auto &lPos = layoutPos[layoutIdx];
+		setPos(lPos.toPixelPos(windowBounds), viewBounds);
+	}
+
+	void setShowBounds(Gfx::Renderer &r, bool on)
+	{
+		visit(overloaded
+		{
+			[&](VControllerDPad &e){ e.setShowBounds(r, on); },
+			[&](VControllerButtonGroup &e){ e.setShowBounds(on); },
+			[](auto &e){}
+		}, *this);
+	}
+
+	_2DOrigin layoutOrigin() const
+	{
+		return visit(overloaded
+		{
+			[&](const VControllerDPad &e){ return LB2DO; },
+			[](auto &e){ return e.layout.origin; }
+		}, *this);
+	}
+
+	std::string name(const EmuApp &app) const
+	{
+		return visit([&](auto &e){ return e.name(app); }, *this);
+	}
+
+	void updateMeasurements(const Window &win)
+	{
+		visit([&](auto &e)
+		{
+			if constexpr(requires {e.updateMeasurements(win);})
+			{
+				e.updateMeasurements(win);
+			}
+		}, *this);
+	}
+
+	void transposeKeysForPlayer(const EmuApp &app, int player)
+	{
+		visit([&](auto &e)
+		{
+			if constexpr(requires {e.transposeKeysForPlayer(app, player);})
+			{
+				e.transposeKeysForPlayer(app, player);
+			}
+		}, *this);
+	}
+
+	std::span<VControllerButton> buttons()
+	{
+		return visit([&](auto &e) -> std::span<VControllerButton>
+		{
+			if constexpr(requires {e.buttons;})
+				return e.buttons;
+			else
+				return {};
+		}, *this);
+	}
+
+	void add(unsigned keyCode)
+	{
+		visit([&](auto &e)
+		{
+			if constexpr(requires {e.buttons;})
+			{
+				e.buttons.emplace_back(keyCode);
+			}
+		}, *this);
+	}
+
+	void remove(VControllerButton &btnToErase)
+	{
+		visit([&](auto &e)
+		{
+			if constexpr(requires {e.buttons;})
+			{
+				std::erase_if(e.buttons, [&](auto &b) { return &b == &btnToErase; });
+			}
+		}, *this);
+	}
+
+	void setRowSize(int8_t size)
+	{
+		visit([&](auto &e)
+		{
+			if constexpr(requires {e.layout.rowItems;})
+				e.layout.rowItems = size;
+		}, *this);
+	}
+
+	auto rowSize() const
+	{
+		return visit([&](auto &e) -> int8_t
+		{
+			if constexpr(requires {e.layout.rowItems;})
+				return e.layout.rowItems;
+			else
+				return 1;
+		}, *this);
+	}
 };
 
 enum class VControllerVisibility : uint8_t
@@ -243,81 +475,46 @@ enum class VControllerVisibility : uint8_t
 class VController : public EmuAppHelper<VController>
 {
 public:
-	static constexpr int C_ELEM = 0, F_ELEM = 8, D_ELEM = 32;
-	static constexpr unsigned TURBO_BIT = IG::bit(31), ACTION_MASK = 0x7FFFFFFF;
 	static constexpr unsigned TOGGLE_KEYBOARD = 65536;
 	static constexpr unsigned CHANGE_KEYBOARD_MODE = 65537;
-	using Map = std::array<unsigned, D_ELEM+9>;
 	using KbMap = VControllerKeyboard::KbMap;
-	using VControllerLayoutPositionArr = std::array<std::array<VControllerLayoutPosition, 7>, 2>;
+	static constexpr uint8_t GAMEPAD_DPAD_BIT = IG::bit(0);
+	static constexpr uint8_t GAMEPAD_BUTTONS_BIT = IG::bit(1);
+	static constexpr uint8_t GAMEPAD_BITS = GAMEPAD_DPAD_BIT | GAMEPAD_BUTTONS_BIT;
 
-	VController(IG::ApplicationContext, int faceButtons, int centerButtons);
-	int xMMSizeToPixel(const IG::Window &win, float mm) const;
-	int yMMSizeToPixel(const IG::Window &win, float mm) const;
-	void setInputPlayer(uint8_t player);
-	uint8_t inputPlayer() const;
-	void updateMapping();
+	VController(ApplicationContext);
+	int xMMSizeToPixel(const Window &win, float mm) const;
+	int yMMSizeToPixel(const Window &win, float mm) const;
+	void setInputPlayer(int8_t player);
+	auto inputPlayer() const { return inputPlayer_; }
+	void setDisabledInputKeys(std::span<const unsigned> keys);
 	void updateKeyboardMapping();
-	bool hasTriggers() const;
-	void setImg(Gfx::Texture &pics);
+	void updateTextures();
 	void inputAction(Input::Action action, unsigned vBtn);
 	void resetInput();
+	void updateAltSpeedModeInput(AltSpeedMode, bool on);
 	void place();
 	void toggleKeyboard();
-	bool pointerInputEvent(const Input::MotionEvent &, IG::WindowRect gameRect);
+	bool pointerInputEvent(const Input::MotionEvent &, WindowRect gameRect);
 	bool keyInput(const Input::KeyEvent &);
-	void draw(Gfx::RendererCommands &cmds, bool activeFF, bool showHidden = false);
-	void draw(Gfx::RendererCommands &cmds, bool activeFF, bool showHidden, float alpha);
-	int numElements() const;
-	IG::WindowRect bounds(int elemIdx) const;
-	void setPos(int elemIdx, IG::WP pos);
-	void setState(int elemIdx, VControllerState state);
-	VControllerState state(int elemIdx) const;
-	void setButtonSize(int gamepadBtnSizeInPixels, int uiBtnSizeInPixels, Gfx::ProjectionPlane projP);
+	void draw(Gfx::RendererCommands &__restrict__, bool showHidden = false);
+	void draw(Gfx::RendererCommands &__restrict__, bool showHidden, float alpha);
 	bool isInKeyboardMode() const;
-	void setMenuImage(Gfx::TextureSpan img);
-	void setFastForwardImage(Gfx::TextureSpan img);
 	void setKeyboardImage(Gfx::TextureSpan img);
-	bool menuHitTest(IG::WP pos);
-	bool fastForwardHitTest(IG::WP pos);
 	void setButtonAlpha(std::optional<uint8_t>);
 	constexpr uint8_t buttonAlpha() const { return alpha; }
-	VControllerGamepad &gamePad();
 	VControllerKeyboard &keyboard() { return kb; }
-	void setRenderer(Gfx::Renderer &renderer);
-	Gfx::Renderer &renderer();
-	void setWindow(const IG::Window &win);
+	void setRenderer(Gfx::Renderer &renderer) { renderer_ = &renderer; }
+	Gfx::Renderer &renderer() { return *renderer_; }
+	void setWindow(const Window &win);
 	bool hasWindow() const { return win; }
-	const IG::Window &window() const { return *win; }
+	const Window &window() const { return *win; }
 	const WindowData &windowData() const { return *winData; }
-	VControllerLayoutPositionArr &layoutPosition() { return layoutPos; };
-	const VControllerLayoutPositionArr &layoutPosition() const { return layoutPos; };
-	bool layoutPositionChanged() const { return layoutPosChanged; };
-	void setLayoutPositionChanged(bool changed = true) { layoutPosChanged = changed; }
-	IG::ApplicationContext appContext() const;
-	const Gfx::GlyphTextureSet &face() const;
-	void setFace(const Gfx::GlyphTextureSet &face);
-	bool setButtonSize(std::optional<uint16_t> mm100xOpt, bool placeElements = true);
-	uint16_t buttonSize() const;
-	int buttonPixelSize(const IG::Window &) const;
-	bool setButtonXPadding(std::optional<uint16_t> opt, bool placeElements = true);
-	uint16_t buttonXPadding() const;
-	bool setButtonYPadding(std::optional<uint16_t> opt, bool placeElements = true);
-	uint16_t buttonYPadding() const;
-	bool setButtonSpacing(std::optional<uint16_t> mm100xOpt, bool placeElements = true);
-	void setDefaultButtonSpacing(uint16_t mm100x);
-	uint16_t buttonSpacing() const;
-	bool setButtonStagger(std::optional<uint16_t> mm100xOpt, bool placeElements = true);
-	void setDefaultButtonStagger(uint16_t mm100x);
-	uint16_t buttonStagger() const;
-	bool setDpadDeadzone(std::optional<uint16_t> mm100xOpt);
-	uint16_t dpadDeadzone() const;
-	bool setDpadDiagonalSensitivity(std::optional<uint16_t> opt);
-	uint16_t dpadDiagonalSensitivity() const;
-	void setTriggersInline(std::optional<bool> opt, bool placeElements = true);
-	bool triggersInline() const;
-	void setBoundingAreaVisible(std::optional<bool> opt, bool placeElements = true);
-	bool boundingAreaVisible() const;
+	ApplicationContext appContext() const { return appCtx; }
+	const Gfx::GlyphTextureSet &face() const { return *facePtr; }
+	void setFace(const Gfx::GlyphTextureSet &face) { facePtr = &face; }
+	bool setButtonSize(int16_t mm100xOpt, bool placeElements = true);
+	auto buttonSize() const { return btnSize; }
 	void setShowOnTouchInput(std::optional<bool> opt);
 	bool showOnTouchInput() const;
 	void setVibrateOnTouchInput(EmuApp &, std::optional<bool> opt);
@@ -325,22 +522,18 @@ public:
 	bool shouldShowOnTouchInput() const;
 	void setGamepadControlsVisibility(std::optional<VControllerVisibility>);
 	VControllerVisibility gamepadControlsVisibility() const;
-	void setGamepadControlsVisible(bool);
-	bool gamepadControlsVisible() const;
+	void setGamepadControlsVisible(bool on) { gamepadIsVisible = on; }
+	bool gamepadControlsVisible() const { return gamepadIsVisible; }
 	static bool visibilityIsValid(VControllerVisibility);
 	void setPhysicalControlsPresent(bool);
 	bool updateAutoOnScreenControlVisible();
-	bool readConfig(MapIO &, unsigned key, size_t size);
+	bool readConfig(EmuApp &, MapIO &, unsigned key, size_t size);
 	void writeConfig(FileIO &) const;
-	bool readSerializedLayoutPositions(MapIO &, size_t size);
-	size_t serializedLayoutPositionsSize() const;
-	void configure(IG::Window &, Gfx::Renderer &, const Gfx::GlyphTextureSet &face);
-	static VControllerLayoutPosition pixelToLayoutPos(IG::WP pos, IG::WP size, IG::WindowRect viewBounds);
-	static IG::WP layoutToPixelPos(VControllerLayoutPosition, IG::WindowRect viewBounds);
-	void resetPositions();
-	void resetOptions();
-	void resetAllOptions();
-	static bool shouldDraw(VControllerState state, bool showHidden = false);
+	void configure(Window &, Gfx::Renderer &, const Gfx::GlyphTextureSet &face);
+	void resetEmulatedDevicePositions();
+	void resetEmulatedDeviceGroups();
+	void resetUIPositions();
+	void resetUIGroups();
 	void setGamepadIsEnabled(bool on) { gamepadDisabledFlags = on ? 0 : GAMEPAD_BITS; }
 	void setGamepadDPadIsEnabled(bool on) { gamepadDisabledFlags = IG::setOrClearBits(gamepadDisabledFlags, GAMEPAD_DPAD_BIT, !on); }
 	void setGamepadButtonsAreEnabled(bool on) { gamepadDisabledFlags = IG::setOrClearBits(gamepadDisabledFlags, GAMEPAD_BUTTONS_BIT, !on); }
@@ -348,43 +541,33 @@ public:
 	bool gamepadDPadIsEnabled() const { return !(gamepadDisabledFlags & GAMEPAD_DPAD_BIT); }
 	bool gamepadButtonsAreEnabled() const { return !(gamepadDisabledFlags & GAMEPAD_BUTTONS_BIT); }
 	bool gamepadIsActive() const;
-	bool allowButtonsPastContentBounds() { return allowButtonsPastContentBounds_; }
+	bool allowButtonsPastContentBounds() const { return allowButtonsPastContentBounds_; }
 	bool setAllowButtonsPastContentBounds(bool on) { return allowButtonsPastContentBounds_ = on; }
+	auto gamepadItems() { return gpElements.size(); }
+	VControllerElement &add(InputComponentDesc);
+	void update(VControllerElement &) const;
+	bool remove(VControllerElement &);
+	std::span<VControllerElement> deviceElements() { return gpElements; }
+	std::span<VControllerElement> guiElements() { return uiElements; }
+	WRect layoutBounds() const;
 
 private:
-	static constexpr uint8_t GAMEPAD_DPAD_BIT = IG::bit(0);
-	static constexpr uint8_t GAMEPAD_BUTTONS_BIT = IG::bit(1);
-	static constexpr uint8_t GAMEPAD_BITS = GAMEPAD_DPAD_BIT | GAMEPAD_BUTTONS_BIT;
-
+	ApplicationContext appCtx{};
 	Gfx::Renderer *renderer_{};
-	const IG::Window *win{};
+	const Window *win{};
 	const WindowData *winData{};
 	const Gfx::GlyphTextureSet *facePtr{};
-	VControllerGamepad gp;
 	VControllerKeyboard kb{};
+	std::vector<VControllerElement> gpElements{};
+	std::vector<VControllerElement> uiElements{};
 	float alphaF{};
-	VControllerLayoutPositionArr layoutPos{};
-	VControllerButton menuBtn{};
-	VControllerButton ffBtn{};
 	Input::DragTracker<std::array<int, 2>> dragTracker{};
-	Map map{};
-	uint16_t defaultButtonSize{};
-	uint16_t btnSize{};
-	uint16_t buttonXPadding_{};
-	uint16_t buttonYPadding_{};
-	uint16_t dpadDzone{};
-	uint16_t dpadDiagonalSensitivity_{};
-	uint16_t defaultButtonSpacing_{200};
-	uint16_t buttonSpacing_{defaultButtonSpacing_};
-	uint16_t defaultButtonStagger_{1};
-	uint16_t buttonStagger_{defaultButtonStagger_};
-	bool triggersInline_{};
-	bool boundingAreaVisible_{};
+	int16_t defaultButtonSize{};
+	int16_t btnSize{};
 	bool showOnTouchInput_ = true;
 	static constexpr auto DEFAULT_GAMEPAD_CONTROLS_VISIBILITY{Config::envIsLinux ? VControllerVisibility::OFF : VControllerVisibility::AUTO};
 	VControllerVisibility gamepadControlsVisibility_{DEFAULT_GAMEPAD_CONTROLS_VISIBILITY};
-	uint8_t inputPlayer_{};
-	bool layoutPosChanged{};
+	int8_t inputPlayer_{};
 	bool physicalControlsPresent{};
 	bool gamepadIsVisible{gamepadControlsVisibility_ != VControllerVisibility::OFF};
 	uint8_t gamepadDisabledFlags{};
@@ -393,17 +576,19 @@ private:
 	IG_UseMemberIf(Config::DISPLAY_CUTOUT, bool, allowButtonsPastContentBounds_){};
 	IG_UseMemberIf(Config::BASE_SUPPORTS_VIBRATOR, bool, vibrateOnTouchInput_){};
 
-	std::array<int, 2> findGamepadElements(IG::WP pos);
+	std::array<int, 2> findGamepadElements(WP pos);
 	int keyboardKeyFromPointer(const Input::MotionEvent &);
 	void applyButtonSize();
+	void resetEmulatedDevicePositions(std::vector<VControllerElement> &) const;
+	std::vector<VControllerElement> defaultEmulatedDeviceGroups() const;
+	void resetUIPositions(std::vector<VControllerElement> &) const;
+	std::vector<VControllerElement> defaultUIGroups() const;
+	VControllerElement &add(std::vector<VControllerElement> &, InputComponentDesc) const;
+	void setButtonSizes(int gamepadBtnSizeInPixels, int uiBtnSizeInPixels);
+	int emulatedDeviceButtonPixelSize() const;
+	int uiButtonPixelSize() const;
+	void writeDeviceButtonsConfig(FileIO &) const;
+	void writeUIButtonsConfig(FileIO &) const;
 };
-
-static constexpr unsigned VCTRL_LAYOUT_DPAD_IDX = 0,
-	VCTRL_LAYOUT_CENTER_BTN_IDX = 1,
-	VCTRL_LAYOUT_FACE_BTN_GAMEPAD_IDX = 2,
-	VCTRL_LAYOUT_MENU_IDX = 3,
-	VCTRL_LAYOUT_FF_IDX = 4,
-	VCTRL_LAYOUT_L_IDX = 5,
-	VCTRL_LAYOUT_R_IDX = 6;
 
 }

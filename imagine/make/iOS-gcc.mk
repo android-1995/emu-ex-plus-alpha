@@ -33,8 +33,9 @@ OBJCFLAGS += -fobjc-arc
 ifdef CCTOOLS_TOOCHAIN_PATH
 AR := llvm-ar
 RANLIB := $(AR) s
-CC := $(firstword $(wildcard $(CCTOOLS_TOOCHAIN_PATH)/bin/*-clang))
-CXX := $(firstword $(wildcard $(CCTOOLS_TOOCHAIN_PATH)/bin/*-clang++))
+# Use --no-default-config to prevent distro's Clang config from adding its flags to the build
+CC := $(firstword $(wildcard $(CCTOOLS_TOOCHAIN_PATH)/bin/*-clang)) --no-default-config
+CXX := $(firstword $(wildcard $(CCTOOLS_TOOCHAIN_PATH)/bin/*-clang++)) --no-default-config
 LD := $(CXX)
 iosSimulatorSDKsPath := $(CCTOOLS_TOOCHAIN_PATH)/SDK
 iosSDKsPath := $(CCTOOLS_TOOCHAIN_PATH)/SDK
@@ -87,7 +88,7 @@ LDFLAGS += -Wl,-no_pie
 ios_useExternalLibcxx := 1
 ifdef ios_useExternalLibcxx
  ifneq ($(pkgName),libcxx) # check we aren't building lib++ itself
-  STDCXXLIB = -nostdlib++ -lc++ -lc++abi
+  STDCXXLIB = -nostdlib++ -lc++ -lc++abi -lc++experimental
   CPPFLAGS += -nostdinc++ -I$(IMAGINE_SDK_PLATFORM_PATH)/include/c++/v1 -D_LIBCPP_DISABLE_AVAILABILITY
  else
   CPPFLAGS += -stdlib=libc++

@@ -493,16 +493,24 @@ static MDFN_COLD void LoadCD(std::vector<CDInterface*> *CDInterfaces)
  }
 }
 
-void applySoundFormat(double rate)
+void SetSoundRate(double rate)
 {
 	if(!sbuf)
 		return;
+	rate = std::round(rate);
 	for(int y = 0; y < 2; y++)
 	{
 		sbuf[y].set_sample_rate(rate ? rate : 44100, 50);
 		sbuf[y].clock_rate(PCE_MASTER_CLOCK / 3.);
 		sbuf[y].bass_freq(10);
 	}
+}
+
+double GetSoundRate()
+{
+	if(!sbuf)
+		return 0;
+	return sbuf[0].sample_rate();
 }
 
 static MDFN_COLD void CloseGame(void)

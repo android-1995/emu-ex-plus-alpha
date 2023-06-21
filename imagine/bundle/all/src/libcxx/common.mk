@@ -1,4 +1,4 @@
-libcxxVersion := 15.0.0
+libcxxVersion := 16.0.1
 libcxxSrcDir := $(tempDir)/llvm-project-$(libcxxVersion).src/libcxx
 libcxxabiSrcDir := $(tempDir)/llvm-project-$(libcxxVersion).src/libcxxabi
 # Archive containing the libcxx & libcxxabi directories along with a minimal set of cmake support files
@@ -42,7 +42,7 @@ all : $(outputLibFile) $(outputLibcxxabiFile)
 install : $(outputLibFile) $(outputLibcxxabiFile)
 	@echo "Installing libc++ to: $(installDir)"
 	@mkdir -p $(installIncludeDir) $(installDir)/lib
-	cp $(outputLibFile) $(outputLibcxxabiFile) $(installDir)/lib/
+	cp $(outputLibFile) $(outputLibcxxabiFile) $(buildDir)/lib/libc++experimental.a $(installDir)/lib/
 	cp -r $(buildDir)/include/c++/v1/* $(installIncludeDir)/
 	cp -r $(libcxxabiSrcDir)/include/* $(installIncludeDir)/
 

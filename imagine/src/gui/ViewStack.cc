@@ -22,7 +22,6 @@
 #include <imagine/gfx/RendererCommands.hh>
 #include <imagine/gfx/BasicEffect.hh>
 #include <imagine/logger/logger.h>
-#include <imagine/util/math/int.hh>
 #include <imagine/util/ScopeGuard.hh>
 #include <utility>
 
@@ -69,10 +68,9 @@ void BasicViewController::dismissView(int idx, bool)
 	win.postDraw();
 }
 
-void BasicViewController::place(const IG::WindowRect &rect, const Gfx::ProjectionPlane &projP)
+void BasicViewController::place(const IG::WindowRect &rect)
 {
 	viewRect = rect;
-	this->projP = projP;
 	place();
 }
 
@@ -82,7 +80,7 @@ void BasicViewController::place()
 		return;
 	assert(viewRect.xSize() && viewRect.ySize());
 	view->waitForDrawFinished();
-	view->setViewRect(viewRect, projP);
+	view->setViewRect(viewRect);
 	view->place();
 }
 
@@ -115,11 +113,10 @@ NavView *ViewStack::navView() const
 	return nav.get();
 }
 
-void ViewStack::place(WindowRect viewRect, WindowRect displayRect, Gfx::ProjectionPlane projP)
+void ViewStack::place(WindowRect viewRect, WindowRect displayRect)
 {
 	this->viewRect = viewRect;
 	this->displayRect = displayRect;
-	this->projP = projP;
 	place();
 }
 
@@ -134,9 +131,9 @@ void ViewStack::place()
 	if(navViewIsActive())
 	{
 		nav->setTitle(std::u16string{top().name()});
-		auto navRect = makeWindowRectRel(viewRect.pos(LT2DO), {viewRect.xSize(), IG::makeEvenRoundedUp(int(nav->titleFace()->nominalHeight()*(double)1.75))});
+		auto navRect = makeWindowRectRel(viewRect.pos(LT2DO), {viewRect.xSize(), View::navBarHeight(*nav->titleFace())});
 		WindowRect navDisplayRect{displayRect.pos(LT2DO), {displayRect.xPos(RC2DO), navRect.yPos(CB2DO)}};
-		nav->setViewRect(navRect, navDisplayRect, projP);
+		nav->setViewRect(navRect, navDisplayRect);
 		nav->place();
 		customViewRect.y += nav->viewRect().ySize();
 		customDisplayRect.y += nav->displayRect().ySize();
@@ -145,13 +142,13 @@ void ViewStack::place()
 	{
 		navViewHasFocus = false;
 	}
-	top().setViewRect(customViewRect, customDisplayRect, projP);
+	top().setViewRect(customViewRect, customDisplayRect);
 	top().place();
 	if(customDisplayRect.y2 > customViewRect.y2) // add a basic gradient in the OS navigation bar area
 	{
-		bottomGradient.setPos(View::displayInsetRect(View::Direction::BOTTOM, customViewRect, customDisplayRect), projP);
-		bottomGradient.tl().color = bottomGradient.tr().color = Gfx::VertexColorPixelFormat.build(0., 0., 0., 0.);
-		bottomGradient.bl().color = bottomGradient.br().color = Gfx::VertexColorPixelFormat.build(0., 0., 0., 1.);
+		bottomGradient.setPos(View::displayInsetRect(View::Direction::BOTTOM, customViewRect, customDisplayRect));
+		bottomGradient.tl().color = bottomGradient.tr().color = Gfx::PackedColor::format.build(0., 0., 0., 1.);
+		bottomGradient.bl().color = bottomGradient.br().color = Gfx::PackedColor::format.build(0., 0., 0., 0.);
 	}
 }
 
@@ -159,9 +156,9 @@ bool ViewStack::inputEvent(const Input::Event &e)
 {
 	if(!view.size())
 		return false;
-	if(e.motionEvent() && e.asMotionEvent().isAbsolute())
+	if(e.motionEvent() && e.motionEvent()->isAbsolute())
 	{
-		auto &motionEv = e.asMotionEvent();
+		auto &motionEv = *e.motionEvent();
 		if(navViewIsActive() && nav->viewRect().overlaps(motionEv.pos()))
 		{
 			if(nav->inputEvent(e))
@@ -236,7 +233,7 @@ void ViewStack::draw(Gfx::RendererCommands &cmds)
 	{
 		using namespace Gfx;
 		cmds.set(BlendMode::ALPHA);
-		cmds.set(ColorName::WHITE);
+		cmds.setColor(ColorName::WHITE);
 		cmds.basicEffect().disableTexture(cmds);
 		bottomGradient.draw(cmds);
 	}

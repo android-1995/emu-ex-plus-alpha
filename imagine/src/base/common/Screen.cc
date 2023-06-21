@@ -28,8 +28,8 @@ namespace IG
 
 Screen::Screen(ApplicationContext ctx, InitParams params):
 	ScreenImpl{ctx, params},
-	windowsPtr{&ctx.application().windows()}
-{}
+	windowsPtr{&ctx.application().windows()},
+	appCtx{ctx} {}
 
 bool Screen::addOnFrame(OnFrameDelegate del, int priority)
 {
@@ -52,7 +52,7 @@ bool Screen::containsOnFrame(OnFrameDelegate del) const
 	return onFrameDelegate.contains(del);
 }
 
-void Screen::runOnFrameDelegates(FrameTime timestamp)
+void Screen::runOnFrameDelegates(SteadyClockTimePoint timestamp)
 {
 	auto params = makeFrameParams(timestamp);
 	onFrameDelegate.runAll([&](OnFrameDelegate del)
@@ -76,9 +76,9 @@ bool Screen::isPosted() const
 	return framePosted;
 }
 
-bool Screen::frameUpdate(FrameTime timestamp)
+bool Screen::frameUpdate(SteadyClockTimePoint timestamp)
 {
-	assert(timestamp.count());
+	assert(hasTime(timestamp));
 	assert(isActive);
 	framePosted = false;
 	if(!onFrameDelegate.size())
@@ -111,9 +111,9 @@ void Screen::setActive(bool active)
 	}
 }
 
-FrameParams Screen::makeFrameParams(FrameTime timestamp) const
+FrameParams Screen::makeFrameParams(SteadyClockTimePoint timestamp) const
 {
-	return {timestamp, frameTime()};
+	return {.timestamp = timestamp, .frameTime = frameTime()};
 }
 
 void Screen::postFrame()
@@ -137,6 +137,8 @@ void Screen::unpostFrame()
 	framePosted = false;
 	unpostFrameTimer();
 }
+
+[[gnu::weak]] SteadyClockTime Screen::presentationDeadline() const { return {}; }
 
 
 }
