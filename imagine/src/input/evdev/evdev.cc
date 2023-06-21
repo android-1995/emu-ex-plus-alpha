@@ -131,7 +131,7 @@ void EvdevInputDevice::processInputEvents(LinuxApplication &app, std::span<const
 	for(auto &ev : events)
 	{
 		//logMsg("got event type %d, code %d, value %d", ev.type, ev.code, ev.value);
-		Time time = IG::Seconds{ev.time.tv_sec} + IG::Microseconds{ev.time.tv_usec};
+		auto time = SteadyClockTimePoint{Seconds{ev.time.tv_sec} + Microseconds{ev.time.tv_usec}};
 		switch(ev.type)
 		{
 			case EV_KEY:
@@ -216,7 +216,7 @@ void EvdevInputDevice::addPollEvent(LinuxApplication &app)
 			if(pollEvents & POLLEV_ERR) [[unlikely]]
 			{
 				logMsg("error %d in input fd %d (%s)", errno, fd, name().data());
-				app.removeInputDevice(*this, true);
+				app.removeInputDevice(ApplicationContext{static_cast<Application&>(app)}, *this, true);
 				return false;
 			}
 			else
@@ -232,7 +232,7 @@ void EvdevInputDevice::addPollEvent(LinuxApplication &app)
 				if(len == -1 && errno != EAGAIN)
 				{
 					logMsg("error %d reading from input fd %d (%s)", errno, fd, name().data());
-					app.removeInputDevice(*this, true);
+					app.removeInputDevice(ApplicationContext{static_cast<Application&>(app)}, *this, true);
 					return false;
 				}
 			}
@@ -274,7 +274,7 @@ static bool isEvdevInputDevice(Input::Device &d)
 	return d.map() == Input::Map::SYSTEM && (d.typeBits() & Input::Device::TYPE_BIT_GAMEPAD);
 }
 
-static bool processDevNode(LinuxApplication &app, IG::CStringView path, int id, bool notify)
+static bool processDevNode(LinuxApplication &app, CStringView path, int id, bool notify)
 {
 	if(access(path, R_OK) != 0)
 	{
@@ -319,11 +319,11 @@ static bool processDevNode(LinuxApplication &app, IG::CStringView path, int id, 
 	auto evDev = std::make_unique<EvdevInputDevice>(id, fd, Device::TYPE_BIT_GAMEPAD, nameStr.data(), vendorProductId);
 	fd_setNonblock(fd, 1);
 	evDev->addPollEvent(app);
-	app.addInputDevice(std::move(evDev), notify);
+	app.addInputDevice(ApplicationContext{static_cast<Application&>(app)}, std::move(evDev), notify);
 	return true;
 }
 
-static bool processDevNodeName(IG::CStringView name, uint32_t &id)
+static bool processDevNodeName(CStringView name, uint32_t &id)
 {
 	// extract id number from "event*" name and get the full path
 	if(sscanf(name, "event%u", &id) != 1)

@@ -24,16 +24,6 @@ namespace FrameRateTest
 
 using namespace IG;
 
-class TestTableEntry : public IG::DualTextMenuItem
-{
-public:
-	bool redText{};
-
-	TestTableEntry(Gfx::GlyphTextureSet *face, SelectDelegate);
-	void draw(Gfx::RendererCommands &, float xPos, float yPos, float xSize, float ySize,
-		float xIndent, IG::_2DOrigin align, const Gfx::ProjectionPlane &, Gfx::Color) const final;
-};
-
 class TestPicker : public IG::TableView
 {
 public:
@@ -41,7 +31,7 @@ public:
 	void setTests(const TestDesc *testParams, unsigned tests);
 
 private:
-	std::vector<TestTableEntry> testEntry{};
+	std::vector<DualTextMenuItem> testEntry{};
 	std::vector<TestParams> testParam{};
 };
 

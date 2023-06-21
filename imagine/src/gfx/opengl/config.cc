@@ -18,7 +18,6 @@
 #include <imagine/gfx/RendererTask.hh>
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/base/Window.hh>
-#include <imagine/util/format.hh>
 #include <imagine/util/ranges.hh>
 #include "internalDefs.hh"
 #include "utils.hh"
@@ -29,6 +28,7 @@
 #include <string>
 #include <cassert>
 #include <cctype>
+#include <format>
 
 namespace IG::Gfx
 {
@@ -41,9 +41,9 @@ float rotationRadians(Rotation r)
 	{
 		case Rotation::ANY:
 		case Rotation::UP: return radians(0.);
-		case Rotation::RIGHT: return radians(-90.);
+		case Rotation::RIGHT: return radians(90.);
 		case Rotation::DOWN: return radians(-180.);
-		case Rotation::LEFT: return radians(90.);
+		case Rotation::LEFT: return radians(-90.);
 	}
 	bug_unreachable("Rotation == %d", std::to_underlying(r));
 }
@@ -56,7 +56,7 @@ static void printFeatures(DrawContextSupport support)
 	featuresStr.reserve(256);
 
 	featuresStr.append(" [Texture Size:");
-	featuresStr.append(fmt::format("{}", support.textureSizeSupport.maxXSize));
+	featuresStr.append(std::format("{}", support.textureSizeSupport.maxXSize));
 	featuresStr.append("]");
 	if(support.textureSizeSupport.nonPow2)
 	{
@@ -124,12 +124,6 @@ static void printFeatures(DrawContextSupport support)
 	{
 		featuresStr.append(" [sRGB FB Write Control]");
 	}
-	#ifdef __ANDROID__
-	if(support.eglPresentationTimeANDROID)
-	{
-		featuresStr.append(" [Presentation Time]");
-	}
-	#endif
 	if(!support.useFixedFunctionPipeline)
 	{
 		featuresStr.append(" [GLSL:");
@@ -320,16 +314,6 @@ void GLRenderer::setupMemoryBarrier()
 	#else
 	support.hasMemoryBarrier = true;
 	#endif*/
-}
-
-void GLRenderer::setupPresentationTime(std::string_view eglExtenstionStr)
-{
-	#ifdef __ANDROID__
-	if(eglExtenstionStr.contains("EGL_ANDROID_presentation_time"))
-	{
-		glManager.loadSymbol(support.eglPresentationTimeANDROID, "eglPresentationTimeANDROID");
-	}
-	#endif
 }
 
 void GLRenderer::checkExtensionString(std::string_view extStr, bool &useFBOFuncs)
@@ -536,7 +520,6 @@ void Renderer::configureRenderer()
 			{
 				auto extStr = ctx.glDisplay().queryExtensions();
 				setupEglFenceSync(extStr);
-				setupPresentationTime(extStr);
 			}
 			#endif
 
@@ -672,14 +655,13 @@ RendererTask &Renderer::task()
 
 void Renderer::setWindowValidOrientations(Window &win, OrientationMask validO)
 {
-//去掉设置屏幕方向，方向由JAVA层控制
-//	if(!win.isMainWindow())
-//		return;
-//	auto oldWinO = win.softOrientation();
-//	if(win.setValidOrientations(validO) && !Config::SYSTEM_ROTATES_WINDOWS)
-//	{
-//		animateWindowRotation(win, rotationRadians(oldWinO), rotationRadians(win.softOrientation()));
-//	}
+	if(!win.isMainWindow())
+		return;
+	auto oldWinO = win.softOrientation();
+	if(win.setValidOrientations(validO) && !Config::SYSTEM_ROTATES_WINDOWS)
+	{
+		animateWindowRotation(win, rotationRadians(oldWinO), rotationRadians(win.softOrientation()));
+	}
 }
 
 void GLRenderer::addEventHandlers(ApplicationContext ctx, RendererTask &task)

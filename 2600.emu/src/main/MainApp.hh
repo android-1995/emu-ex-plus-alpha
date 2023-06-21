@@ -29,12 +29,12 @@ public:
 	A2600App(ApplicationInitParams initParams, ApplicationContext &ctx):
 		EmuApp{initParams, ctx}, a2600System{ctx, *this}
 	{
-		setDefaultVControlsButtonStagger(5);
 		audio().setStereo(false); // TODO: stereo mode
 	}
 
 	auto &system() { return a2600System;  }
 	const auto &system() const { return a2600System;  }
+	AssetDesc vControllerAssetDesc(unsigned key) const;
 };
 
 using MainApp = A2600App;

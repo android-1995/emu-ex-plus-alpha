@@ -27,13 +27,11 @@ public:
 	MdSystem mdSystem;
 
 	MdApp(ApplicationInitParams initParams, ApplicationContext &ctx):
-		EmuApp{initParams, ctx}, mdSystem{ctx}
-	{
-		setDefaultVControlsButtonSpacing(100);
-	}
+		EmuApp{initParams, ctx}, mdSystem{ctx} {}
 
 	auto &system() { return mdSystem;  }
 	const auto &system() const { return mdSystem;  }
+	AssetDesc vControllerAssetDesc(unsigned key) const;
 };
 
 using MainApp = MdApp;

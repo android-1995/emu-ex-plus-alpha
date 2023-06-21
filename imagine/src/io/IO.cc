@@ -26,8 +26,16 @@ namespace IG
 
 template class IOUtils<IO>;
 
-ssize_t IO::read(void *buff, size_t bytes) { return visit([&](auto &io){ return io.read(buff, bytes); }, *this); }
-ssize_t IO::write(const void *buff, size_t bytes) { return visit([&](auto &io){ return io.write(buff, bytes); }, *this); }
+ssize_t IO::read(void *buff, size_t bytes, std::optional<off_t> offset)
+{
+	return visit([&](auto &io){ return io.read(buff, bytes, offset); }, *this);
+}
+
+ssize_t IO::write(const void *buff, size_t bytes, std::optional<off_t> offset)
+{
+	return visit([&](auto &io){ return io.write(buff, bytes, offset);	}, *this);
+}
+
 off_t IO::seek(off_t offset, IOSeekMode mode) { return visit([&](auto &io){ return io.seek(offset, mode); }, *this); }
 size_t IO::size() { return visit([&](auto &io){ return io.size(); }, *this); }
 bool IO::eof() { return visit([&](auto &io){ return io.eof(); }, *this); }
@@ -73,17 +81,6 @@ void IO::advise(off_t offset, size_t bytes, Advice advice)
 	}, *this);
 }
 
-ssize_t IO::readAtPos(void *buff, size_t bytes, off_t offset)
-{
-	return visit([&](auto &io)
-	{
-		if constexpr(requires {io.readAtPos(buff, bytes, offset);})
-			return io.readAtPos(buff, bytes, offset);
-		else
-			return readAtPosGeneric(buff, bytes, offset);
-	}, *this);
-}
-
 }
 
 namespace IG::FileUtils
@@ -91,35 +88,35 @@ namespace IG::FileUtils
 
 ssize_t writeToPath(CStringView path, std::span<const unsigned char> src)
 {
-	auto f = FileIO{path, OpenFlagsMask::NEW | OpenFlagsMask::TEST};
-	return f.write(src.data(), src.size());
+	auto f = FileIO{path, OpenFlagsMask::New | OpenFlagsMask::Test};
+	return f.write(src).bytes;
 }
 
 ssize_t writeToPath(CStringView path, IO &io)
 {
-	auto f = FileIO{path, OpenFlagsMask::NEW | OpenFlagsMask::TEST};
+	auto f = FileIO{path, OpenFlagsMask::New | OpenFlagsMask::Test};
 	return io.send(f, nullptr, io.size());
 }
 
 ssize_t readFromPath(CStringView path, std::span<unsigned char> dest, IO::AccessHint accessHint)
 {
-	FileIO f{path, accessHint, OpenFlagsMask::TEST};
-	return f.read(dest.data(), dest.size());
+	FileIO f{path, accessHint, OpenFlagsMask::Test};
+	return f.read(dest).bytes;
 }
 
 IOBuffer bufferFromPath(CStringView path, OpenFlagsMask openFlags, size_t sizeLimit)
 {
-	FileIO file{path, IOAccessHint::ALL, openFlags};
+	FileIO file{path, IOAccessHint::All, openFlags};
 	if(!file)
 		return {};
 	if(file.size() > sizeLimit)
 	{
-		if(to_underlying(openFlags & OpenFlagsMask::TEST))
+		if(to_underlying(openFlags & OpenFlagsMask::Test))
 			return {};
 		else
-			throw std::runtime_error(fmt::format("{} exceeds {} byte limit", path.data(), sizeLimit));
+			throw std::runtime_error(std::format("{} exceeds {} byte limit", path, sizeLimit));
 	}
-	return file.buffer(IOBufferMode::RELEASE);
+	return file.buffer(IOBufferMode::Release);
 }
 
 }

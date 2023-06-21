@@ -16,6 +16,7 @@
 #include <emuframework/EmuApp.hh>
 #include <emuframework/EmuInput.hh>
 #include "MainSystem.hh"
+#include "MainApp.hh"
 
 namespace EmuEx
 {
@@ -48,44 +49,88 @@ enum
 	ssKeyIdxLastGamepad = ssKeyIdxZTurbo
 };
 
-const char *EmuSystem::inputFaceBtnName = "A-Z";
-const char *EmuSystem::inputCenterBtnName = "Start";
-const int EmuSystem::inputFaceBtns = 8;
-const int EmuSystem::inputCenterBtns = 1;
-int EmuSystem::inputLTriggerIndex = 6;
-int EmuSystem::inputRTriggerIndex = 7;
-const int EmuSystem::maxPlayers = 2;
-
-VController::Map SaturnSystem::vControllerMap(int player)
+constexpr std::array<unsigned, 4> dpadButtonCodes
 {
-	unsigned playerOffset = player ? Controls::gamepadKeys : 0;
-	VController::Map map{};
-	map[VController::F_ELEM] = ssKeyIdxA + playerOffset;
-	map[VController::F_ELEM+1] = ssKeyIdxB + playerOffset;
-	map[VController::F_ELEM+2] = ssKeyIdxC + playerOffset;
-	map[VController::F_ELEM+3] = ssKeyIdxX + playerOffset;
-	map[VController::F_ELEM+4] = ssKeyIdxY + playerOffset;
-	map[VController::F_ELEM+5] = ssKeyIdxZ + playerOffset;
-	map[VController::F_ELEM+6] = ssKeyIdxL + playerOffset;
-	map[VController::F_ELEM+7] = ssKeyIdxR + playerOffset;
+	ssKeyIdxUp,
+	ssKeyIdxRight,
+	ssKeyIdxDown,
+	ssKeyIdxLeft,
+};
 
-	map[VController::C_ELEM] = ssKeyIdxStart + playerOffset;
+constexpr unsigned centerButtonCodes[]{ssKeyIdxStart};
 
-	map[VController::D_ELEM] = ssKeyIdxLeftUp + playerOffset;
-	map[VController::D_ELEM+1] = ssKeyIdxUp + playerOffset;
-	map[VController::D_ELEM+2] = ssKeyIdxRightUp + playerOffset;
-	map[VController::D_ELEM+3] = ssKeyIdxLeft + playerOffset;
-	map[VController::D_ELEM+5] = ssKeyIdxRight + playerOffset;
-	map[VController::D_ELEM+6] = ssKeyIdxLeftDown + playerOffset;
-	map[VController::D_ELEM+7] = ssKeyIdxDown + playerOffset;
-	map[VController::D_ELEM+8] = ssKeyIdxRightDown + playerOffset;
-	return map;
+constexpr unsigned faceButtonCodes[]
+{
+	ssKeyIdxA,
+	ssKeyIdxB,
+	ssKeyIdxC,
+	ssKeyIdxX,
+	ssKeyIdxY,
+	ssKeyIdxZ,
+};
+
+constexpr std::array gamepadComponents
+{
+	InputComponentDesc{"D-Pad", dpadButtonCodes, InputComponent::dPad, LB2DO},
+	InputComponentDesc{"Face Buttons", faceButtonCodes, InputComponent::button, RB2DO},
+	InputComponentDesc{"Start", centerButtonCodes, InputComponent::button, RB2DO},
+};
+
+constexpr SystemInputDeviceDesc gamepadDesc{"Gamepad", gamepadComponents};
+
+constexpr FRect gpImageCoords(IRect cellRelBounds)
+{
+	constexpr FP imageSize{256, 256};
+	constexpr int cellSize = 32;
+	return (cellRelBounds.relToAbs() * cellSize).as<float>() / imageSize;
 }
 
-unsigned SaturnSystem::translateInputAction(unsigned input, bool &turbo)
+constexpr AssetDesc virtualControllerAssets[]
 {
-	turbo = 0;
-	switch(input)
+	// d-pad
+	{AssetFileID::gamepadOverlay, gpImageCoords({{}, {4, 4}})},
+
+	// gamepad buttons
+	{AssetFileID::gamepadOverlay, gpImageCoords({{4, 0}, {2, 2}})}, // A
+	{AssetFileID::gamepadOverlay, gpImageCoords({{6, 0}, {2, 2}})}, // B
+	{AssetFileID::gamepadOverlay, gpImageCoords({{4, 2}, {2, 2}})}, // C
+	{AssetFileID::gamepadOverlay, gpImageCoords({{6, 2}, {2, 2}})}, // X
+	{AssetFileID::gamepadOverlay, gpImageCoords({{0, 4}, {2, 2}})}, // Y
+	{AssetFileID::gamepadOverlay, gpImageCoords({{2, 4}, {2, 2}})}, // Z
+	{AssetFileID::gamepadOverlay, gpImageCoords({{4, 4}, {2, 2}})}, // L
+	{AssetFileID::gamepadOverlay, gpImageCoords({{6, 4}, {2, 2}})}, // R
+	{AssetFileID::gamepadOverlay, gpImageCoords({{0, 6}, {2, 1}}), {1, 2}}, // start
+};
+
+AssetDesc SaturnApp::vControllerAssetDesc(unsigned key) const
+{
+	switch(key)
+	{
+		case 0: return virtualControllerAssets[0];
+		case ssKeyIdxATurbo:
+		case ssKeyIdxA: return virtualControllerAssets[1];
+		case ssKeyIdxBTurbo:
+		case ssKeyIdxB: return virtualControllerAssets[2];
+		case ssKeyIdxCTurbo:
+		case ssKeyIdxC: return virtualControllerAssets[3];
+		case ssKeyIdxXTurbo:
+		case ssKeyIdxX: return virtualControllerAssets[4];
+		case ssKeyIdxYTurbo:
+		case ssKeyIdxY: return virtualControllerAssets[5];
+		case ssKeyIdxZTurbo:
+		case ssKeyIdxZ: return virtualControllerAssets[6];
+		case ssKeyIdxL: return virtualControllerAssets[7];
+		case ssKeyIdxR: return virtualControllerAssets[8];
+		case ssKeyIdxStart: return virtualControllerAssets[9];
+		default: return virtualControllerAssets[1];
+	}
+}
+
+const int EmuSystem::maxPlayers = 2;
+
+InputAction SaturnSystem::translateInputAction(InputAction action)
+{
+	switch(action.key)
 	{
 		case ssKeyIdxXTurbo:
 		case ssKeyIdxYTurbo:
@@ -99,8 +144,8 @@ unsigned SaturnSystem::translateInputAction(unsigned input, bool &turbo)
 		case ssKeyIdxATurbo + Controls::gamepadKeys:
 		case ssKeyIdxBTurbo + Controls::gamepadKeys:
 		case ssKeyIdxCTurbo + Controls::gamepadKeys:
-			turbo = 1; [[fallthrough]];
-		default: return input;
+			action.setTurboFlag(true); [[fallthrough]];
+		default: return action;
 	}
 }
 
@@ -152,6 +197,11 @@ void SaturnSystem::clearInputBuffers(EmuInputView &)
 	PerPortReset();
 	pad[0] = PerPadAdd(&PORTDATA1);
 	pad[1] = PerPadAdd(&PORTDATA2);
+}
+
+SystemInputDeviceDesc SaturnSystem::inputDeviceDesc(int idx) const
+{
+	return gamepadDesc;
 }
 
 }

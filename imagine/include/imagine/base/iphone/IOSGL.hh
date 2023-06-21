@@ -36,6 +36,8 @@ class GLContextAttributes;
 class GLManagerImpl
 {
 public:
+	static constexpr bool hasSwapInterval{};
+
 	explicit constexpr operator bool() const { return true; }
 	constexpr bool operator ==(GLManagerImpl const&) const = default;
 };
@@ -94,7 +96,7 @@ struct GLBufferConfig
 
 using GLDrawableImpl = EAGLViewDrawable;
 using GLContextImpl = IOSGLContext;
-using EAGLViewMakeRenderbufferDelegate = DelegateFunc<IG::Point2D<int>(void *, unsigned int &, unsigned int &)>;
+using EAGLViewMakeRenderbufferDelegate = DelegateFunc<IP(void *, unsigned int &, unsigned int &)>;
 using EAGLViewDeleteRenderbufferDelegate = DelegateFunc<void(unsigned int colorRenderbuffer, unsigned int depthRenderbuffer)>;
 
 extern EAGLViewMakeRenderbufferDelegate makeRenderbuffer;

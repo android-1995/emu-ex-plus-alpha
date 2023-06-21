@@ -1,21 +1,27 @@
-/*  This file is part of NGP.emu.
+/*  This file is part of Swan.emu.
 
-	NGP.emu is free software: you can redistribute it and/or modify
+	Swan.emu is free software: you can redistribute it and/or modify
 	it under the terms of the GNU General Public License as published by
 	the Free Software Foundation, either version 3 of the License, or
 	(at your option) any later version.
 
-	NGP.emu is distributed in the hope that it will be useful,
+	Swan.emu is distributed in the hope that it will be useful,
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU General Public License for more details.
 
 	You should have received a copy of the GNU General Public License
-	along with NGP.emu.  If not, see <http://www.gnu.org/licenses/> */
+	along with Swan.emu.  If not, see <http://www.gnu.org/licenses/> */
 
 #include <emuframework/EmuApp.hh>
 #include <emuframework/EmuInput.hh>
 #include "MainSystem.hh"
+#include "MainApp.hh"
+
+namespace MDFN_IEN_WSWAN
+{
+extern uint16 WSButtonStatus;
+}
 
 namespace EmuEx
 {
@@ -43,14 +49,110 @@ enum
 	wsKeyIdxY2Turbo,
 	wsKeyIdxY3Turbo,
 	wsKeyIdxY4Turbo,
+	wsKeyIdxANoRotation,
+	wsKeyIdxBNoRotation,
+	wsKeyIdxY1X1,
+	wsKeyIdxY2X2,
+	wsKeyIdxY3X3,
+	wsKeyIdxY4X4,
 };
 
-const char *EmuSystem::inputFaceBtnName = "A/B/X1-4/Y1-4";
-const char *EmuSystem::inputCenterBtnName = "Start";
-const int EmuSystem::inputFaceBtns = 6;
-const int EmuSystem::inputCenterBtns = 1;
+constexpr std::array<unsigned, 4> dpadButtonCodes
+{
+	wsKeyIdxUp,
+	wsKeyIdxRight,
+	wsKeyIdxDown,
+	wsKeyIdxLeft,
+};
+
+constexpr unsigned centerButtonCodes[]{wsKeyIdxStart};
+
+constexpr unsigned faceButtonCodes[]
+{
+	wsKeyIdxBNoRotation,
+	wsKeyIdxANoRotation,
+};
+
+constexpr unsigned oppositeDPadButtonCodes[]
+{
+	wsKeyIdxY4X4,
+	wsKeyIdxY3X3,
+	wsKeyIdxY1X1,
+	wsKeyIdxY2X2,
+};
+
+constexpr unsigned faceButtonCombinedCodes[]
+{
+	wsKeyIdxBNoRotation,
+	wsKeyIdxANoRotation,
+	wsKeyIdxY4X4,
+	wsKeyIdxY3X3,
+	wsKeyIdxY1X1,
+	wsKeyIdxY2X2,
+};
+
+constexpr std::array gamepadComponents
+{
+	InputComponentDesc{"D-Pad", dpadButtonCodes, InputComponent::dPad, LB2DO},
+	InputComponentDesc{"Face Buttons + Opposite D-Pad Buttons", faceButtonCombinedCodes, InputComponent::button, RB2DO, InputComponentFlagsMask::rowSize2},
+	InputComponentDesc{"Face Buttons", faceButtonCodes, InputComponent::button, RB2DO, InputComponentFlagsMask::altConfig},
+	InputComponentDesc{"Opposite D-Pad Buttons", oppositeDPadButtonCodes, InputComponent::button, RB2DO, InputComponentFlagsMask::altConfig | InputComponentFlagsMask::staggeredLayout},
+	InputComponentDesc{"Start", centerButtonCodes, InputComponent::button, RB2DO},
+};
+
+constexpr SystemInputDeviceDesc gamepadDesc{"Gamepad", gamepadComponents};
+
+constexpr FRect gpImageCoords(IRect cellRelBounds)
+{
+	constexpr FP imageSize{256, 256};
+	constexpr int cellSize = 32;
+	return (cellRelBounds.relToAbs() * cellSize).as<float>() / imageSize;
+}
+
+constexpr struct VirtualControllerAssets
+{
+	AssetDesc dpad{AssetFileID::gamepadOverlay, gpImageCoords({{}, {4, 4}})},
+
+	a{AssetFileID::gamepadOverlay,     gpImageCoords({{4, 0}, {2, 2}})},
+	b{AssetFileID::gamepadOverlay,     gpImageCoords({{6, 0}, {2, 2}})},
+	d1{AssetFileID::gamepadOverlay,    gpImageCoords({{4, 2}, {2, 2}})},
+	d2{AssetFileID::gamepadOverlay,    gpImageCoords({{6, 2}, {2, 2}})},
+	d3{AssetFileID::gamepadOverlay,    gpImageCoords({{0, 4}, {2, 2}})},
+	d4{AssetFileID::gamepadOverlay,    gpImageCoords({{2, 4}, {2, 2}})},
+	start{AssetFileID::gamepadOverlay, gpImageCoords({{0, 6}, {2, 1}}), {1, 2}},
+
+	blank{AssetFileID::gamepadOverlay, gpImageCoords({{4, 4}, {2, 2}})};
+} virtualControllerAssets;
+
+AssetDesc WsApp::vControllerAssetDesc(unsigned key) const
+{
+	switch(key)
+	{
+		case 0: return virtualControllerAssets.dpad;
+		case wsKeyIdxANoRotation:
+		case wsKeyIdxATurbo:
+		case wsKeyIdxA: return virtualControllerAssets.a;
+		case wsKeyIdxBNoRotation:
+		case wsKeyIdxBTurbo:
+		case wsKeyIdxB: return virtualControllerAssets.b;
+		case wsKeyIdxY1X1:
+		case wsKeyIdxY1Turbo:
+		case wsKeyIdxY1: return virtualControllerAssets.d1;
+		case wsKeyIdxY2X2:
+		case wsKeyIdxY2Turbo:
+		case wsKeyIdxY2: return virtualControllerAssets.d2;
+		case wsKeyIdxY3X3:
+		case wsKeyIdxY3Turbo:
+		case wsKeyIdxY3: return virtualControllerAssets.d3;
+		case wsKeyIdxY4X4:
+		case wsKeyIdxY4Turbo:
+		case wsKeyIdxY4: return virtualControllerAssets.d4;
+		case wsKeyIdxStart: return virtualControllerAssets.start;
+		default: return virtualControllerAssets.blank;
+	}
+}
+
 const int EmuSystem::maxPlayers = 1;
-FaceButtonImageMap EmuSystem::vControllerImageMap{0, 4, 3, 1, 5, 2};
 
 enum KeypadMask: unsigned
 {
@@ -67,174 +169,125 @@ enum KeypadMask: unsigned
 	B_BIT = bit(10),
 };
 
-VController::Map WsSystem::vControllerMap(int player)
-{
-	VController::Map map{};
-	if(isRotated())
-	{
-		map[VController::F_ELEM] = X4_BIT;
-		map[VController::F_ELEM+1] = X3_BIT;
-		map[VController::F_ELEM+2] = A_BIT;
-		map[VController::F_ELEM+3] = X1_BIT;
-		map[VController::F_ELEM+4] = X2_BIT;
-		map[VController::F_ELEM+5] = B_BIT;
-
-		map[VController::C_ELEM] = START_BIT;
-
-		map[VController::D_ELEM] = Y2_BIT | Y1_BIT;
-		map[VController::D_ELEM+1] = Y2_BIT;
-		map[VController::D_ELEM+2] = Y2_BIT | Y3_BIT;
-		map[VController::D_ELEM+3] = Y1_BIT;
-		map[VController::D_ELEM+5] = Y3_BIT;
-		map[VController::D_ELEM+6] = Y4_BIT | Y1_BIT;
-		map[VController::D_ELEM+7] = Y4_BIT;
-		map[VController::D_ELEM+8] = Y4_BIT | Y3_BIT;
-	}
-	else
-	{
-		bool swapAB = !showVGamepadYWhenHorizonal;
-		map[VController::F_ELEM] = swapAB ? B_BIT : A_BIT;
-		map[VController::F_ELEM+1] = Y3_BIT;
-		map[VController::F_ELEM+2] = Y2_BIT;
-		map[VController::F_ELEM+3] = swapAB ? A_BIT : B_BIT;
-		map[VController::F_ELEM+4] = Y4_BIT;
-		map[VController::F_ELEM+5] = Y1_BIT;
-
-		map[VController::C_ELEM] = START_BIT;
-
-		map[VController::D_ELEM] = X1_BIT | X4_BIT;
-		map[VController::D_ELEM+1] = X1_BIT;
-		map[VController::D_ELEM+2] = X1_BIT | X2_BIT;
-		map[VController::D_ELEM+3] = X4_BIT;
-		map[VController::D_ELEM+5] = X2_BIT;
-		map[VController::D_ELEM+6] = X3_BIT | X4_BIT;
-		map[VController::D_ELEM+7] = X3_BIT;
-		map[VController::D_ELEM+8] = X3_BIT | X2_BIT;
-	}
-	return map;
-}
-
 static bool isGamepadButton(unsigned input)
 {
 	switch(input)
 	{
-		case wsKeyIdxY1Turbo:
-		case wsKeyIdxY1:
-		case wsKeyIdxY2Turbo:
-		case wsKeyIdxY2:
-		case wsKeyIdxY3Turbo:
-		case wsKeyIdxY3:
-		case wsKeyIdxY4Turbo:
-		case wsKeyIdxY4:
-		case wsKeyIdxStart:
-		case wsKeyIdxATurbo:
-		case wsKeyIdxA:
-		case wsKeyIdxBTurbo:
-		case wsKeyIdxB:
+		case wsKeyIdxA ... wsKeyIdxY4X4:
 			return true;
 		default: return false;
 	}
 }
 
-unsigned WsSystem::translateInputAction(unsigned input, bool &turbo)
+InputAction WsSystem::translateInputAction(InputAction action)
 {
-	if(!isGamepadButton(input))
-		turbo = 0;
-	if(isRotated())
+	if(!isGamepadButton(action.key))
+		action.setTurboFlag(false);
+	action.key = [&] -> unsigned
 	{
-		switch(input)
+		if(isRotated())
 		{
-			case wsKeyIdxUp: return Y2_BIT;
-			case wsKeyIdxRight: return Y3_BIT;
-			case wsKeyIdxDown: return Y4_BIT;
-			case wsKeyIdxLeft: return Y1_BIT;
-			case wsKeyIdxLeftUp: return Y1_BIT | Y2_BIT;
-			case wsKeyIdxRightUp: return Y3_BIT | Y2_BIT;
-			case wsKeyIdxRightDown: return Y3_BIT | Y4_BIT;
-			case wsKeyIdxLeftDown: return Y1_BIT | Y4_BIT;
-			case wsKeyIdxY1Turbo: turbo = 1; [[fallthrough]];
-			case wsKeyIdxY1: return B_BIT;
-			case wsKeyIdxY2Turbo: turbo = 1; [[fallthrough]];
-			case wsKeyIdxY2: return A_BIT;
-			case wsKeyIdxY3Turbo: turbo = 1; [[fallthrough]];
-			case wsKeyIdxY3: return X3_BIT;
-			case wsKeyIdxY4Turbo: turbo = 1; [[fallthrough]];
-			case wsKeyIdxY4: return X2_BIT;
-			case wsKeyIdxStart: return START_BIT;
-			case wsKeyIdxATurbo: turbo = 1; [[fallthrough]];
-			case wsKeyIdxA: return X4_BIT;
-			case wsKeyIdxBTurbo: turbo = 1; [[fallthrough]];
-			case wsKeyIdxB: return X1_BIT;
-			default: bug_unreachable("input == %d", input);
+			switch(action.key)
+			{
+				case wsKeyIdxUp: return Y2_BIT;
+				case wsKeyIdxRight: return Y3_BIT;
+				case wsKeyIdxDown: return Y4_BIT;
+				case wsKeyIdxLeft: return Y1_BIT;
+				case wsKeyIdxLeftUp: return Y1_BIT | Y2_BIT;
+				case wsKeyIdxRightUp: return Y3_BIT | Y2_BIT;
+				case wsKeyIdxRightDown: return Y3_BIT | Y4_BIT;
+				case wsKeyIdxLeftDown: return Y1_BIT | Y4_BIT;
+				case wsKeyIdxY1Turbo: action.setTurboFlag(true); [[fallthrough]];
+				case wsKeyIdxY1: return B_BIT;
+				case wsKeyIdxY2Turbo: action.setTurboFlag(true); [[fallthrough]];
+				case wsKeyIdxY2: return A_BIT;
+				case wsKeyIdxY3Turbo: action.setTurboFlag(true); [[fallthrough]];
+				case wsKeyIdxY3: return X3_BIT;
+				case wsKeyIdxY4Turbo: action.setTurboFlag(true); [[fallthrough]];
+				case wsKeyIdxY4: return X2_BIT;
+				case wsKeyIdxStart: return START_BIT;
+				case wsKeyIdxATurbo: action.setTurboFlag(true); [[fallthrough]];
+				case wsKeyIdxA: return X4_BIT;
+				case wsKeyIdxBTurbo: action.setTurboFlag(true); [[fallthrough]];
+				case wsKeyIdxB: return X1_BIT;
+				case wsKeyIdxANoRotation: return A_BIT;
+				case wsKeyIdxBNoRotation: return B_BIT;
+				case wsKeyIdxY1X1: return X1_BIT;
+				case wsKeyIdxY2X2: return X2_BIT;
+				case wsKeyIdxY3X3: return X3_BIT;
+				case wsKeyIdxY4X4: return X4_BIT;
+			}
 		}
-	}
-	else
-	{
-		switch(input)
+		else
 		{
-			case wsKeyIdxUp: return X1_BIT;
-			case wsKeyIdxRight: return X2_BIT;
-			case wsKeyIdxDown: return X3_BIT;
-			case wsKeyIdxLeft: return X4_BIT;
-			case wsKeyIdxLeftUp: return X4_BIT | X1_BIT;
-			case wsKeyIdxRightUp: return X2_BIT | X1_BIT;
-			case wsKeyIdxRightDown: return X2_BIT | X3_BIT;
-			case wsKeyIdxLeftDown: return X4_BIT | X3_BIT;
-			case wsKeyIdxY1Turbo: turbo = 1; [[fallthrough]];
-			case wsKeyIdxY1: return Y1_BIT;
-			case wsKeyIdxY2Turbo: turbo = 1; [[fallthrough]];
-			case wsKeyIdxY2: return Y2_BIT;
-			case wsKeyIdxY3Turbo: turbo = 1; [[fallthrough]];
-			case wsKeyIdxY3: return Y3_BIT;
-			case wsKeyIdxY4Turbo: turbo = 1; [[fallthrough]];
-			case wsKeyIdxY4: return Y4_BIT;
-			case wsKeyIdxStart: return START_BIT;
-			case wsKeyIdxATurbo: turbo = 1; [[fallthrough]];
-			case wsKeyIdxA: return A_BIT;
-			case wsKeyIdxBTurbo: turbo = 1; [[fallthrough]];
-			case wsKeyIdxB: return B_BIT;
-			default: bug_unreachable("input == %d", input);
+			switch(action.key)
+			{
+				case wsKeyIdxUp: return X1_BIT;
+				case wsKeyIdxRight: return X2_BIT;
+				case wsKeyIdxDown: return X3_BIT;
+				case wsKeyIdxLeft: return X4_BIT;
+				case wsKeyIdxLeftUp: return X4_BIT | X1_BIT;
+				case wsKeyIdxRightUp: return X2_BIT | X1_BIT;
+				case wsKeyIdxRightDown: return X2_BIT | X3_BIT;
+				case wsKeyIdxLeftDown: return X4_BIT | X3_BIT;
+				case wsKeyIdxY1Turbo: action.setTurboFlag(true); [[fallthrough]];
+				case wsKeyIdxY1: return Y1_BIT;
+				case wsKeyIdxY2Turbo: action.setTurboFlag(true); [[fallthrough]];
+				case wsKeyIdxY2: return Y2_BIT;
+				case wsKeyIdxY3Turbo: action.setTurboFlag(true); [[fallthrough]];
+				case wsKeyIdxY3: return Y3_BIT;
+				case wsKeyIdxY4Turbo: action.setTurboFlag(true); [[fallthrough]];
+				case wsKeyIdxY4: return Y4_BIT;
+				case wsKeyIdxStart: return START_BIT;
+				case wsKeyIdxATurbo: action.setTurboFlag(true); [[fallthrough]];
+				case wsKeyIdxA: return A_BIT;
+				case wsKeyIdxBTurbo: action.setTurboFlag(true); [[fallthrough]];
+				case wsKeyIdxB: return B_BIT;
+				case wsKeyIdxANoRotation: return A_BIT;
+				case wsKeyIdxBNoRotation: return B_BIT;
+				case wsKeyIdxY1X1: return Y1_BIT;
+				case wsKeyIdxY2X2: return Y2_BIT;
+				case wsKeyIdxY3X3: return Y3_BIT;
+				case wsKeyIdxY4X4: return Y4_BIT;
+			}
 		}
-	}
-	return 0;
+		bug_unreachable("invalid key");
+	}();
+	return action;
 }
 
 void WsSystem::handleInputAction(EmuApp *, InputAction a)
 {
-	inputBuff = IG::setOrClearBits(inputBuff, (uint16_t)a.key, a.state == Input::Action::PUSHED);
+	using namespace MDFN_IEN_WSWAN;
+	WSButtonStatus = setOrClearBits(WSButtonStatus, uint16_t(a.key), a.state == Input::Action::PUSHED);
 }
 
 void WsSystem::clearInputBuffers(EmuInputView &)
 {
-	inputBuff = {};
+	MDFN_IEN_WSWAN::WSButtonStatus = {};
 }
 
 void WsSystem::setupInput(EmuApp &app)
 {
-	static constexpr std::pair<int, bool> enableAll[]
-	{
-		{0, true}, {1, true}, {2, true}, {3, true}, {4, true}, {5, true}
-	};
 	if(isRotated())
 	{
-		static constexpr std::pair<int, bool> enableY[]
-		{
-			{0, true}, {1, true}, {2, false}, {3, true}, {4, true}, {5, false}
-		};
-		app.setFaceButtonMapping({5, 4, 0, 2, 3, 1});
-		app.applyEnabledFaceButtons(showVGamepadABWhenVertical ? enableAll : enableY);
+		if(showVGamepadABWhenVertical)
+			app.unsetDisabledInputKeys();
+		else
+			app.setDisabledInputKeys(faceButtonCodes);
 	}
 	else
 	{
-		static constexpr std::pair<int, bool> enableAB[]
-		{
-			{0, true}, {1, false}, {2, false}, {3, true}, {4, false}, {5, false}
-		};
-		app.applyEnabledFaceButtons(showVGamepadYWhenHorizonal ? enableAll : enableAB);
-		app.setFaceButtonMapping(showVGamepadYWhenHorizonal ? vControllerImageMap
-			: FaceButtonImageMap{1, 4, 3, 0, 5, 2}); // A/B ordering
+		if(showVGamepadYWhenHorizonal)
+			app.unsetDisabledInputKeys();
+		else
+			app.setDisabledInputKeys(oppositeDPadButtonCodes);
 	}
-	app.updateVControllerMapping();
+}
+
+SystemInputDeviceDesc WsSystem::inputDeviceDesc(int idx) const
+{
+	return gamepadDesc;
 }
 
 }

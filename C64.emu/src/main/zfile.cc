@@ -28,12 +28,13 @@ extern "C"
 
 using namespace EmuEx;
 
-CLINK FILE *zfile_fopen(const char *path, const char *mode)
+CLINK FILE *zfile_fopen(const char *path, const char *mode_)
 {
+	std::string_view mode{mode_};
 	auto appContext = gAppContext();
 	if(EmuApp::hasArchiveExtension(appContext.fileUriDisplayName(path)))
 	{
-		if(std::string_view{mode}.contains('w'))
+		if(mode.contains('w') || mode.contains('+'))
 		{
 			logErr("opening archive %s with write mode not supported", path);
 			return nullptr;
@@ -49,7 +50,7 @@ CLINK FILE *zfile_fopen(const char *path, const char *mode)
 				if(EmuSystem::defaultFsFilter(entry.name()))
 				{
 					logMsg("archive file entry:%s", entry.name().data());
-					return MapIO{entry.moveIO()}.toFileStream(mode);
+					return MapIO{entry.releaseIO()}.toFileStream(mode_);
 				}
 			}
 			logErr("no recognized file extensions in archive:%s", path);
@@ -62,6 +63,17 @@ CLINK FILE *zfile_fopen(const char *path, const char *mode)
 	}
 	else
 	{
-		return FileUtils::fopenUri(appContext, path, mode);
+		return FileUtils::fopenUri(appContext, path, mode_);
 	}
+}
+
+CLINK off_t archdep_file_size(FILE *stream)
+{
+	off_t pos = ftello(stream);
+	if(pos == -1)
+		return -1;
+	fseeko(stream, 0, SEEK_END);
+	off_t end = ftello(stream);
+	fseeko(stream, pos, SEEK_SET);
+	return end;
 }

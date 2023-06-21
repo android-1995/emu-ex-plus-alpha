@@ -32,20 +32,21 @@
 namespace EmuEx
 {
 
-const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2022\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nMednafen Team\nmednafen.sourceforge.net";
+const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2023\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nMednafen Team\nmednafen.github.io";
+bool EmuSystem::hasRectangularPixels = true;
 constexpr double masterClockFrac = 21477272.727273 / 3.;
-constexpr double staticFrameTimeWith262Lines = (455. * 262.) / masterClockFrac; // ~60.05Hz
-double EmuSystem::staticFrameTime = (455. * 263.) / masterClockFrac; //~59.82Hz
+constexpr auto pceFrameTimeWith262Lines{fromSeconds<FrameTime>(455. * 262. / masterClockFrac)}; // ~60.05Hz
+constexpr auto pceFrameTime{fromSeconds<FrameTime>(455. * 263. / masterClockFrac)}; //~59.82Hz
 bool EmuApp::needsGlobalInstance = true;
 
 bool hasHuCardExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".pce", ".sgx", ".PCE", ".SGX");
+	return IG::endsWithAnyCaseless(name, ".pce", ".sgx");
 }
 
 static bool hasCDExtension(std::string_view name)
 {
-	return IG::stringEndsWithAny(name, ".toc", ".cue", ".ccd", ".chd", ".TOC", ".CUE", ".CCD", ".CHD");
+	return IG::endsWithAnyCaseless(name, ".toc", ".cue", ".ccd", ".chd");
 }
 
 static bool hasPCEWithCDExtension(std::string_view name)
@@ -64,7 +65,6 @@ const char *EmuSystem::systemName() const
 }
 
 EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter = hasPCEWithCDExtension;
-EmuSystem::NameFilterFunc EmuSystem::defaultBenchmarkFsFilter = hasHuCardExtension;
 
 void PceSystem::loadBackupMemory(EmuApp &)
 {
@@ -86,14 +86,14 @@ void PceSystem::onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags)
 		MDFN_IEN_PCE_FAST::HuC_SaveNV();
 }
 
-IG::Time PceSystem::backupMemoryLastWriteTime(const EmuApp &app) const
+WallClockTimePoint PceSystem::backupMemoryLastWriteTime(const EmuApp &app) const
 {
-	return appContext().fileUriLastWriteTime(savePathMDFN(app, 0, "sav").c_str());
+	return appContext().fileUriLastWriteTime(savePathMDFN(app, 0, "sav", noMD5InFilenames).c_str());
 }
 
 FS::FileString PceSystem::stateFilename(int slot, std::string_view name) const
 {
-	return stateFilenameMDFN(*MDFNGameInfo, slot, name, 'q');
+	return stateFilenameMDFN(*MDFNGameInfo, slot, name, 'q', noMD5InFilenames);
 }
 
 void PceSystem::closeSystem()
@@ -138,7 +138,6 @@ void PceSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 {
 	mdfnGameInfo = resolvedCore() == EmuCore::Accurate ? EmulatedPCE : EmulatedPCE_Fast;
 	logMsg("using emulator core module:%s", asModuleString(resolvedCore()).data());
-	mdfnGameInfo.name = std::string{EmuSystem::contentName()};
 	auto unloadCD = IG::scopeGuard(
 		[&]()
 		{
@@ -171,16 +170,7 @@ void PceSystem::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDelegat
 	else
 	{
 		static constexpr size_t maxRomSize = 0x300000;
-		auto stream = std::make_unique<MemoryStream>(maxRomSize, true);
-		auto size = io.read(stream->map(), stream->map_size());
-		if(size <= 0)
-			throwFileReadError();
-		stream->setSize(size);
-		MDFNFILE fp(&NVFS, std::move(stream));
-		GameFile gf{&NVFS, std::string{contentDirectory()}, fp.stream(),
-			stringWithoutDotExtension<std::string>(contentFileName()),
-			std::string{contentName()}};
-		mdfnGameInfo.Load(&gf);
+		EmuEx::loadContent(*this, mdfnGameInfo, io, maxRomSize);
 	}
 	unloadCD.cancel();
 	//logMsg("%d input ports", MDFNGameInfo->InputInfo->InputPorts);
@@ -209,45 +199,33 @@ void PceSystem::updatePixmap(IG::PixelFormat fmt)
 	return;
 }
 
-void PceSystem::configAudioRate(IG::FloatSeconds frameTime, int rate)
+FrameTime PceSystem::frameTime() const { return isUsing263Lines() ? pceFrameTime : pceFrameTimeWith262Lines; }
+
+void PceSystem::configAudioRate(FrameTime outputFrameTime, int outputRate)
 {
-	const bool using263Lines = isUsing263Lines();
-	prevUsing263Lines = using263Lines;
-	auto systemFrameTime = using263Lines ? staticFrameTime : staticFrameTimeWith262Lines;
-	auto soundRate = std::round(rate / systemFrameTime * frameTime.count());
-	logMsg("emu sound rate:%f, 263 lines:%d", soundRate, using263Lines);
+	configuredFor263Lines = isUsing263Lines();
+	auto mixRate = audioMixRate(outputRate, outputFrameTime);
+	if(!isUsingAccurateCore())
+		mixRate = std::round(mixRate);
+	auto currMixRate = isUsingAccurateCore() ? MDFN_IEN_PCE::GetSoundRate() : MDFN_IEN_PCE_FAST::GetSoundRate();
+	if(mixRate == currMixRate)
+		return;
+	logMsg("set sound mix rate:%.2f for %s video lines", mixRate, isUsing263Lines() ? "263" : "262");
 	if(isUsingAccurateCore())
-		MDFN_IEN_PCE::applySoundFormat(soundRate);
+		MDFN_IEN_PCE::SetSoundRate(mixRate);
 	else
-		MDFN_IEN_PCE_FAST::applySoundFormat(soundRate);
+		MDFN_IEN_PCE_FAST::SetSoundRate(mixRate);
 }
 
 void PceSystem::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAudio *audio)
 {
-	unsigned maxFrames = 48000/54;
-	int16 audioBuff[maxFrames*2];
-	EmulateSpecStruct espec{};
-	if(audio)
+	static constexpr size_t maxAudioFrames = 48000 / minFrameRate;
+	static constexpr size_t maxLineWidths = 264;
+	EmuEx::runFrame(*this, mdfnGameInfo, taskCtx, video, mSurfacePix, audio, maxAudioFrames, maxLineWidths);
+	if(configuredFor263Lines != isUsing263Lines()) [[unlikely]]
 	{
-		espec.SoundBuf = audioBuff;
-		espec.SoundBufMaxSize = maxFrames;
-		if(prevUsing263Lines != isUsing263Lines()) [[unlikely]]
-		{
-			configFrameTime(audio->format().rate);
-		}
+		onFrameTimeChanged();
 	}
-	espec.taskCtx = taskCtx;
-	espec.sys = this;
-	espec.video = video;
-	espec.skip = !video;
-	espec.audio = audio;
-	auto mSurface = toMDFNSurface(mSurfacePix);
-	espec.surface = &mSurface;
-	int32 lineWidth[264];
-	espec.LineWidths = lineWidth;
-	mdfnGameInfo.Emulate(&espec);
-	if(audio)
-		audio->writeFrames(audioBuff, espec.SoundBufSize);
 }
 
 void PceSystem::reset(EmuApp &, ResetMode mode)
@@ -281,9 +259,9 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 {
 	const Gfx::LGradientStopDesc navViewGrad[] =
 	{
-		{ .0, Gfx::VertexColorPixelFormat.build((255./255.) * .4, (104./255.) * .4, (31./255.) * .4, 1.) },
-		{ .3, Gfx::VertexColorPixelFormat.build((255./255.) * .4, (104./255.) * .4, (31./255.) * .4, 1.) },
-		{ .97, Gfx::VertexColorPixelFormat.build((85./255.) * .4, (35./255.) * .4, (10./255.) * .4, 1.) },
+		{ .0, Gfx::PackedColor::format.build((255./255.) * .4, (104./255.) * .4, (31./255.) * .4, 1.) },
+		{ .3, Gfx::PackedColor::format.build((255./255.) * .4, (104./255.) * .4, (31./255.) * .4, 1.) },
+		{ .97, Gfx::PackedColor::format.build((85./255.) * .4, (35./255.) * .4, (10./255.) * .4, 1.) },
 		{ 1., view.separatorColor() },
 	};
 	view.setBackgroundGradient(navViewGrad);
@@ -313,7 +291,7 @@ static void renderMultiresOutput(EmulateSpecStruct spec, IG::PixmapView srcPix, 
 		// scale 256x4, 341x3 + 1x4, 512x2
 		for(auto h : IG::iotaCount(pixHeight))
 		{
-			auto srcPixAddr = (Pixel*)srcPix.pixel({0,(int)h});
+			auto srcPixAddr = (Pixel*)&srcPix[0, h];
 			int width = lineWidth[h];
 			switch(width)
 			{
@@ -361,7 +339,7 @@ static void renderMultiresOutput(EmulateSpecStruct spec, IG::PixmapView srcPix, 
 	{
 		for(auto h : IG::iotaCount(pixHeight))
 		{
-			auto srcPixAddr = (Pixel*)srcPix.pixel({0,(int)h});
+			auto srcPixAddr = (Pixel*)&srcPix[0, h];
 			int width = lineWidth[h];
 			switch(width)
 			{

@@ -147,7 +147,7 @@ uint32_t IControlPad::statusHandler(BluetoothSocket &sock, uint32_t status)
 	if(status == BluetoothSocket::STATUS_OPENED)
 	{
 		logMsg("iCP opened successfully");
-		ctx.application().bluetoothInputDeviceStatus(*this, status);
+		ctx.application().bluetoothInputDeviceStatus(ctx, *this, status);
 		sock.write(setLEDPulseInverse, sizeof setLEDPulseInverse);
 		function = FUNC_SET_LED_MODE;
 		return BluetoothSocket::OPEN_USAGE_READ_EVENTS;
@@ -155,12 +155,12 @@ uint32_t IControlPad::statusHandler(BluetoothSocket &sock, uint32_t status)
 	else if(status == BluetoothSocket::STATUS_CONNECT_ERROR)
 	{
 		logErr("iCP connection error");
-		ctx.application().bluetoothInputDeviceStatus(*this, status);
+		ctx.application().bluetoothInputDeviceStatus(ctx, *this, status);
 	}
 	else if(status == BluetoothSocket::STATUS_READ_ERROR)
 	{
 		logErr("iCP read error, disconnecting");
-		ctx.application().bluetoothInputDeviceStatus(*this, status);
+		ctx.application().bluetoothInputDeviceStatus(ctx, *this, status);
 	}
 	return 0;
 }
@@ -177,7 +177,7 @@ bool IControlPad::dataHandler(const char *packetPtr, size_t size)
 			if(packet[size-bytesLeft] != RESP_OKAY)
 			{
 				logErr("error: iCP didn't respond with OK");
-				ctx.application().bluetoothInputDeviceStatus(*this, BluetoothSocket::STATUS_READ_ERROR);
+				ctx.application().bluetoothInputDeviceStatus(ctx, *this, BluetoothSocket::STATUS_READ_ERROR);
 				return 0;
 			}
 			logMsg("got OK reply");
@@ -202,7 +202,7 @@ bool IControlPad::dataHandler(const char *packetPtr, size_t size)
 			// check if inputBuffer is complete
 			if(inputBufferPos == 6)
 			{
-				auto time = IG::steadyClockTimestamp();
+				auto time = SteadyClock::now();
 				for(auto i : iotaCount(4))
 				{
 					if(axis[i].update(inputBuffer[i], Input::Map::ICONTROLPAD, time, *this, ctx.mainWindow()))
@@ -219,7 +219,7 @@ bool IControlPad::dataHandler(const char *packetPtr, size_t size)
 	return 1;
 }
 
-void IControlPad::processBtnReport(const char *btnData, Input::Time time)
+void IControlPad::processBtnReport(const char *btnData, SteadyClockTimePoint time)
 {
 	using namespace IG::Input;
 	for(auto e : iCPDataAccess)

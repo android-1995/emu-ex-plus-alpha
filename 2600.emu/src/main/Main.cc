@@ -42,17 +42,18 @@ namespace EmuEx
 {
 
 constexpr size_t MAX_ROM_SIZE = 512 * 1024;
-const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2022\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nStella Team\nstella-emu.github.io";
+const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2023\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nStella Team\nstella-emu.github.io";
 bool EmuSystem::hasPALVideoSystem = true;
 bool EmuSystem::hasResetModes = true;
 IG::Audio::SampleFormat EmuSystem::audioSampleFormat = IG::Audio::SampleFormats::f32;
+bool EmuSystem::hasRectangularPixels = true;
+bool EmuApp::needsGlobalInstance = true;
+
 EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter =
 	[](std::string_view name)
 	{
-		return IG::stringEndsWithAny(name, ".a26", ".bin", ".A26", ".BIN");
+		return IG::endsWithAnyCaseless(name, ".a26", ".bin");
 	};
-EmuSystem::NameFilterFunc EmuSystem::defaultBenchmarkFsFilter = EmuSystem::defaultFsFilter;
-bool EmuApp::needsGlobalInstance = true;
 
 const char *EmuSystem::shortSystemName() const
 {
@@ -124,16 +125,34 @@ void A2600System::loadContent(IO &io, EmuSystemCreateParams, OnLoadProgressDeleg
 	os.makeConsole(cartridge, props, contentFileName().data());
 	auto &console = os.console();
 	autoDetectedInput1 = limitToSupportedControllerTypes(console.leftController().type());
-	setControllerType(EmuApp::get(appContext()), console, (Controller::Type)optionInputPort1.val);
+	setControllerType(EmuApp::get(appContext()), console, Controller::Type(optionInputPort1.val));
 	Paddles::setDigitalSensitivity(optionPaddleDigitalSensitivity);
 	console.initializeVideo();
 	console.initializeAudio();
 	logMsg("is PAL: %s", videoSystem() == VideoSystem::PAL ? "yes" : "no");
 }
 
-void A2600System::configAudioRate(IG::FloatSeconds frameTime, int rate)
+static auto consoleFrameRate(const OSystem &osystem)
 {
-	osystem.setFrameTime(frameTime.count(), rate, (AudioSettings::ResamplingQuality)optionAudioResampleQuality.val);
+	if(!osystem.hasConsole())
+		return 60.f;
+	if(!osystem.console().tia().frameBufferScanlinesLastFrame())
+		return osystem.console().timing() == ConsoleTiming::ntsc ? 60.f : 50.f;
+	return osystem.console().currentFrameRate();
+}
+
+FrameTime A2600System::frameTime() const
+{
+	return fromHz<FrameTime>(consoleFrameRate(osystem));
+}
+
+void A2600System::configAudioRate(FrameTime outputFrameTime, int outputRate)
+{
+	if(!osystem.hasConsole())
+		return;
+	configuredInputVideoFrameRate = consoleFrameRate(osystem);
+	osystem.setSoundMixRate(std::round(audioMixRate(outputRate, configuredInputVideoFrameRate, outputFrameTime)),
+		AudioSettings::ResamplingQuality(optionAudioResampleQuality.val));
 }
 
 static void renderVideo(EmuSystemTaskContext taskCtx, EmuVideo &video, FrameBuffer &fb, TIA &tia)
@@ -150,9 +169,6 @@ void A2600System::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAud
 	auto &console = os.console();
 	auto &sound = os.soundEmuEx();
 	sound.setEmuAudio(audio);
-	console.leftController().update();
-	console.rightController().update();
-	console.switches().update();
 	console.riot().update();
 	auto &tia = console.tia();
 	static constexpr uInt64 maxCyclesPerFrame = 32768;
@@ -165,7 +181,12 @@ void A2600System::runFrame(EmuSystemTaskContext taskCtx, EmuVideo *video, EmuAud
 	{
 		renderVideo(taskCtx, *video, os.frameBuffer(), tia);
 	}
-	sound.updateRate(os);
+	if(auto newInputVideoFrameRate = osystem.console().currentFrameRate();
+		configuredInputVideoFrameRate != newInputVideoFrameRate
+		&& newInputVideoFrameRate >= 40.0 && newInputVideoFrameRate <= 70.0) [[unlikely]]
+	{
+		onFrameTimeChanged();
+	}
 }
 
 void A2600System::renderFramebuffer(EmuVideo &video)
@@ -218,9 +239,9 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 {
 	const Gfx::LGradientStopDesc navViewGrad[] =
 	{
-		{ .0, Gfx::VertexColorPixelFormat.build((200./255.) * .4, (100./255.) * .4, (0./255.) * .4, 1.) },
-		{ .3, Gfx::VertexColorPixelFormat.build((200./255.) * .4, (100./255.) * .4, (0./255.) * .4, 1.) },
-		{ .97, Gfx::VertexColorPixelFormat.build((75./255.) * .4, (37.5/255.) * .4, (0./255.) * .4, 1.) },
+		{ .0, Gfx::PackedColor::format.build((200./255.) * .4, (100./255.) * .4, (0./255.) * .4, 1.) },
+		{ .3, Gfx::PackedColor::format.build((200./255.) * .4, (100./255.) * .4, (0./255.) * .4, 1.) },
+		{ .97, Gfx::PackedColor::format.build((75./255.) * .4, (37.5/255.) * .4, (0./255.) * .4, 1.) },
 		{ 1., view.separatorColor() },
 	};
 	view.setBackgroundGradient(navViewGrad);

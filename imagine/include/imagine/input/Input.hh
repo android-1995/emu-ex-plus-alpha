@@ -17,9 +17,11 @@
 
 #include <imagine/config/defs.hh>
 #include <imagine/util/rectangle2.h>
-#include <imagine/input/bluetoothInputDefs.hh>
 #include <imagine/input/inputDefs.hh>
+#include <imagine/input/bluetoothInputDefs.hh>
+#include <imagine/time/Time.hh>
 #include <string>
+#include <string_view>
 #include <variant>
 
 namespace IG
@@ -68,7 +70,7 @@ class BaseEvent
 public:
 	constexpr BaseEvent() = default;
 
-	constexpr BaseEvent(Map map, Key button, uint32_t metaState, Action state, Source src, Time time, const Device *device)
+	constexpr BaseEvent(Map map, Key button, uint32_t metaState, Action state, Source src, SteadyClockTimePoint time, const Device *device)
 		: time_{time}, device_{device}, metaState{metaState}, button{button}, state_{state}, map_{map}, src{src} {}
 
 	Map map() const;
@@ -78,7 +80,7 @@ public:
 	bool released(Key key = {}) const;
 	uint32_t metaKeyBits() const;
 	bool isShiftPushed() const;
-	Time time() const;
+	SteadyClockTimePoint time() const;
 	const Device *device() const;
 	void setMap(Map map);
 	std::string_view mapName() const;
@@ -87,7 +89,7 @@ public:
 	static std::string_view actionToStr(Action action);
 
 protected:
-	Time time_{};
+	SteadyClockTimePoint time_{};
 	const Device *device_{};
 	uint32_t metaState{};
 	Key button{};
@@ -101,7 +103,7 @@ class KeyEvent : public BaseEvent
 public:
 	constexpr KeyEvent() = default;
 
-	constexpr KeyEvent(Map map, Key button, Key sysKey, Action state, uint32_t metaState, int repeatCount, Source src, Time time, const Device *device)
+	constexpr KeyEvent(Map map, Key button, Key sysKey, Action state, uint32_t metaState, int repeatCount, Source src, SteadyClockTimePoint time, const Device *device)
 		: BaseEvent{map, button, metaState, state, src, time, device}, sysKey_{sysKey}, repeatCount{repeatCount} {}
 
 	Key key() const;
@@ -149,10 +151,10 @@ class MotionEvent : public BaseEvent
 public:
 	constexpr MotionEvent() = default;
 
-	constexpr MotionEvent(Map map, Key button, uint32_t metaState, Action state, int x, int y, PointerId pointerId, Source src, Time time, const Device *device)
+	constexpr MotionEvent(Map map, Key button, uint32_t metaState, Action state, int x, int y, PointerId pointerId, Source src, SteadyClockTimePoint time, const Device *device)
 		: BaseEvent{map, button, metaState, state, src, time, device}, pointerId_{pointerId}, x{x}, y{y} {}
 
-	IG::WP pos() const;
+	WP pos() const;
 	PointerId pointerId() const;
 	bool pointerDown(Key btnMask) const;
 	int scrolledVertical() const;
@@ -178,12 +180,8 @@ public:
 	constexpr auto motionEvent() const { return std::get_if<MotionEvent>(this); }
 	constexpr auto keyEvent() { return std::get_if<KeyEvent>(this); }
 	constexpr auto keyEvent() const { return std::get_if<KeyEvent>(this); }
-	constexpr auto &asMotionEvent() { return *motionEvent(); }
-	constexpr auto &asMotionEvent() const { return *motionEvent(); }
-	constexpr auto &asKeyEvent() { return *keyEvent(); }
-	constexpr auto &asKeyEvent() const { return *keyEvent(); }
 
-	Time time() const;
+	SteadyClockTimePoint time() const;
 	const Device *device() const;
 };
 

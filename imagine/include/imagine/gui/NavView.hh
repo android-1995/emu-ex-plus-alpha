@@ -22,6 +22,7 @@
 #include <imagine/gui/View.hh>
 #include <memory>
 #include <array>
+#include <span>
 
 namespace IG
 {
@@ -44,7 +45,7 @@ public:
 	virtual void showRightBtn(bool show) = 0;
 	Gfx::GlyphTextureSet *titleFace();
 	bool hasButtons() const;
-	Gfx::VertexColor separatorColor() const;
+	Gfx::PackedColor separatorColor() const;
 
 protected:
 	struct Control
@@ -76,10 +77,10 @@ public:
 	void setRotateLeftButton(bool on);
 
 protected:
-	std::unique_ptr<Gfx::LGradientStopDesc[]> gradientStops{};
-	Gfx::Sprite leftSpr{}, rightSpr{};
-	Gfx::LGradient bg{};
-	Gfx::GeomRect topBg{};
+	std::unique_ptr<Gfx::LGradientStopDesc[]> gradientStops;
+	Gfx::Sprite leftSpr, rightSpr;
+	Gfx::LGradient bg;
+	Gfx::IQuad topBg{};
 	bool centerTitle = true;
 	bool rotateLeftBtn{};
 };

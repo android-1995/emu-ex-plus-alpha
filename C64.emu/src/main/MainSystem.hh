@@ -91,13 +91,14 @@ public:
 	const char *sysFileDir{};
 	VicePlugin plugin{};
 	std::string defaultPaletteName{};
+	std::string lastMissingSysFile;
 	IG::PixmapView canvasSrcPix{};
 	PixelFormat pixFmt{};
 	ViceSystem currSystem{};
 	std::atomic_bool runningFrame{};
 	bool ctrlLock{};
 	bool c64IsInit{}, c64FailedInit{};
-	FS::PathString sysFilePath[Config::envIsLinux ? 5 : 3]{};
+	std::array <FS::PathString, Config::envIsLinux ? 3 : 1> sysFilePath{};
 	std::array<char, 21> externalPaletteResStr{};
 	std::array<char, 17> paletteFileResStr{};
 	Byte1Option optionDriveTrueEmulation{CFGKEY_DRIVE_TRUE_EMULATION, 0};
@@ -133,17 +134,10 @@ public:
 				plugin.maincpu_mainloop();
 			});
 
-		if constexpr(Config::envIsLinux && !Config::MACHINE_IS_PANDORA)
+		if(sysFilePath.size() == 3)
 		{
-			sysFilePath[1] = ctx.assetPath();
-			sysFilePath[2] = FS::pathString(ctx.assetPath(), "C64.emu.zip");
-			sysFilePath[3] = "~/.local/share/C64.emu";
-			sysFilePath[4] = "/usr/share/games/vice";
-		}
-		else
-		{
-			sysFilePath[1] = FS::pathString(ctx.storagePath(), "C64.emu");
-			sysFilePath[2] = FS::pathString(ctx.storagePath(), "C64.emu.zip");
+			sysFilePath[1] = "~/.local/share/C64.emu";
+			sysFilePath[2] = "/usr/share/games/vice";
 		}
 
 		// higher quality ReSID sampling modes take orders of magnitude more CPU power,
@@ -200,9 +194,10 @@ public:
 	void reset(EmuApp &, ResetMode mode);
 	void clearInputBuffers(EmuInputView &view);
 	void handleInputAction(EmuApp *, InputAction);
-	unsigned translateInputAction(unsigned input, bool &turbo);
-	VController::Map vControllerMap(int player);
-	void configAudioRate(FloatSeconds frameTime, int rate);
+	InputAction translateInputAction(InputAction);
+	SystemInputDeviceDesc inputDeviceDesc(int idx) const;
+	FrameTime frameTime() const { return fromHz<FrameTime>(systemFrameRate); }
+	void configAudioRate(FrameTime outputFrameTime, int outputRate);
 	static std::span<const AspectRatioInfo> aspectRatioInfos();
 
 	// optional API functions
@@ -219,7 +214,7 @@ public:
 	bool onVideoRenderFormatChange(EmuVideo &, PixelFormat);
 
 protected:
-	bool initC64(EmuApp &app);
+	void initC64(EmuApp &app);
 	int reSidSampling() const;
 	void setVirtualDeviceTraps(bool on);
 	bool virtualDeviceTraps() const;

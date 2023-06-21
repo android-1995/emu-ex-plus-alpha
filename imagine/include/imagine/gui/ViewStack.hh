@@ -19,6 +19,8 @@
 #include <imagine/gui/View.hh>
 #include <imagine/gui/NavView.hh>
 #include <vector>
+#include <memory>
+#include <string_view>
 
 namespace IG
 {
@@ -35,17 +37,16 @@ public:
 	using ViewController::pushAndShow;
 	void dismissView(View &v, bool refreshLayout = true) override;
 	void dismissView(int idx, bool refreshLayout = true) override;
-	void place(const IG::WindowRect &rect, const Gfx::ProjectionPlane &projP);
+	void place(const WRect &rect);
 	void place();
 	bool hasView() { return (bool)view; }
 	bool inputEvent(const Input::Event &) override;
 	void draw(Gfx::RendererCommands &cmds);
 
 protected:
-	std::unique_ptr<View> view{};
-	RemoveViewDelegate removeViewDel{};
-	IG::WindowRect viewRect{};
-	Gfx::ProjectionPlane projP{};
+	std::unique_ptr<View> view;
+	RemoveViewDelegate removeViewDel;
+	WRect viewRect{};
 };
 
 class ViewStack : public ViewController
@@ -54,7 +55,7 @@ public:
 	constexpr ViewStack() = default;
 	void setNavView(std::unique_ptr<NavView> nav);
 	NavView *navView() const;
-	void place(WindowRect viewRect, WindowRect displayRect, Gfx::ProjectionPlane);
+	void place(WindowRect viewRect, WindowRect displayRect);
 	void place();
 	bool inputEvent(const Input::Event &) override;
 	bool moveFocusToNextView(const Input::Event &, _2DOrigin direction) override;
@@ -93,17 +94,16 @@ protected:
 	{
 		ViewEntry(std::unique_ptr<View> v, bool needsNavView):
 			v{std::move(v)}, needsNavView{needsNavView} {}
-		std::unique_ptr<View> v{};
+		std::unique_ptr<View> v;
 		bool needsNavView{};
 		bool isModal{};
 	};
-	std::vector<ViewEntry> view{};
-	std::unique_ptr<NavView> nav{};
+	std::vector<ViewEntry> view;
+	std::unique_ptr<NavView> nav;
 	//ViewController *nextController{};
 	WindowRect viewRect{}, customViewRect{};
 	WindowRect displayRect{}, customDisplayRect{};
-	Gfx::ProjectionPlane projP{};
-	Gfx::ColQuad bottomGradient{};
+	Gfx::IColQuad bottomGradient{};
 	bool showNavBackBtn = true;
 	bool showNavView_ = true;
 	bool navViewHasFocus = false;

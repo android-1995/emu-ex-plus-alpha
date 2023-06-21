@@ -22,14 +22,12 @@ namespace EmuEx
 {
 
 const char *EmuSystem::configFilename = "NesEmu.config";
-FS::PathString fdsBiosPath{};
 
 std::span<const AspectRatioInfo> NesSystem::aspectRatioInfos()
 {
 	static constexpr AspectRatioInfo aspectRatioInfo[]
 	{
 		{"4:3 (Original)", {4, 3}},
-		{"8:7", {8, 7}},
 		EMU_SYSTEM_DEFAULT_ASPECT_RATIO_INFO_INIT
 	};
 	return aspectRatioInfo;
@@ -66,6 +64,9 @@ bool NesSystem::resetSessionOptions(EmuApp &app)
 	optionVisibleVideoLines.reset();
 	optionHorizontalVideoCrop.reset();
 	updateVideoPixmap(app.video(), optionHorizontalVideoCrop, optionVisibleVideoLines);
+	overclock_enabled = 0;
+	postrenderscanlines = 0;
+	vblankscanlines = 0;
 	return true;
 }
 
@@ -106,6 +107,11 @@ bool NesSystem::readConfig(ConfigType type, MapIO &io, unsigned key, size_t read
 			case CFGKEY_START_VIDEO_LINE: return optionStartVideoLine.readFromIO(io, readSize);
 			case CFGKEY_VISIBLE_VIDEO_LINES: return optionVisibleVideoLines.readFromIO(io, readSize);
 			case CFGKEY_HORIZONTAL_VIDEO_CROP: return optionHorizontalVideoCrop.readFromIO(io, readSize);
+			case CFGKEY_OVERCLOCKING: return readOptionValue<bool>(io, readSize, [&](auto on){overclock_enabled = on;});
+			case CFGKEY_OVERCLOCK_EXTRA_LINES: return readOptionValue<int16_t>(io, readSize,
+				[&](auto v){if(v >= 0 && v <= maxExtraLinesPerFrame) postrenderscanlines = v;});
+			case CFGKEY_OVERCLOCK_VBLANK_MULTIPLIER: return readOptionValue<int8_t>(io, readSize,
+				[&](auto v){if(v >= 0 && v <= maxVBlankMultiplier) vblankscanlines = v;});
 		}
 	}
 	return false;
@@ -143,6 +149,9 @@ void NesSystem::writeConfig(ConfigType type, FileIO &io)
 		optionStartVideoLine.writeWithKeyIfNotDefault(io);
 		optionVisibleVideoLines.writeWithKeyIfNotDefault(io);
 		optionHorizontalVideoCrop.writeWithKeyIfNotDefault(io);
+		writeOptionValueIfNotDefault(io, CFGKEY_OVERCLOCKING, bool(overclock_enabled), 0);
+		writeOptionValueIfNotDefault(io, CFGKEY_OVERCLOCK_EXTRA_LINES, int16_t(postrenderscanlines), 0);
+		writeOptionValueIfNotDefault(io, CFGKEY_OVERCLOCK_VBLANK_MULTIPLIER, int8_t(vblankscanlines), 0);
 	}
 }
 

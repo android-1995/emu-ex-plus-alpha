@@ -51,8 +51,7 @@ public:
 			{
 				if(!io) [[unlikely]]
 					return *this;
-				msg = io->get<MsgType>();
-				if(!msg)
+				if(io->read(msg).bytes != sizeof(MsgType))
 				{
 					// end of messages
 					io = nullptr;
@@ -72,7 +71,7 @@ public:
 
 		private:
 			PosixIO *io{};
-			MsgType msg{};
+			MsgType msg;
 		};
 
 		constexpr Messages(PosixIO &io): io{io} {}
@@ -86,9 +85,9 @@ public:
 		}
 
 		template <class T>
-		bool getExtraData(std::span<T> span)
+		auto readExtraData(std::span<T> span)
 		{
-			return io.read(span.data(), span.size_bytes()) != -1;
+			return io.read(span);
 		}
 
 	protected:
@@ -113,7 +112,7 @@ public:
 		attach(EventLoop::forThread(), IG_forward(f));
 	}
 
-	void attach(EventLoop loop, IG::Callable<void, Messages> auto &&f)
+	void attach(EventLoop loop, Callable<void, Messages> auto &&f)
 	{
 		pipe.attach(loop,
 			[=](auto &io) -> bool
@@ -124,7 +123,7 @@ public:
 			});
 	}
 
-	void attach(EventLoop loop, IG::Callable<bool, Messages> auto &&f)
+	void attach(EventLoop loop, Callable<bool, Messages> auto &&f)
 	{
 		pipe.attach(loop,
 			[=](auto &io) -> bool
@@ -141,7 +140,7 @@ public:
 
 	bool send(MsgType msg)
 	{
-		return pipe.sink().write(msg) != -1;
+		return pipe.sink().put(msg) != -1;
 	}
 
 	bool send(MsgType msg, bool awaitReply)
@@ -162,7 +161,7 @@ public:
 		if(semPtr)
 		{
 			msg.setReplySemaphore(semPtr);
-			if(pipe.sink().write(msg) == -1) [[unlikely]]
+			if(pipe.sink().put(msg) == -1) [[unlikely]]
 			{
 				return false;
 			}

@@ -19,23 +19,24 @@
 #include <imagine/util/ScopeGuard.hh>
 #include <imagine/util/format.hh>
 #include <imagine/fs/FS.hh>
+#include <imagine/io/IOStream.hh>
 #include <resample/resampler.h>
 #include <resample/resamplerinfo.h>
+#include <libgambatte/src/mem/cartridge.h>
 #include <main/Cheats.hh>
 
 namespace EmuEx
 {
 
-const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2022\nRobert Broglia\nwww.explusalpha.com\n\n\nPortions (c) the\nGambatte Team\ngambatte.sourceforge.net";
+const char *EmuSystem::creditsViewStr = CREDITS_INFO_STRING "(c) 2011-2023\nRobert Broglia\nwww.explusalpha.com\n\n\nPortions (c) the\nGambatte Team\ngambatte.sourceforge.net";
 bool EmuSystem::hasCheats = true;
-double EmuSystem::staticFrameTime = 70224. / 4194304.; // ~59.7275Hz
+constexpr IG::WP lcdSize{gambatte::lcd_hres, gambatte::lcd_vres};
+
 EmuSystem::NameFilterFunc EmuSystem::defaultFsFilter =
 	[](std::string_view name)
 	{
-		return IG::stringEndsWithAny(name, ".gb", ".gbc", ".GB", ".GBC");
+		return IG::endsWithAnyCaseless(name, ".gb", ".gbc", ".dmg");
 	};
-EmuSystem::NameFilterFunc EmuSystem::defaultBenchmarkFsFilter = defaultFsFilter;
-constexpr IG::WP lcdSize{gambatte::lcd_hres, gambatte::lcd_vres};
 
 const char *EmuSystem::shortSystemName() const
 {
@@ -74,10 +75,11 @@ void GbcSystem::applyGBPalette()
 		gbEmu.setDmgPaletteColor(2, i, makeOutputColor(pal.sp2[i]));
 }
 
-void GbcSystem::reset(EmuApp &, ResetMode mode)
+void GbcSystem::reset(EmuApp &app, ResetMode mode)
 {
-	assert(hasContent());
+	flushBackupMemory(app);
 	gbEmu.reset();
+	loadBackupMemory(app);
 }
 
 const char *saveSlotCharAiWu(int slot)
@@ -106,32 +108,66 @@ FS::FileString GbcSystem::stateFilename(int slot, std::string_view name) const
 
 void GbcSystem::saveState(IG::CStringView path)
 {
-	IG::OFStream stream{appContext().openFileUri(path, OpenFlagsMask::NEW)};
+	OFStream stream{appContext().openFileUri(path, OpenFlagsMask::New)};
 	if(!gbEmu.saveState(frameBuffer, gambatte::lcd_hres, stream))
 		throwFileWriteError();
 }
 
 void GbcSystem::loadState(EmuApp &app, IG::CStringView path)
 {
-	IG::IFStream stream{app.appContext().openFileUri(path, IO::AccessHint::ALL)};
+	IFStream stream{app.appContext().openFileUri(path, IO::AccessHint::All)};
 	if(!gbEmu.loadState(stream))
 		throwFileReadError();
 }
 
-void GbcSystem::loadBackupMemory(EmuApp &)
+void GbcSystem::loadBackupMemory(EmuApp &app)
 {
-	gbEmu.loadSavedata();
+	if(auto sram = gbEmu.srambank();
+		sram.size())
+	{
+		logMsg("loading sram");
+		if(!saveFileIO)
+			saveFileIO = staticBackupMemoryFile(app.contentSaveFilePath(".sav"), sram.size(), 0xFF);
+		if(!saveFileIO)
+			throw std::runtime_error("Error accessing .sav file, please verify it has write access");
+		saveFileIO.read(sram, 0);
+	}
+	if(auto timeOpt = gbEmu.rtcTime();
+		timeOpt)
+	{
+		logMsg("loading rtc");
+		if(!rtcFileIO)
+			rtcFileIO = staticBackupMemoryFile(app.contentSaveFilePath(".rtc"), 4);
+		if(!rtcFileIO)
+			throw std::runtime_error("Error accessing .rtc file, please verify it has write access");
+		auto rtcData = rtcFileIO.get<std::array<uint8_t, 4>>(0);
+		gbEmu.setRtcTime(rtcData[0] << 24 | rtcData[1] << 16 | rtcData[2] << 8 | rtcData[3]);
+	}
 }
 
 void GbcSystem::onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags)
 {
-	if(!hasContent())
-		return;
-	logMsg("saving backup memory");
-	gbEmu.saveSavedata();
+	if(auto sram = gbEmu.srambank();
+		sram.size())
+	{
+		logMsg("saving sram");
+		saveFileIO.write(sram, 0);
+	}
+	if(auto timeOpt = gbEmu.rtcTime();
+		timeOpt)
+	{
+		logMsg("saving rtc");
+		rtcFileIO.put(std::array<uint8_t, 4>
+			{
+				uint8_t(*timeOpt >> 24 & 0xFF),
+				uint8_t(*timeOpt >> 16 & 0xFF),
+				uint8_t(*timeOpt >>  8 & 0xFF),
+				uint8_t(*timeOpt       & 0xFF)
+			}, 0);
+	}
 }
 
-IG::Time GbcSystem::backupMemoryLastWriteTime(const EmuApp &app) const
+WallClockTimePoint GbcSystem::backupMemoryLastWriteTime(const EmuApp &app) const
 {
 	return appContext().fileUriLastWriteTime(app.contentSaveFilePath(".sav").c_str());
 }
@@ -139,6 +175,8 @@ IG::Time GbcSystem::backupMemoryLastWriteTime(const EmuApp &app) const
 void GbcSystem::closeSystem()
 {
 	cheatList.clear();
+	saveFileIO = {};
+	rtcFileIO = {};
 	gameBuiltinPalette = nullptr;
 	totalFrames = 0;
 	totalSamples = 0;
@@ -186,13 +224,13 @@ bool GbcSystem::onVideoRenderFormatChange(EmuVideo &video, IG::PixelFormat fmt)
 	return true;
 }
 
-void GbcSystem::configAudioRate(IG::FloatSeconds frameTime, int rate)
+void GbcSystem::configAudioRate(FrameTime outputFrameTime, int outputRate)
 {
-	long outputRate = rate;
-	long inputRate = staticFrameTime / frameTime.count() * 2097152.;
+	long inputRate = gbFrameTimeSecs / duration_cast<FloatSeconds>(outputFrameTime) * 2097152.;
 	if(optionAudioResampler >= ResamplerInfo::num())
-		optionAudioResampler = std::min((int)ResamplerInfo::num(), 1);
-	if(!resampler || optionAudioResampler != activeResampler || resampler->outRate() != outputRate)
+		optionAudioResampler = std::min(ResamplerInfo::num(), 1zu);
+	if(!resampler || optionAudioResampler != activeResampler
+		|| resampler->outRate() != outputRate  || resampler->inRate() != inputRate)
 	{
 		logMsg("setting up resampler %d for input rate %ldHz", (int)optionAudioResampler, inputRate);
 		resampler.reset(ResamplerInfo::get(optionAudioResampler).create(inputRate, outputRate, 35112 + 2064));
@@ -265,9 +303,9 @@ void EmuApp::onCustomizeNavView(EmuApp::NavView &view)
 {
 	const Gfx::LGradientStopDesc navViewGrad[] =
 	{
-		{ .0, Gfx::VertexColorPixelFormat.build((8./255.) * .4, (232./255.) * .4, (222./255.) * .4, 1.) },
-		{ .3, Gfx::VertexColorPixelFormat.build((8./255.) * .4, (232./255.) * .4, (222./255.) * .4, 1.) },
-		{ .97, Gfx::VertexColorPixelFormat.build((0./255.) * .4, (77./255.) * .4, (74./255.) * .4, 1.) },
+		{ .0, Gfx::PackedColor::format.build((8./255.) * .4, (232./255.) * .4, (222./255.) * .4, 1.) },
+		{ .3, Gfx::PackedColor::format.build((8./255.) * .4, (232./255.) * .4, (222./255.) * .4, 1.) },
+		{ .97, Gfx::PackedColor::format.build((0./255.) * .4, (77./255.) * .4, (74./255.) * .4, 1.) },
 		{ 1., view.separatorColor() },
 	};
 	view.setBackgroundGradient(navViewGrad);
@@ -312,4 +350,13 @@ uint_least32_t gbcToRgb32(unsigned const bgr15, unsigned flags)
 	}
 	auto desc = (flags & EmuEx::COLOR_CONVERSION_BGR_BIT) ? IG::PIXEL_DESC_BGRA8888.nativeOrder() : IG::PIXEL_DESC_RGBA8888_NATIVE;
 	return desc.build(outR, outG, outB, 0u);
+}
+
+namespace gambatte
+{
+
+// no-ops, all save data is explicitly loaded/saved
+void Cartridge::loadSavedata() {}
+void Cartridge::saveSavedata() {}
+
 }

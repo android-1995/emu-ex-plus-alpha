@@ -31,22 +31,22 @@
 namespace EmuEx
 {
 
-EmuVideoLayer::EmuVideoLayer(EmuVideo &video):
-	video{video} {}
+EmuVideoLayer::EmuVideoLayer(EmuVideo &video, float defaultAspectRatio):
+	video{video},
+	landscapeAspectRatio{defaultAspectRatio},
+	portraitAspectRatio{defaultAspectRatio} {}
 
-void EmuVideoLayer::place(IG::WindowRect viewRect, IG::WindowRect displayRect, Gfx::ProjectionPlane projP, EmuInputView *inputView, EmuSystem &sys)
+void EmuVideoLayer::place(IG::WindowRect viewRect, IG::WindowRect displayRect, EmuInputView *inputView, EmuSystem &sys)
 {
-	if(sys.hasContent())
+	if(sys.hasContent() && video.size().x)
 	{
-		Gfx::GCRect contentGCRect{};
 		auto viewportAspectRatio = displayRect.xSize() / (float)displayRect.ySize();
 		auto zoom = zoom_;
 		auto contentSize = video.size();
 		if(isSideways(rotation))
 			std::swap(contentSize.x, contentSize.y);
-		// compute the video rectangle in pixel coordinates
-		if((zoom == optionImageZoomIntegerOnly || zoom == optionImageZoomIntegerOnlyY)
-			&& contentSize.x)
+		contentRect_ = {};
+		if(zoom == optionImageZoomIntegerOnly || zoom == optionImageZoomIntegerOnlyY)
 		{
 			int x = contentSize.x, y = contentSize.y;
 
@@ -91,131 +91,64 @@ void EmuVideoLayer::place(IG::WindowRect viewRect, IG::WindowRect displayRect, G
 				scaleFactor = std::max(1, displayRect.ySize() / y);
 				logMsg("using y scale factor %d", scaleFactor);
 			}
-
-			contentRect_.x = 0;
-			contentRect_.y = 0;
 			contentRect_.x2 = x * scaleFactor;
 			contentRect_.y2 = y * scaleFactor;
-			contentRect_.setPos({(int)displayRect.xCenter() - contentRect_.x2/2, (int)displayRect.yCenter() - contentRect_.y2/2});
 		}
-
-		// compute the video rectangle in world coordinates for sub-pixel placement
 		if(zoom <= 100 || zoom == optionImageZoomIntegerOnlyY)
 		{
-			auto aR = aspectRatio() * sys.videoAspectRatioScale();
+			auto aR = evalAspectRatio(viewportAspectRatio < 1.f ? portraitAspectRatio : landscapeAspectRatio)
+				* sys.videoAspectRatioScale();
 			if(isSideways(rotation))
 				aR = 1. / aR;
 			if(zoom == optionImageZoomIntegerOnlyY)
 			{
 				// get width from previously calculated pixel height
-				float width = projP.unprojectYSize(contentRect_.ySize()) * (float)aR;
+				float width = contentRect_.ySize() * (float)aR;
 				if(!aR)
 				{
-					width = projP.width();
+					width = displayRect.xSize();
 				}
-				contentGCRect.x = -width / 2.f;
-				contentGCRect.x2 = width / 2.f;
+				contentRect_.x2 = width;
 			}
 			else
 			{
-				auto size = projP.size();
+				auto size = displayRect.size();
 				if(aR)
 				{
 					size = IG::sizesWithRatioBestFit((float)aR, size.x, size.y);
 				}
-				contentGCRect.x = -size.x / 2.f;
-				contentGCRect.x2 = size.x / 2.f;
-				contentGCRect.y = -size.y / 2.f;
-				contentGCRect.y2 = size.y / 2.f;
+				contentRect_.x2 = size.x;
+				contentRect_.y2 = size.y;
+				if(zoom < 100)
+				{
+					auto scaler = zoom / 100.f;
+					contentRect_.x2 *= scaler;
+					contentRect_.y2 *= scaler;
+				}
 			}
 		}
-
-		// determine whether to generate the final coordinates from pixels or world units
-		bool getXCoordinateFromPixels = 0, getYCoordinateFromPixels = 0;
-		if(zoom == optionImageZoomIntegerOnlyY)
+		if(viewportAspectRatio < 1.f && inputView)
 		{
-			getYCoordinateFromPixels = 1;
-		}
-		else if(zoom == optionImageZoomIntegerOnly)
-		{
-			getXCoordinateFromPixels = getYCoordinateFromPixels = 1;
-		}
-
-		// apply sub-pixel zoom
-		if(zoom < 100)
-		{
-			auto scaler = zoom / 100.f;
-			contentGCRect.x *= scaler;
-			contentGCRect.y *= scaler;
-			contentGCRect.x2 *= scaler;
-			contentGCRect.y2 *= scaler;
-		}
-
-		// adjust position
-		int layoutDirection = 0;
-		if(inputView && viewportAspectRatio < 1. && !isSideways(rotation) &&
-			inputView->activeVController()->gamepadIsActive())
-		{
-			auto &vController = *inputView->activeVController();
-			auto padding = vController.bounds(3).ySize(); // adding menu button-sized padding
-			auto paddingG = projP.unProjectRect(vController.bounds(3)).ySize();
-			auto viewBoundsG = projP.unProjectRect(viewRect);
-			auto &layoutPos = vController.layoutPosition()[inputView->window().isPortrait() ? 1 : 0];
-			if(layoutPos[VCTRL_LAYOUT_DPAD_IDX].origin.onTop() && layoutPos[VCTRL_LAYOUT_FACE_BTN_GAMEPAD_IDX].origin.onTop())
-			{
-				layoutDirection = -1;
-				contentGCRect.setYPos(viewBoundsG.y + paddingG, CB2DO);
-				contentRect_.setYPos(viewRect.y2 - padding, CB2DO);
-			}
-			else if(!(layoutPos[VCTRL_LAYOUT_DPAD_IDX].origin.onBottom() && layoutPos[VCTRL_LAYOUT_FACE_BTN_GAMEPAD_IDX].origin.onTop())
-				&& !(layoutPos[VCTRL_LAYOUT_DPAD_IDX].origin.onTop() && layoutPos[VCTRL_LAYOUT_FACE_BTN_GAMEPAD_IDX].origin.onBottom()))
-			{
-				// move controls to top if d-pad & face button aren't on opposite Y quadrants
-				layoutDirection = 1;
-				contentGCRect.setYPos(viewBoundsG.y2 - paddingG, CT2DO);
-				contentRect_.setYPos(viewRect.y + padding, CT2DO);
-			}
-		}
-
-		// assign final coordinates
-		auto fromWorldSpaceRect = projP.projectRect(contentGCRect);
-		auto fromPixelRect = projP.unProjectRect(contentRect_);
-		if(getXCoordinateFromPixels)
-		{
-			contentGCRect.x = fromPixelRect.x;
-			contentGCRect.x2 = fromPixelRect.x2;
+			contentRect_.setPos(viewRect.pos(CT2DO) + WP{0, inputView->uiElementHeight() + portraitOffset}, CT2DO);
 		}
 		else
 		{
-			contentRect_.x = fromWorldSpaceRect.x;
-			contentRect_.x2 = fromWorldSpaceRect.x2;
+			contentRect_.setPos(displayRect.center() + WP{landscapeOffset, 0}, C2DO);
 		}
-		if(getYCoordinateFromPixels)
-		{
-			contentGCRect.y = fromPixelRect.y;
-			contentGCRect.y2 = fromPixelRect.y2;
-		}
-		else
-		{
-			contentRect_.y = fromWorldSpaceRect.y;
-			contentRect_.y2 = fromWorldSpaceRect.y2;
-		}
-
-		disp.setPos(contentGCRect);
-		auto layoutStr = layoutDirection == 1 ? "top" : layoutDirection == -1 ? "bottom" : "center";
-		logMsg("placed game rect (%s), at pixels %d:%d:%d:%d, world %f:%f:%f:%f",
-				layoutStr, contentRect_.x, contentRect_.y, contentRect_.x2, contentRect_.y2,
-				(double)contentGCRect.x, (double)contentGCRect.y, (double)contentGCRect.x2, (double)contentGCRect.y2);
+		contentRect_.fitIn(displayRect);
+		disp.setPos(contentRect_);
+		logMsg("placed game rect, at pixels %d:%d:%d:%d",
+			contentRect_.x, contentRect_.y, contentRect_.x2, contentRect_.y2);
 	}
 	placeOverlay();
 }
 
-void EmuVideoLayer::draw(Gfx::RendererCommands &cmds, const Gfx::ProjectionPlane &projP)
+void EmuVideoLayer::draw(Gfx::RendererCommands &cmds)
 {
 	using namespace IG::Gfx;
 	bool srgbOutput = srgbColorSpace();
 	auto c = srgbOutput ? brightnessSrgb : brightness;
-	cmds.setColor(c.r, c.g, c.b);
+	cmds.setColor({c.r, c.g, c.b});
 	cmds.set(BlendMode::OFF);
 	if(effects.size())
 	{
@@ -335,8 +268,17 @@ void EmuVideoLayer::onVideoFormatChanged(IG::PixelFormat effectFmt)
 void EmuVideoLayer::setRotation(IG::Rotation r)
 {
 	rotation = r;
-	disp.setUVBounds({{0.f, 0.f}, {1.f, 1.f}}, r);
+	disp.setUVBounds(disp.unitTexCoordRect(), r);
 	placeOverlay();
+}
+
+float EmuVideoLayer::evalAspectRatio(float aR)
+{
+	if(aR == -1)
+	{
+		return video.size().ratio<float>();
+	}
+	return aR;
 }
 
 Gfx::Renderer &EmuVideoLayer::renderer()
