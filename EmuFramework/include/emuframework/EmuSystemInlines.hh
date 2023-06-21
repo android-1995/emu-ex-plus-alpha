@@ -60,7 +60,7 @@ void EmuSystem::onFlushBackupMemory(EmuApp &app, BackupMemoryDirtyFlags flags)
 		static_cast<MainSystem*>(this)->onFlushBackupMemory(app, flags);
 }
 
-IG::Time EmuSystem::backupMemoryLastWriteTime(const EmuApp &app) const
+WallClockTimePoint EmuSystem::backupMemoryLastWriteTime(const EmuApp &app) const
 {
 	if(&MainSystem::backupMemoryLastWriteTime != &EmuSystem::backupMemoryLastWriteTime)
 		return static_cast<const MainSystem*>(this)->backupMemoryLastWriteTime(app);
@@ -127,7 +127,7 @@ bool EmuSystem::onVideoRenderFormatChange(EmuVideo &video, IG::PixelFormat fmt)
 	return false;
 }
 
-FS::FileString EmuSystem::contentDisplayNameForPath(IG::CStringView path) const
+FS::FileString EmuSystem::contentDisplayNameForPath(CStringView path) const
 {
 	if(&MainSystem::contentDisplayNameForPath != &EmuSystem::contentDisplayNameForPath)
 		return static_cast<const MainSystem*>(this)->contentDisplayNameForPath(path);
@@ -199,12 +199,12 @@ void EmuSystem::runFrame(EmuSystemTaskContext task, EmuVideo *video, EmuAudio *a
 	static_cast<MainSystem*>(this)->runFrame(task, video, audio);
 }
 
-void EmuSystem::loadState(EmuApp &app, IG::CStringView uri)
+void EmuSystem::loadState(EmuApp &app, CStringView uri)
 {
 	static_cast<MainSystem*>(this)->loadState(app, uri);
 }
 
-void EmuSystem::saveState(IG::CStringView uri)
+void EmuSystem::saveState(CStringView uri)
 {
 	static_cast<MainSystem*>(this)->saveState(uri);
 }
@@ -214,12 +214,17 @@ void EmuSystem::clearInputBuffers(EmuInputView &view)
 	static_cast<MainSystem*>(this)->clearInputBuffers(view);
 }
 
-unsigned EmuSystem::translateInputAction(unsigned input, bool &turbo)
+InputAction EmuSystem::translateInputAction(InputAction action)
 {
-	return static_cast<MainSystem*>(this)->translateInputAction(input, turbo);
+	return static_cast<MainSystem*>(this)->translateInputAction(action);
 }
 
-void EmuSystem::configAudioRate(IG::FloatSeconds frameTime, int rate)
+FrameTime EmuSystem::frameTime() const
+{
+	return static_cast<const MainSystem*>(this)->frameTime();
+}
+
+void EmuSystem::configAudioRate(FrameTime frameTime, int rate)
 {
 	static_cast<MainSystem*>(this)->configAudioRate(frameTime, rate);
 }
@@ -229,14 +234,14 @@ std::span<const AspectRatioInfo> EmuSystem::aspectRatioInfos()
 	return MainSystem::aspectRatioInfos();
 }
 
+SystemInputDeviceDesc EmuSystem::inputDeviceDesc(int idx) const
+{
+	return static_cast<const MainSystem*>(this)->inputDeviceDesc(idx);
+}
+
 void EmuSystem::loadContent(IO &io, EmuSystemCreateParams params, OnLoadProgressDelegate onLoadDel)
 {
 	static_cast<MainSystem*>(this)->loadContent(io, params, onLoadDel);
-}
-
-VController::Map EmuSystem::vControllerMap(int player)
-{
-	return static_cast<MainSystem*>(this)->vControllerMap(player);
 }
 
 VController::KbMap EmuSystem::vControllerKeyboardMap(VControllerKbMode mode)

@@ -39,6 +39,8 @@ class NeoSystem final: public EmuSystem
 public:
 	static constexpr auto pixFmt = IG::PIXEL_FMT_RGB565;
 	static constexpr int FBResX = 352;
+	FileIO nvramFileIO;
+	FileIO memcardFileIO;
 	GN_Surface sdlSurf{};
 	uint16_t screenBuff[FBResX*256] __attribute__ ((aligned (8))){};
 	FS::PathString datafilePath{};
@@ -49,6 +51,7 @@ public:
 	Byte1Option optionTimerInt{CFGKEY_TIMER_INT, 2};
 	Byte1Option optionCreateAndUseCache{CFGKEY_CREATE_USE_CACHE, 0};
 	Byte1Option optionStrictROMChecking{CFGKEY_STRICT_ROM_CHECKING, 0};
+	static constexpr auto neogeoFrameTime{fromSeconds<FrameTime>(264. / 15625.)}; // ~59.18Hz
 
 	NeoSystem(ApplicationContext ctx);
 	void setTimerIntOption();
@@ -70,9 +73,10 @@ public:
 	void reset(EmuApp &, ResetMode mode);
 	void clearInputBuffers(EmuInputView &view);
 	void handleInputAction(EmuApp *, InputAction);
-	unsigned translateInputAction(unsigned input, bool &turbo);
-	VController::Map vControllerMap(int player);
-	void configAudioRate(FloatSeconds frameTime, int rate);
+	InputAction translateInputAction(InputAction);
+	SystemInputDeviceDesc inputDeviceDesc(int idx) const;
+	FrameTime frameTime() const { return neogeoFrameTime; }
+	void configAudioRate(FrameTime outputFrameTime, int outputRate);
 	static std::span<const AspectRatioInfo> aspectRatioInfos();
 
 	// optional API functions
@@ -82,7 +86,7 @@ public:
 	bool resetSessionOptions(EmuApp &);
 	void loadBackupMemory(EmuApp &);
 	void onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags);
-	IG::Time backupMemoryLastWriteTime(const EmuApp &) const;
+	WallClockTimePoint backupMemoryLastWriteTime(const EmuApp &) const;
 	FS::FileString contentDisplayNameForPath(IG::CStringView path) const;
 };
 

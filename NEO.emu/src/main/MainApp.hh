@@ -27,14 +27,11 @@ public:
 	NeoSystem neoSystem;
 
 	NeoApp(ApplicationInitParams initParams, ApplicationContext &ctx):
-		EmuApp{initParams, ctx}, neoSystem{ctx}
-	{
-		setDefaultVControlsButtonSpacing(100);
-		setDefaultVControlsButtonStagger(5);
-	}
+		EmuApp{initParams, ctx}, neoSystem{ctx} {}
 
 	auto &system() { return neoSystem;  }
 	const auto &system() const { return neoSystem;  }
+	AssetDesc vControllerAssetDesc(unsigned key) const;
 };
 
 using MainApp = NeoApp;

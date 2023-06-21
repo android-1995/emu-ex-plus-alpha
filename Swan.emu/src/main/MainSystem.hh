@@ -1,5 +1,20 @@
 #pragma once
 
+/*  This file is part of Swan.emu.
+
+	Swan.emu is free software: you can redistribute it and/or modify
+	it under the terms of the GNU General Public License as published by
+	the Free Software Foundation, either version 3 of the License, or
+	(at your option) any later version.
+
+	Swan.emu is distributed in the hope that it will be useful,
+	but WITHOUT ANY WARRANTY; without even the implied warranty of
+	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+	GNU General Public License for more details.
+
+	You should have received a copy of the GNU General Public License
+	along with Swan.emu.  If not, see <http://www.gnu.org/licenses/> */
+
 #include <imagine/base/ApplicationContext.hh>
 #include <emuframework/Option.hh>
 #include <mednafen/mednafen.h>
@@ -14,7 +29,7 @@ enum
 {
 	CFGKEY_USER_NAME = 256, CFGKEY_USER_PROFILE = 257,
 	CFGKEY_SHOW_VGAMEPAD_Y_HORIZ = 258, CFGKEY_SHOW_VGAMEPAD_AB_VERT = 259,
-	CFGKEY_WS_ROTATION = 260,
+	CFGKEY_WS_ROTATION = 260, CFGKEY_NO_MD5_FILENAMES = 261,
 };
 
 struct WsUserProfile
@@ -71,22 +86,24 @@ class WsSystem final: public EmuSystem
 {
 public:
 	Mednafen::MDFNGI mdfnGameInfo{EmulatedWSwan};
-	uint16_t inputBuff{};
+	FileIO saveFileIO;
 	IG::MutablePixmapView mSurfacePix{};
-	static constexpr int vidBufferX = 224, vidBufferY = 144;
-	alignas(8) uint32_t pixBuff[vidBufferX*vidBufferY]{};
+	static constexpr IP vidBufferPx{224, 144};
+	alignas(8) uint32_t pixBuff[vidBufferPx.x * vidBufferPx.y]{};
 	IG::StaticString<16> userName{};
 	WsUserProfile userProfile{defaultUserProfile};
+	uint8_t configuredLCDVTotal{};
 	bool showVGamepadYWhenHorizonal = true;
 	bool showVGamepadABWhenVertical{};
+	bool noMD5InFilenames{};
 	WsRotation rotation{};
 
 	WsSystem(ApplicationContext ctx):
 		EmuSystem{ctx}
 	{
 		Mednafen::MDFNGameInfo = &mdfnGameInfo;
-		mdfnGameInfo.SetInput(0, "gamepad", (uint8*)&inputBuff);
 	}
+
 	void setShowVGamepadYWhenHorizonal(bool);
 	void setShowVGamepadABWhenVertical(bool);
 	void setRotation(WsRotation);
@@ -114,16 +131,17 @@ public:
 	void reset(EmuApp &, ResetMode mode);
 	void clearInputBuffers(EmuInputView &view);
 	void handleInputAction(EmuApp *, InputAction);
-	unsigned translateInputAction(unsigned input, bool &turbo);
-	VController::Map vControllerMap(int player);
-	void configAudioRate(FloatSeconds frameTime, int rate);
+	InputAction translateInputAction(InputAction);
+	SystemInputDeviceDesc inputDeviceDesc(int idx) const;
+	FrameTime frameTime() const;
+	void configAudioRate(FrameTime outputFrameTime, int outputRate);
 	static std::span<const AspectRatioInfo> aspectRatioInfos();
 
 	// optional API functions
 	void closeSystem();
 	void loadBackupMemory(EmuApp &);
 	void onFlushBackupMemory(EmuApp &, BackupMemoryDirtyFlags);
-	IG::Time backupMemoryLastWriteTime(const EmuApp &app) const;
+	WallClockTimePoint backupMemoryLastWriteTime(const EmuApp &app) const;
 	bool onVideoRenderFormatChange(EmuVideo &, IG::PixelFormat);
 	IG::Rotation contentRotation() const;
 	bool resetSessionOptions(EmuApp &app);

@@ -63,27 +63,27 @@ void TestFramework::setCPUUseText(std::string_view str)
 
 void TestFramework::placeCPUStatsText(Gfx::Renderer &r)
 {
-	if(cpuStatsText.compile(r, projP))
+	if(cpuStatsText.compile(r))
 	{
-		cpuStatsRect = projP.bounds();
-		cpuStatsRect.y = (cpuStatsRect.y2 - cpuStatsText.nominalHeight() * cpuStatsText.currentLines())
-			- cpuStatsText.nominalHeight() * .5f; // adjust to top
+		cpuStatsRect = viewBounds;
+		cpuStatsRect.y2 = (cpuStatsRect.y + cpuStatsText.nominalHeight() * cpuStatsText.currentLines())
+			+ cpuStatsText.nominalHeight() / 2; // adjust to top
 	}
 }
 
 void TestFramework::placeFrameStatsText(Gfx::Renderer &r)
 {
-	if(frameStatsText.compile(r, projP, {.maxLineSize = projP.width()}))
+	if(frameStatsText.compile(r, {.maxLineSize = viewBounds.xSize()}))
 	{
-		frameStatsRect = projP.bounds();
-		frameStatsRect.y2 = (frameStatsRect.y + frameStatsText.nominalHeight() * frameStatsText.currentLines())
-			+ cpuStatsText.nominalHeight() * .5f; // adjust to bottom
+		frameStatsRect = viewBounds;
+		frameStatsRect.y = (frameStatsRect.y2 - frameStatsText.nominalHeight() * frameStatsText.currentLines())
+			- cpuStatsText.nominalHeight() / 2; // adjust to bottom
 	}
 }
 
-void TestFramework::place(Gfx::Renderer &r, const Gfx::ProjectionPlane &projP, const Gfx::GCRect &testRect)
+void TestFramework::place(Gfx::Renderer &r, WRect viewBounds_, WRect testRect)
 {
-	this->projP = projP;
+	viewBounds = viewBounds_;
 	placeCPUStatsText(r);
 	placeFrameStatsText(r);
 	placeTest(testRect);
@@ -91,7 +91,7 @@ void TestFramework::place(Gfx::Renderer &r, const Gfx::ProjectionPlane &projP, c
 
 void TestFramework::frameUpdate(Gfx::RendererTask &rTask, IG::Window &win, IG::FrameParams frameParams)
 {
-	auto timestamp = frameParams.timestamp();
+	auto timestamp = frameParams.timestamp;
 	// CPU stats
 	auto &screen = *win.screen();
 	bool updatedCPUStats = false;
@@ -118,7 +118,7 @@ void TestFramework::frameUpdate(Gfx::RendererTask &rTask, IG::Window &win, IG::F
 
 		// frame stats
 		bool updatedFrameStats = false;
-		if(!startTime.count())
+		if(!hasTime(startTime))
 		{
 			startTime = timestamp;
 			//logMsg("start time: %llu", (unsigned long long)startTime);
@@ -129,13 +129,13 @@ void TestFramework::frameUpdate(Gfx::RendererTask &rTask, IG::Window &win, IG::F
 			//logMsg("elapsed: %d", screen.elapsedFrames(frameTime));
 			if(elapsedScreenFrames > 1)
 			{
-				lostFrameProcessTime = std::chrono::duration_cast<IG::Milliseconds>(lastFramePresentTime.atWinPresent - lastFramePresentTime.atOnFrame).count();
+				lostFrameProcessTime = duration_cast<Milliseconds>(lastFramePresentTime.atWinPresent - lastFramePresentTime.atOnFrame).count();
 
 				droppedFrames++;
 				skippedFrameStr.clear();
 				IG::formatTo(skippedFrameStr, "Lost {} frame(s) taking {:.3f}s after {} continuous\nat time {:.3f}s",
 					elapsedScreenFrames - 1, IG::FloatSeconds(timestamp - lastFramePresentTime.timestamp).count(),
-					continuousFrames, IG::FloatSeconds(timestamp).count());
+					continuousFrames, IG::FloatSeconds(timestamp.time_since_epoch()).count());
 				updatedFrameStats = true;
 				continuousFrames = 0;
 			}
@@ -144,9 +144,9 @@ void TestFramework::frameUpdate(Gfx::RendererTask &rTask, IG::Window &win, IG::F
 		{
 			statsStr.clear();
 			IG::formatTo(statsStr, "Total Draw Time: {:02}ms ({:02}ms)\nTimestamp Diff: {:02}ms",
-				(unsigned long)std::chrono::duration_cast<IG::Milliseconds>(lastFramePresentTime.atWinPresent - lastFramePresentTime.atOnFrame).count(),
+				(unsigned long)duration_cast<Milliseconds>(lastFramePresentTime.atWinPresent - lastFramePresentTime.atOnFrame).count(),
 				lostFrameProcessTime,
-				(unsigned long)std::chrono::duration_cast<IG::Milliseconds>(timestamp - lastFramePresentTime.timestamp).count());
+				(unsigned long)duration_cast<Milliseconds>(timestamp - lastFramePresentTime.timestamp).count());
 			updatedFrameStats = true;
 		}
 		if(updatedFrameStats)
@@ -171,7 +171,7 @@ void TestFramework::prepareDraw(Gfx::Renderer &r)
 	frameStatsText.makeGlyphs(r);
 }
 
-void TestFramework::draw(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds, float xIndent)
+void TestFramework::draw(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds, int xIndent)
 {
 	using namespace IG::Gfx;
 	drawTest(cmds, bounds);
@@ -181,27 +181,25 @@ void TestFramework::draw(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds, floa
 	{
 		basicEffect.disableTexture(cmds);
 		cmds.set(BlendMode::ALPHA);
-		cmds.setColor(0., 0., 0., .7);
-		GeomRect::draw(cmds, cpuStatsRect);
-		cmds.setColor(1., 1., 1., 1.);
+		cmds.setColor({0., 0., 0., .7});
+		cmds.drawRect(cpuStatsRect);
 		basicEffect.enableAlphaTexture(cmds);
-		cpuStatsText.draw(cmds, {projP.alignXToPixel(cpuStatsRect.x + xIndent),
-			projP.alignYToPixel(cpuStatsRect.yCenter())}, LC2DO, projP);
+		cpuStatsText.draw(cmds, {cpuStatsRect.x + xIndent,
+			cpuStatsRect.yCenter()}, LC2DO, ColorName::WHITE);
 	}
 	if(frameStatsText.isVisible())
 	{
 		basicEffect.disableTexture(cmds);
 		cmds.set(BlendMode::ALPHA);
-		cmds.setColor(0., 0., 0., .7);
-		GeomRect::draw(cmds, frameStatsRect);
-		cmds.setColor(1., 1., 1., 1.);
+		cmds.setColor({0., 0., 0., .7});
+		cmds.drawRect(frameStatsRect);
 		basicEffect.enableAlphaTexture(cmds);
-		frameStatsText.draw(cmds, {projP.alignXToPixel(frameStatsRect.x + xIndent),
-			projP.alignYToPixel(frameStatsRect.yCenter())}, LC2DO, projP);
+		frameStatsText.draw(cmds, {frameStatsRect.x + xIndent,
+			frameStatsRect.yCenter()}, LC2DO, ColorName::WHITE);
 	}
 }
 
-void TestFramework::finish(Gfx::RendererTask &task, IG::FrameTime frameTime)
+void TestFramework::finish(Gfx::RendererTask &task, SteadyClockTimePoint frameTime)
 {
 	endTime = frameTime;
 	task.deleteSyncFence(presentFence);
@@ -210,7 +208,7 @@ void TestFramework::finish(Gfx::RendererTask &task, IG::FrameTime frameTime)
 		onTestFinished(*this);
 }
 
-void ClearTest::frameUpdateTest(Gfx::RendererTask &, IG::Screen &, IG::FrameTime)
+void ClearTest::frameUpdateTest(Gfx::RendererTask &, Screen &, SteadyClockTimePoint)
 {
 	flash ^= true;
 }
@@ -220,13 +218,13 @@ void ClearTest::drawTest(Gfx::RendererCommands &cmds, Gfx::ClipRect)
 	if(flash)
 	{
 		if(!droppedFrames)
-			cmds.setClearColor(.7, .7, .7);
+			cmds.setClearColor({.7, .7, .7});
 		else if(droppedFrames % 2 == 0)
-			cmds.setClearColor(.7, .7, .0);
+			cmds.setClearColor({.7, .7, .0});
 		else
-			cmds.setClearColor(.7, .0, .0);
+			cmds.setClearColor({.7, .0, .0});
 		cmds.clear();
-		cmds.setClearColor(0, 0, 0);
+		cmds.setClearColor(0);
 	}
 	else
 	{
@@ -253,12 +251,12 @@ void DrawTest::initTest(IG::ApplicationContext app, Gfx::Renderer &r, IG::WP pix
 	sprite = {{}, texture};
 }
 
-void DrawTest::placeTest(const Gfx::GCRect &rect)
+void DrawTest::placeTest(WRect rect)
 {
 	sprite.setPos(rect);
 }
 
-void DrawTest::frameUpdateTest(Gfx::RendererTask &, IG::Screen &, IG::FrameTime)
+void DrawTest::frameUpdateTest(Gfx::RendererTask &, Screen &, SteadyClockTimePoint)
 {
 	flash ^= true;
 }
@@ -273,18 +271,18 @@ void DrawTest::drawTest(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds)
 	if(flash)
 	{
 		if(!droppedFrames)
-			cmds.setColor(.7, .7, .7, 1.);
+			cmds.setColor({.7, .7, .7});
 		else if(droppedFrames % 2 == 0)
-			cmds.setColor(.7, .7, .0, 1.);
+			cmds.setColor({.7, .7, .0});
 		else
-			cmds.setColor(.7, .0, .0, 1.);
+			cmds.setColor({.7, .0, .0});
 	}
 	else
-		cmds.setColor(0., 0., 0., 1.);
+		cmds.setColor(0);
 	sprite.draw(cmds, cmds.basicEffect());
 }
 
-void WriteTest::frameUpdateTest(Gfx::RendererTask &rendererTask, IG::Screen &screen, IG::FrameTime frameTime)
+void WriteTest::frameUpdateTest(Gfx::RendererTask &rendererTask, Screen &screen, SteadyClockTimePoint frameTime)
 {
 	DrawTest::frameUpdateTest(rendererTask, screen, frameTime);
 	rendererTask.clientWaitSync(std::exchange(presentFence, {}));
@@ -318,6 +316,7 @@ void WriteTest::drawTest(Gfx::RendererCommands &cmds, Gfx::ClipRect bounds)
 	cmds.setClipTest(true);
 	cmds.setClipRect(bounds);
 	cmds.set(BlendMode::OFF);
+	cmds.setColor(ColorName::WHITE);
 	sprite.draw(cmds, cmds.basicEffect());
 }
 

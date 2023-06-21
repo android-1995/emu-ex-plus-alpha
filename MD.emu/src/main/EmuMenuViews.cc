@@ -18,7 +18,7 @@
 #include <emuframework/FilePathOptionView.hh>
 #include <emuframework/DataPathSelectView.hh>
 #include <emuframework/UserPathSelectView.hh>
-#include <emuframework/EmuSystemActionsView.hh>
+#include <emuframework/SystemActionsView.hh>
 #include "EmuCheatViews.hh"
 #include "MainApp.hh"
 #include <imagine/gui/AlertView.hh>
@@ -80,10 +80,12 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 	MultiChoiceMenuItem inputPorts
 	{
 		"Input Ports", &defaultFace(),
-		[this](int idx, Gfx::Text &t)
 		{
-			t.resetString(inputSystemName(input.system[1]));
-			return true;
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
+			{
+				t.resetString(inputSystemName(input.system[1]));
+				return true;
+			}
 		},
 		(MenuItem::Id)system().mdInputPortDev[1],
 		inputPortsItem
@@ -110,14 +112,16 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 	MultiChoiceMenuItem videoSystem
 	{
 		"视频制式", &defaultFace(),
-		[this](int idx, Gfx::Text &t)
 		{
-			if(idx == 0)
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
 			{
-				t.resetString(vdp_pal ? "PAL" : "NTSC");
-				return true;
+				if(idx == 0)
+				{
+					t.resetString(vdp_pal ? "PAL" : "NTSC");
+					return true;
+				}
+				return false;
 			}
-			return false;
 		},
 		system().optionVideoSystem.val,
 		videoSystemItem
@@ -141,23 +145,25 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 	MultiChoiceMenuItem region
 	{
 		"游戏地区", &defaultFace(),
-		[this](int idx, Gfx::Text &t)
 		{
-			if(idx == 0)
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
 			{
-				auto regionStr = [](unsigned region)
+				if(idx == 0)
 				{
-					switch(region)
+					auto regionStr = [](unsigned region)
 					{
+						switch(region)
+						{
 						case REGION_USA: return "美国";
 						case REGION_EUROPE: return "欧洲";
 						default: return "日本";
-					}
-				};
-				t.resetString(regionStr(region_code));
-				return true;
+						}
+					};
+					t.resetString(regionStr(region_code));
+					return true;
+				}
+				return false;
 			}
-			return false;
 		},
 		std::min((int)config.region_detect, 4),
 		regionItem
@@ -192,7 +198,7 @@ public:
 	}
 };
 
-class CustomSystemActionsView : public EmuSystemActionsView
+class CustomSystemActionsView : public SystemActionsView
 {
 private:
 	TextMenuItem options
@@ -208,7 +214,7 @@ private:
 	};
 
 public:
-	CustomSystemActionsView(ViewAttachParams attach): EmuSystemActionsView{attach, true}
+	CustomSystemActionsView(ViewAttachParams attach): SystemActionsView{attach, true}
 	{
 		item.emplace_back(&options);
 		loadStandardItems();
@@ -247,18 +253,13 @@ class CustomSystemOptionView : public SystemOptionView, public MainAppHelper<Cus
 	{
 		"使用 Big-Endian SRAM", &defaultFace(),
 		(bool)system().optionBigEndianSram,
-		[this](BoolMenuItem &item, View &, Input::Event e)
+		[this](BoolMenuItem &item, Input::Event e)
 		{
-			auto ynAlertView = makeView<YesNoAlertView>(
+			app().pushAndShowModalView(makeView<YesNoAlertView>(
 				"警告，这会改变 SRAM 保存文件的格式。"
-                "开启后将与 Gens 等其他模拟器兼容。"
-                "任何加载了错误设置的 SRAM 都将被损坏。");
-			ynAlertView->setOnYes(
-				[this, &item]()
-				{
-					system().optionBigEndianSram = item.flipBoolValue(*this);
-				});
-			app().pushAndShowModalView(std::move(ynAlertView), e);
+				"开启后将与 Gens 等其他模拟器兼容。"
+				"任何加载了错误设置的 SRAM 都将被损坏。",
+				YesNoAlertView::Delegates{.onYes = [&]{ system().optionBigEndianSram = item.flipBoolValue(*this); }}), e);
 		}
 	};
 
@@ -285,7 +286,7 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 				{
 					logMsg("set cheats path:%s", path.data());
 					system().cheatsDir = path;
-					cheatsPath.compile(cheatsMenuName(appContext(), path), renderer(), projP);
+					cheatsPath.compile(cheatsMenuName(appContext(), path), renderer());
 				}), e);
 		}
 	};
@@ -328,21 +329,21 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 	std::string biosMenuEntryStr(uint8_t region, IG::CStringView path) const
 	{
 		auto regionStr = biosHeadingStr[regionCodeToIdx(region)];
-		return fmt::format("{}: {}", regionStr, appContext().fileUriDisplayName(path));
+		return std::format("{}: {}", regionStr, appContext().fileUriDisplayName(path));
 	}
 
 	TextMenuItem::SelectDelegate setCDBiosPathDel(uint8_t region)
 	{
 		return [this, region](const Input::Event &e)
 		{
-			pushAndShow(makeViewWithName<DataFileSelectView>(biosHeadingStr[regionCodeToIdx(region)],
+			pushAndShow(makeViewWithName<DataFileSelectView<>>(biosHeadingStr[regionCodeToIdx(region)],
 				app().validSearchPath(pathFromRegion(region)),
 				[this, region](CStringView path, FS::file_type type)
 				{
 					auto idx = regionCodeToIdx(region);
 					pathFromRegion(region) = path;
 					logMsg("set bios:%d to path:%s", idx, pathFromRegion(region).data());
-					cdBiosPath[idx].compile(biosMenuEntryStr(region, path), renderer(), projP);
+					cdBiosPath[idx].compile(biosMenuEntryStr(region, path), renderer());
 					return true;
 				}, hasMDExtension), e);
 		};

@@ -22,32 +22,34 @@
 namespace IG
 {
 
-class PosixIO final : public IOUtils<PosixIO>
+enum class IOMapFlagsMask: uint8_t
+{
+	Write = bit(0),
+	PopulatePages = bit(1),
+};
+
+IG_DEFINE_ENUM_BIT_FLAG_FUNCTIONS(IOMapFlagsMask);
+
+class PosixIO : public IOUtils<PosixIO>
 {
 public:
 	using IOUtilsBase = IOUtils<PosixIO>;
+	using IOUtilsBase::read;
 	using IOUtilsBase::write;
-	using IOUtilsBase::seekS;
-	using IOUtilsBase::seekE;
-	using IOUtilsBase::seekC;
+	using IOUtilsBase::seek;
 	using IOUtilsBase::tell;
 	using IOUtilsBase::send;
 	using IOUtilsBase::buffer;
 	using IOUtilsBase::get;
 	using IOUtilsBase::toFileStream;
 
-	using MapFlags = uint8_t;
-	static constexpr MapFlags MAP_WRITE = bit(0);
-	static constexpr MapFlags MAP_POPULATE_PAGES = bit(1);
-
 	constexpr PosixIO() = default;
 	PosixIO(UniqueFileDescriptor fd):fd_{std::move(fd)} {}
 	PosixIO(CStringView path, OpenFlagsMask oFlags = {});
 	UniqueFileDescriptor releaseFd();
 	int fd() const;
-	ssize_t read(void *buff, size_t bytes);
-	ssize_t readAtPos(void *buff, size_t bytes, off_t offset);
-	ssize_t write(const void *buff, size_t bytes);
+	ssize_t read(void *buff, size_t bytes, std::optional<off_t> offset = {});
+	ssize_t write(const void *buff, size_t bytes, std::optional<off_t> offset = {});
 	bool truncate(off_t offset);
 	off_t seek(off_t offset, SeekMode mode);
 	void sync();
@@ -56,7 +58,7 @@ public:
 	void advise(off_t offset, size_t bytes, Advice advice);
 	explicit operator bool() const;
 	IOBuffer releaseBuffer();
-	IOBuffer mapRange(off_t start, size_t size, MapFlags);
+	IOBuffer mapRange(off_t start, size_t size, IOMapFlagsMask);
 	static IOBuffer byteBufferFromMmap(void *data, size_t size);
 
 protected:

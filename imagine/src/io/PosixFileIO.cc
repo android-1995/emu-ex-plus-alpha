@@ -36,64 +36,74 @@ static void applyAccessHint(PosixFileIO &io, IOAccessHint access, bool isMapped)
 {
 	switch(access)
 	{
-		case IOAccessHint::NORMAL: return;
-		case IOAccessHint::SEQUENTIAL: return io.advise(0, 0, IOAdvice::SEQUENTIAL);
-		case IOAccessHint::RANDOM: return io.advise(0, 0, IOAdvice::RANDOM);
-		case IOAccessHint::ALL:
+		case IOAccessHint::Normal: return;
+		case IOAccessHint::Sequential: return io.advise(0, 0, IOAdvice::Sequential);
+		case IOAccessHint::Random: return io.advise(0, 0, IOAdvice::Random);
+		case IOAccessHint::All:
 			if(!isMapped || (isMapped && !hasMmapPopulateFlag))
-				return io.advise(0, 0, IOAdvice::WILLNEED);
+				return io.advise(0, 0, IOAdvice::WillNeed);
 	}
 }
 
 PosixFileIO::PosixFileIO(UniqueFileDescriptor fd_, IOAccessHint access, OpenFlagsMask openFlags):
 	ioImpl{std::in_place_type<PosixIO>, std::move(fd_)}
 {
-	tryMmap(access, openFlags);
+	initMmap(access, openFlags);
 }
 
 PosixFileIO::PosixFileIO(UniqueFileDescriptor fd, OpenFlagsMask openFlags):
-	PosixFileIO{std::move(fd), IOAccessHint::NORMAL, openFlags} {}
+	PosixFileIO{std::move(fd), IOAccessHint::Normal, openFlags} {}
 
-PosixFileIO::PosixFileIO(IG::CStringView path, IOAccessHint access, OpenFlagsMask openFlags):
+PosixFileIO::PosixFileIO(CStringView path, IOAccessHint access, OpenFlagsMask openFlags):
 	ioImpl{std::in_place_type<PosixIO>, path, openFlags}
 {
-	tryMmap(access, openFlags);
+	initMmap(access, openFlags);
 }
 
-PosixFileIO::PosixFileIO(IG::CStringView path, OpenFlagsMask openFlags):
-	PosixFileIO{path, IOAccessHint::NORMAL, openFlags} {}
+PosixFileIO::PosixFileIO(CStringView path, OpenFlagsMask openFlags):
+	PosixFileIO{path, IOAccessHint::Normal, openFlags} {}
 
-void PosixFileIO::tryMmap(IOAccessHint access, OpenFlagsMask openFlags)
+void PosixFileIO::initMmap(IOAccessHint access, OpenFlagsMask openFlags)
 {
-	assumeExpr(std::holds_alternative<PosixIO>(ioImpl));
-	auto &io = *std::get_if<PosixIO>(&ioImpl);
-	// try to open as memory map only if read-only
-	if(to_underlying(openFlags & OpenFlagsMask::WRITE) || !io)
+	if(!*std::get_if<PosixIO>(&ioImpl))
 		return;
-	size_t size = io.size();
-	if(!size) [[unlikely]]
-		return;
-	PosixIO::MapFlags flags = access == IOAccessHint::ALL ? PosixIO::MAP_POPULATE_PAGES : 0;
-	MapIO mappedFile{io.mapRange(0, size, flags)};
-	if(mappedFile)
-	{
-		ioImpl = std::move(mappedFile);
-		applyAccessHint(*this, access, true);
-	}
-	else
+	if(to_underlying(openFlags & OpenFlagsMask::Write)
+		|| !tryMap(access, openFlags)) // try to open as memory map only if read-only
 	{
 		applyAccessHint(*this, access, false);
 	}
 }
 
-ssize_t PosixFileIO::read(void *buff, size_t bytes)
+bool PosixFileIO::tryMap(IOAccessHint access, OpenFlagsMask openFlags)
 {
-	return visit([&](auto &io){ return io.read(buff, bytes); }, ioImpl);
+	return visit(overloaded
+	{
+		[&](PosixIO &io)
+		{
+			IOMapFlagsMask flags{};
+			if(access == IOAccessHint::All)
+				flags |= IOMapFlagsMask::PopulatePages;
+			if(to_underlying(openFlags & OpenFlagsMask::Write))
+				flags |= IOMapFlagsMask::Write;
+			MapIO mappedFile{io.mapRange(0, io.size(), flags)};
+			if(!mappedFile)
+				return false;
+			ioImpl = std::move(mappedFile);
+			applyAccessHint(*this, access, true);
+			return true;
+		},
+		[&](MapIO &) { return true; }
+	}, ioImpl);
 }
 
-ssize_t PosixFileIO::readAtPos(void *buff, size_t bytes, off_t offset)
+ssize_t PosixFileIO::read(void *buff, size_t bytes, std::optional<off_t> offset)
 {
-	return visit([&](auto &io){ return io.readAtPos(buff, bytes, offset); }, ioImpl);
+	return visit([&](auto &io){ return io.read(buff, bytes, offset); }, ioImpl);
+}
+
+ssize_t PosixFileIO::write(const void *buff, size_t bytes, std::optional<off_t> offset)
+{
+	return visit([&](auto &io){ return io.write(buff, bytes, offset); }, ioImpl);
 }
 
 std::span<uint8_t> PosixFileIO::map()
@@ -105,11 +115,6 @@ std::span<uint8_t> PosixFileIO::map()
 		else
 			return std::span<uint8_t>{};
 	}, ioImpl);
-}
-
-ssize_t PosixFileIO::write(const void *buff, size_t bytes)
-{
-	return visit([&](auto &io){ return io.write(buff, bytes); }, ioImpl);
 }
 
 bool PosixFileIO::truncate(off_t offset)
@@ -130,11 +135,7 @@ off_t PosixFileIO::seek(off_t offset, IOSeekMode mode)
 
 void PosixFileIO::sync()
 {
-	visit([&](auto &io)
-	{
-		if constexpr(requires {io.sync();})
-			io.sync();
-	}, ioImpl);
+	visit([&](auto &io){ io.sync(); }, ioImpl);
 }
 
 size_t PosixFileIO::size()

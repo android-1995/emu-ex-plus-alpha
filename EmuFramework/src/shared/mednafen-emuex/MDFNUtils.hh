@@ -15,11 +15,16 @@
 
 #include <imagine/pixmap/Pixmap.hh>
 #include <imagine/fs/FSDefs.hh>
+#include <imagine/gui/MenuItem.hh>
 #include <imagine/util/format.hh>
+#include <imagine/util/string.h>
 #include <emuframework/EmuApp.hh>
+#include <mednafen/types.h>
 #include <mednafen/video/surface.h>
 #include <mednafen/hash/md5.h>
 #include <mednafen/git.h>
+#include <mednafen/MemoryStream.h>
+#include <main/MainSystem.hh>
 #include <string_view>
 
 namespace EmuEx
@@ -40,12 +45,12 @@ inline Mednafen::MDFN_Surface toMDFNSurface(IG::MutablePixmapView pix)
 					bug_unreachable("format id == %d", pix.format().id());
 			};
 		}();
-	return {pix.data(), (uint32)pix.w(), (uint32)pix.h(), (uint32)pix.pitchPixels(), fmt};
+	return {pix.data(), uint32(pix.w()), uint32(pix.h()), uint32(pix.pitchPx()), fmt};
 }
 
-inline FS::FileString stateFilenameMDFN(const Mednafen::MDFNGI &gameInfo, int slot, std::string_view name, char autoChar)
+inline FS::FileString stateFilenameMDFN(const Mednafen::MDFNGI &gameInfo, int slot, std::string_view name, char autoChar, bool skipMD5)
 {
-	auto saveSlotChar = [&](int slot) -> char
+	auto saveSlotChar = [&] -> char
 	{
 		switch(slot)
 		{
@@ -53,17 +58,22 @@ inline FS::FileString stateFilenameMDFN(const Mednafen::MDFNGI &gameInfo, int sl
 			case 0 ... 9: return '0' + slot;
 			default: bug_unreachable("slot == %d", slot);
 		}
-	};
-	return IG::format<FS::FileString>("{}.{}.nc{}",
-		name, Mednafen::md5_context::asciistr(gameInfo.MD5, 0), saveSlotChar(slot));
+	}();
+	if(skipMD5)
+		return format<FS::FileString>("{}.nc{}", name, saveSlotChar);
+	else
+		return format<FS::FileString>("{}.{}.nc{}", name, Mednafen::md5_context::asciistr(gameInfo.MD5, 0), saveSlotChar);
 }
 
-inline std::string savePathMDFN(const EmuApp &app, int id1, const char *cd1)
+inline std::string savePathMDFN(const EmuApp &app, int id1, const char *cd1, bool skipMD5)
 {
 	assert(cd1);
 	IG::FileString ext{'.'};
-	ext += Mednafen::md5_context::asciistr(Mednafen::MDFNGameInfo->MD5, 0);
-	ext += '.';
+	if(!skipMD5)
+	{
+		ext += Mednafen::md5_context::asciistr(Mednafen::MDFNGameInfo->MD5, 0);
+		ext += '.';
+	}
 	ext += cd1;
 	auto path = app.contentSaveFilePath(ext);
 	return std::string{path};
@@ -71,7 +81,60 @@ inline std::string savePathMDFN(const EmuApp &app, int id1, const char *cd1)
 
 inline std::string savePathMDFN(int id1, const char *cd1)
 {
-	return savePathMDFN(EmuEx::gApp(), id1, cd1);
+	auto &app = EmuEx::gApp();
+	return savePathMDFN(app, id1, cd1, static_cast<MainSystem&>(app.system()).noMD5InFilenames);
+}
+
+inline BoolMenuItem saveFilenameTypeMenuItem(auto &view, auto &system)
+{
+	return {"Save Filename Type", &view.defaultFace(),
+		system.noMD5InFilenames,
+		"Default", "No MD5",
+		[&](BoolMenuItem &item) { system.noMD5InFilenames = item.flipBoolValue(view); }
+	};
+}
+
+inline void loadContent(EmuSystem &sys, Mednafen::MDFNGI &mdfnGameInfo, IO &io, size_t maxContentSize)
+{
+	using namespace Mednafen;
+	auto stream = std::make_unique<MemoryStream>(maxContentSize, true);
+	auto size = io.read(stream->map(), stream->map_size());
+	if(size <= 0)
+		sys.throwFileReadError();
+	stream->setSize(size);
+	MDFNFILE fp(&NVFS, std::move(stream));
+	GameFile gf{&NVFS, std::string{sys.contentDirectory()}, fp.stream(),
+		std::string{withoutDotExtension(sys.contentFileName())},
+		std::string{sys.contentName()}};
+	mdfnGameInfo.Load(&gf);
+}
+
+inline void runFrame(EmuSystem &sys, Mednafen::MDFNGI &mdfnGameInfo, EmuSystemTaskContext taskCtx,
+	EmuVideo *videoPtr, MutablePixmapView pixView, EmuAudio *audioPtr, size_t maxAudioFrames, size_t maxLineWidths = 0)
+{
+	using namespace Mednafen;
+	int16 audioBuff[maxAudioFrames * 2];
+	EmulateSpecStruct espec{};
+	if(audioPtr)
+	{
+		espec.SoundBuf = audioBuff;
+		espec.SoundBufMaxSize = maxAudioFrames;
+	}
+	espec.taskCtx = taskCtx;
+	espec.sys = &sys;
+	espec.video = videoPtr;
+	espec.skip = !videoPtr;
+	auto mSurface = toMDFNSurface(pixView);
+	espec.surface = &mSurface;
+	int32 lineWidth[maxLineWidths ?: 1];
+	if(maxLineWidths)
+		espec.LineWidths = lineWidth;
+	mdfnGameInfo.Emulate(&espec);
+	if(audioPtr)
+	{
+		assert((unsigned)espec.SoundBufSize <= audioPtr->format().bytesToFrames(sizeof(audioBuff)));
+		audioPtr->writeFrames((uint8_t*)audioBuff, espec.SoundBufSize);
+	}
 }
 
 }

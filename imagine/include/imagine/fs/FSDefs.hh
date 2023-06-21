@@ -23,16 +23,17 @@
 #include <imagine/util/enum.hh>
 #include <chrono>
 #include <array>
+#include <algorithm>
 #include <unistd.h>
 #include <limits.h>
 
 namespace IG::FS
 {
 
-using file_time_type = std::chrono::seconds;
+using file_time_type = std::chrono::system_clock::time_point;
 
 static constexpr size_t FILE_STRING_SIZE = std::max(512, NAME_MAX + 1);
-using FileStringImpl = IG::StaticString<FILE_STRING_SIZE - 1>;
+using FileStringImpl = StaticString<FILE_STRING_SIZE - 1>;
 class FileString : public FileStringImpl
 {
 public:
@@ -41,7 +42,7 @@ public:
 };
 
 static constexpr size_t PATH_STRING_SIZE = std::max(1024, PATH_MAX);
-using PathStringImpl = IG::StaticString<PATH_STRING_SIZE - 1>;
+using PathStringImpl = StaticString<PATH_STRING_SIZE - 1>;
 class PathString : public PathStringImpl
 {
 public:

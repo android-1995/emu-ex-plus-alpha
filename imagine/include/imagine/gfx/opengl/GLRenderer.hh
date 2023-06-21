@@ -24,6 +24,8 @@
 #include <imagine/gfx/BasicEffect.hh>
 #include <imagine/util/used.hh>
 #include <memory>
+#include <optional>
+#include <string_view>
 #ifdef CONFIG_BASE_GL_PLATFORM_EGL
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
@@ -98,7 +100,6 @@ public:
 	#endif
 	#ifdef __ANDROID__
 	void (GL_APIENTRYP glEGLImageTargetTexStorageEXT)(GLenum target, GLeglImageOES image, const GLint* attrib_list){};
-	EGLBoolean (EGLAPIENTRY *eglPresentationTimeANDROID)(EGLDisplay dpy, EGLSurface surface, EGLnsecsANDROID time){};
 	#endif
 	#if defined CONFIG_GFX_OPENGL_DEBUG_CONTEXT && defined CONFIG_GFX_OPENGL_ES
 	void GL_APIENTRY (*glDebugMessageCallback)(GLDEBUGPROCKHR callback, const void *userParam){};
@@ -162,10 +163,11 @@ public:
 	GLRenderer(ApplicationContext);
 	GLDisplay glDisplay() const;
 	bool makeWindowDrawable(RendererTask &task, Window &, GLBufferConfig, GLColorSpace);
+	int toSwapInterval(const Window &win, PresentMode mode) const;
 
 protected:
 	void addEventHandlers(ApplicationContext, RendererTask &);
-	std::optional<GLBufferConfig> makeGLBufferConfig(ApplicationContext, IG::PixelFormat, const Window * = {});
+	std::optional<GLBufferConfig> makeGLBufferConfig(ApplicationContext, PixelFormat, const Window * = {});
 	void setCurrentDrawable(GLDisplay, GLContext, Drawable);
 	void setupNonPow2Textures();
 	void setupNonPow2MipmapTextures();
@@ -184,7 +186,6 @@ protected:
 	void setupFenceSync();
 	void setupAppleFenceSync();
 	void setupEglFenceSync(std::string_view eglExtenstionStr);
-	void setupPresentationTime(std::string_view eglExtenstionStr);
 	void checkExtensionString(std::string_view extStr, bool &useFBOFuncs);
 	void checkFullExtensionString(const char *fullExtStr);
 	bool attachWindow(Window &, GLBufferConfig, GLColorSpace);

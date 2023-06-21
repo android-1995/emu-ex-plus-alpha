@@ -16,18 +16,18 @@
 #pragma once
 
 #include <imagine/io/IOUtils.hh>
+#include <span>
 
 namespace IG
 {
 
-class MapIO final : public IOUtils<MapIO>
+class MapIO : public IOUtils<MapIO>
 {
 public:
 	using IOUtilsBase = IOUtils<MapIO>;
+	using IOUtilsBase::read;
 	using IOUtilsBase::write;
-	using IOUtilsBase::seekS;
-	using IOUtilsBase::seekE;
-	using IOUtilsBase::seekC;
+	using IOUtilsBase::seek;
 	using IOUtilsBase::tell;
 	using IOUtilsBase::send;
 	using IOUtilsBase::buffer;
@@ -35,27 +35,28 @@ public:
 	using IOUtilsBase::toFileStream;
 
 	constexpr MapIO() = default;
-	MapIO(IOBuffer);
-	explicit MapIO(Readable auto &&io): MapIO{io.buffer(BufferMode::RELEASE)} {}
-	explicit MapIO(Readable auto &io): MapIO{io.buffer(BufferMode::DIRECT)} {}
-	ssize_t read(void *buff, size_t bytes);
-	ssize_t readAtPos(void *buff, size_t bytes, off_t offset);
-	std::span<uint8_t> map();
-	ssize_t write(const void *buff, size_t bytes);
+	MapIO(IOBuffer buff): buff{std::move(buff)} {}
+	explicit MapIO(Readable auto &&io): MapIO{io.buffer(BufferMode::Release)} {}
+	explicit MapIO(Readable auto &io): MapIO{io.buffer(BufferMode::Direct)} {}
+	ssize_t read(void *buff, size_t bytes, std::optional<off_t> offset = {});
+	ssize_t write(const void *buff, size_t bytes, std::optional<off_t> offset = {});
 	off_t seek(off_t offset, SeekMode mode);
-	size_t size();
-	bool eof();
-	explicit operator bool() const;
+	size_t size() const { return buff.size(); }
+	bool eof() const { return currPos == size(); }
+	std::span<uint8_t> map() { return {data(), size()}; }
+	void sync();
+	explicit operator bool() const { return data(); }
 	void advise(off_t offset, size_t bytes, Advice advice);
-	IOBuffer releaseBuffer();
+	uint8_t *data() const { return buff.data(); }
+	IOBuffer releaseBuffer() { return std::move(buff); }
+	std::span<uint8_t> subSpan(off_t offset, size_t maxBytes) const;
+	MapIO subView(off_t offset, size_t maxBytes) const { return IOBuffer{subSpan(offset, maxBytes), 0}; }
 
-protected:
-	uint8_t *currPos{};
+private:
+	size_t currPos{};
 	IOBuffer buff{};
 
-	uint8_t *data() const;
-	uint8_t *dataEnd() const;
-	ssize_t readAtAddr(void* buff, size_t bytes, const uint8_t *readPos);
+	ssize_t copyBuffer(auto *buff, size_t bytes, std::optional<off_t> offset);
 };
 
 }

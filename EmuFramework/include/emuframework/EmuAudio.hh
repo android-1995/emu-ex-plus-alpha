@@ -18,11 +18,31 @@
 #include <imagine/audio/OutputStream.hh>
 #include <imagine/time/Time.hh>
 #include <imagine/vmem/RingBuffer.hh>
+#include <imagine/util/used.hh>
+#include <imagine/util/bitset.hh>
+#include <imagine/util/enum.hh>
 #include <memory>
 #include <atomic>
 
+namespace IG
+{
+class MapIO;
+class FileIO;
+}
+
 namespace EmuEx
 {
+
+using namespace IG;
+
+enum class AudioFlagsMask: uint8_t
+{
+	enabled = bit(0),
+	enabledDuringAltSpeed = bit(1),
+	defaultMask = enabled | enabledDuringAltSpeed,
+};
+
+IG_DEFINE_ENUM_BIT_FLAG_FUNCTIONS(AudioFlagsMask);
 
 class EmuAudio
 {
@@ -35,43 +55,61 @@ public:
 		MULTI_UNDERRUN
 	};
 
-	constexpr EmuAudio(const IG::Audio::Manager &audioManager):
-		audioManagerPtr{&audioManager} {}
-	void open(IG::Audio::Api);
-	void start(IG::Microseconds targetBufferFillUSecs, IG::Microseconds bufferIncrementUSecs);
+	EmuAudio(const IG::Audio::Manager &audioManager);
+	void open();
+	void start(FloatSeconds bufferDuration);
 	void stop();
 	void close();
 	void flush();
 	void writeFrames(const void *samples, size_t framesToWrite);
 	void setRate(int rate);
+	int rate() const { return rate_; }
+	int maxRate() const { return defaultRate; }
 	void setStereo(bool on);
 	void setSpeedMultiplier(double speed);
-	void setAddSoundBuffersOnUnderrun(bool on);
-	void setVolume(int8_t vol);
+	float volume() const { return currentVolume; }
+	bool setMaxVolume(int8_t vol);
+	int8_t maxVolume() const { return std::round(maxVolume_ * 100.f); }
+	void setOutputAPI(IG::Audio::Api);
+	IG::Audio::Api outputAPI() const { return audioAPI; }
+	void setEnabled(bool on);
+	bool isEnabled() const;
+	void setEnabledDuringAltSpeed(bool on);
+	bool isEnabledDuringAltSpeed() const;
 	IG::Audio::Format format() const;
-	explicit operator bool() const;
+	explicit operator bool() const { return bool(rBuff); }
+	void writeConfig(FileIO &) const;
+	bool readConfig(MapIO &, unsigned key, size_t size);
 
 protected:
 	IG::Audio::OutputStream audioStream;
-	const IG::Audio::Manager *audioManagerPtr{};
-	IG::RingBuffer rBuff;
-	IG::Time lastUnderrunTime{};
-	double speedMultiplier = 1.;
+	const IG::Audio::Manager &audioManager;
+	RingBuffer rBuff;
+	SteadyClockTimePoint lastUnderrunTime{};
+	double speedMultiplier{1.};
 	size_t targetBufferFillBytes{};
 	size_t bufferIncrementBytes{};
-	int rate{};
-	float volume = 1.0;
-	float requestedVolume = 1.0;
-	std::atomic<AudioWriteState> audioWriteState = AudioWriteState::BUFFER;
-	bool addSoundBuffersOnUnderrun = false;
-	int8_t channels = 2;
+	int defaultRate;
+	int rate_;
+	float maxVolume_{1.};
+	float currentVolume{1.};
+	std::atomic<AudioWriteState> audioWriteState{AudioWriteState::BUFFER};
+	int8_t channels{2};
+	AudioFlagsMask flagsMask{AudioFlagsMask::defaultMask};
+	IG_UseMemberIf(IG::Audio::Config::MULTIPLE_SYSTEM_APIS, IG::Audio::Api, audioAPI){};
+	bool addSoundBuffersOnUnderrun{};
+public:
+	bool addSoundBuffersOnUnderrunSetting{};
+	int8_t defaultSoundBuffers{3};
+	int8_t soundBuffers{defaultSoundBuffers};
 
 	size_t framesFree() const;
 	size_t framesWritten() const;
 	size_t framesCapacity() const;
 	bool shouldStartAudioWrites(size_t bytesToWrite = 0) const;
 	void resizeAudioBuffer(size_t targetBufferFillBytes);
-	const IG::Audio::Manager &audioManager() const;
+	void updateVolume();
+	void updateAddBuffersOnUnderrun();
 };
 
 }

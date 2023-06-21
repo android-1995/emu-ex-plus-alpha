@@ -20,7 +20,7 @@
 #include <emuframework/DataPathSelectView.hh>
 #include <emuframework/UserPathSelectView.hh>
 #include <emuframework/SystemOptionView.hh>
-#include <emuframework/EmuSystemActionsView.hh>
+#include <emuframework/SystemActionsView.hh>
 #include <emuframework/FilePicker.hh>
 #include "EmuCheatViews.hh"
 #include "MainApp.hh"
@@ -104,14 +104,16 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 	MultiChoiceMenuItem videoSystem
 	{
 		"System", &defaultFace(),
-		[this](uint32_t idx, Gfx::Text &t)
 		{
-			if(idx == 0)
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
 			{
-				t.resetString(dendy ? "Dendy" : pal_emulation ? "PAL" : "NTSC");
-				return true;
+				if(idx == 0)
+				{
+					t.resetString(dendy ? "Dendy" : pal_emulation ? "PAL" : "NTSC");
+					return true;
+				}
+				return false;
 			}
-			return false;
 		},
 		system().optionVideoSystem.val,
 		videoSystemItem
@@ -134,16 +136,17 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 		{
 			if(!item.boolValue())
 			{
-				auto ynAlertView = makeView<YesNoAlertView>(
+				app().pushAndShowModalView(makeView<YesNoAlertView>(
 					"Use compatible mode if the current game has glitches when "
-					"fast-forwarding/frame-skipping, at the cost of increased CPU usage.");
-				ynAlertView->setOnYes(
-					[this, &item]()
+					"fast-forwarding/frame-skipping, at the cost of increased CPU usage.",
+					YesNoAlertView::Delegates
 					{
-						system().sessionOptionSet();
-						system().optionCompatibleFrameskip = item.flipBoolValue(*this);
-					});
-				app().pushAndShowModalView(std::move(ynAlertView), e);
+						.onYes = [this, &item]
+						{
+							system().sessionOptionSet();
+							system().optionCompatibleFrameskip = item.flipBoolValue(*this);
+						}
+					}), e);
 			}
 			else
 			{
@@ -204,7 +207,54 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 		}
 	};
 
-	std::array<MenuItem*, 7> menuItem
+	TextHeadingMenuItem overclocking{"Overclocking", &defaultBoldFace()};
+
+	BoolMenuItem overclockingEnabled
+	{
+		"Enabled", &defaultFace(),
+		overclock_enabled,
+		[this](BoolMenuItem &item)
+		{
+			system().sessionOptionSet();
+			overclock_enabled = item.flipBoolValue(*this);
+		}
+	};
+
+	DualTextMenuItem extraLines
+	{
+		"Extra Lines Per Frame", std::to_string(postrenderscanlines), &defaultFace(),
+		[this](const Input::Event &e)
+		{
+			app().pushAndShowNewCollectValueRangeInputView<int, 0, maxExtraLinesPerFrame>(attachParams(), e,
+				"Input 0 to 30000", std::to_string(postrenderscanlines),
+				[this](EmuApp &app, auto val)
+				{
+					system().sessionOptionSet();
+					postrenderscanlines = val;
+					extraLines.set2ndName(std::to_string(val));
+					return true;
+				});
+		}
+	};
+
+	DualTextMenuItem vblankMultipler
+	{
+		"Vertical Blank Line Multiplier", std::to_string(vblankscanlines), &defaultFace(),
+		[this](const Input::Event &e)
+		{
+			app().pushAndShowNewCollectValueRangeInputView<int, 0, maxVBlankMultiplier>(attachParams(), e,
+				"Input 0 to 16", std::to_string(vblankscanlines),
+				[this](EmuApp &app, auto val)
+				{
+					system().sessionOptionSet();
+					vblankscanlines = val;
+					vblankMultipler.set2ndName(std::to_string(val));
+					return true;
+				});
+		}
+	};
+
+	std::array<MenuItem*, 11> menuItem
 	{
 		&inputPorts,
 		&fourScore,
@@ -213,6 +263,10 @@ class ConsoleOptionView : public TableView, public MainAppHelper<ConsoleOptionVi
 		&videoSystem,
 		&visibleVideoLines,
 		&horizontalVideoCrop,
+		&overclocking,
+		&overclockingEnabled,
+		&extraLines,
+		&vblankMultipler,
 	};
 
 public:
@@ -287,9 +341,9 @@ class CustomVideoOptionView : public VideoOptionView, public MainAppHelper<Custo
 			{
 				auto fsFilter = [](std::string_view name)
 					{
-						return IG::stringEndsWithAny(name, ".pal", ".PAL");
+						return IG::endsWithAnyCaseless(name, ".pal");
 					};
-				auto fPicker = makeView<EmuFilePicker>(FSPicker::Mode::FILE, fsFilter, e, false);
+				auto fPicker = makeView<FilePicker>(FSPicker::Mode::FILE, fsFilter, e, false);
 				fPicker->setOnSelectPath(
 					[this](FSPicker &picker, IG::CStringView path, std::string_view name, Input::Event)
 					{
@@ -307,14 +361,16 @@ class CustomVideoOptionView : public VideoOptionView, public MainAppHelper<Custo
 	MultiChoiceMenuItem defaultPal
 	{
 		"Default Palette", &defaultFace(),
-		[this](uint32_t idx, Gfx::Text &t)
 		{
-			if(idx == defaultPaletteCustomFileIdx())
+			.onSetDisplayString = [this](auto idx, Gfx::Text &t)
 			{
-				t.resetString(IG::stringWithoutDotExtension(appContext().fileUriDisplayName(system().defaultPalettePath)));
-				return true;
+				if(idx == defaultPaletteCustomFileIdx())
+				{
+					t.resetString(IG::withoutDotExtension(appContext().fileUriDisplayName(system().defaultPalettePath)));
+					return true;
+				}
+				return false;
 			}
-			return false;
 		},
 		[this]()
 		{
@@ -517,7 +573,7 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 				{
 					logMsg("set cheats path:%s", path.data());
 					system().cheatsDir = path;
-					cheatsPath.compile(cheatsMenuName(appContext(), path), renderer(), projP);
+					cheatsPath.compile(cheatsMenuName(appContext(), path), renderer());
 				}), e);
 		}
 	};
@@ -532,7 +588,7 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 				{
 					logMsg("set patches path:%s", path.data());
 					system().patchesDir = path;
-					patchesPath.compile(patchesMenuName(appContext(), path), renderer(), projP);
+					patchesPath.compile(patchesMenuName(appContext(), path), renderer());
 				}), e);
 		}
 	};
@@ -547,23 +603,23 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 				{
 					logMsg("set palettes path:%s", path.data());
 					system().palettesDir = path;
-					palettesPath.compile(palettesMenuName(appContext(), path), renderer(), projP);
+					palettesPath.compile(palettesMenuName(appContext(), path), renderer());
 				}), e);
 		}
 	};
 
 	TextMenuItem fdsBios
 	{
-		biosMenuEntryStr(fdsBiosPath), &defaultFace(),
+		biosMenuEntryStr(system().fdsBiosPath), &defaultFace(),
 		[this](TextMenuItem &, View &, Input::Event e)
 		{
-			pushAndShow(makeViewWithName<DataFileSelectView>("Disk System BIOS",
-				app().validSearchPath(FS::dirnameUri(fdsBiosPath)),
+			pushAndShow(makeViewWithName<DataFileSelectView<>>("Disk System BIOS",
+				app().validSearchPath(FS::dirnameUri(system().fdsBiosPath)),
 				[this](CStringView path, FS::file_type type)
 				{
-					fdsBiosPath = path;
+					system().fdsBiosPath = path;
 					logMsg("set fds bios:%s", path.data());
-					fdsBios.compile(biosMenuEntryStr(path), renderer(), projP);
+					fdsBios.compile(biosMenuEntryStr(path), renderer());
 					return true;
 				}, hasFDSBIOSExtension), e);
 		}
@@ -571,7 +627,7 @@ class CustomFilePathOptionView : public FilePathOptionView, public MainAppHelper
 
 	std::string biosMenuEntryStr(CStringView path) const
 	{
-		return fmt::format("Disk System BIOS: {}", appContext().fileUriDisplayName(path));
+		return std::format("Disk System BIOS: {}", appContext().fileUriDisplayName(path));
 	}
 
 public:
@@ -669,58 +725,44 @@ public:
 	}
 };
 
-class CustomSystemActionsView : public EmuSystemActionsView
+class CustomSystemActionsView : public SystemActionsView
 {
 private:
 	TextMenuItem fdsControl
 	{
 		u"", &defaultFace(),
-		[this](TextMenuItem &item, View &, Input::Event e)
-		{
-			if(system().hasContent() && isFDS)
-			{
-				pushAndShow(makeView<FDSControlView>(), e);
-			}
-			else
-				app().postMessage(2, false, "Disk System not in use");
-		}
+		[this](Input::Event e) { pushAndShow(makeView<FDSControlView>(), e); }
 	};
 
 	void refreshFDSItem()
 	{
-		fdsControl.setActive(isFDS);
 		if(!isFDS)
-			fdsControl.compile("FDS Control", renderer(), projP);
-		else if(!FCEU_FDSInserted())
-			fdsControl.compile("FDS Control (No Disk)", renderer(), projP);
+			return;
+		if(!FCEU_FDSInserted())
+			fdsControl.compile("FDS Control (No Disk)", renderer());
 		else
-			fdsControl.compile(fmt::format("FDS Control (Disk {}:{})", (FCEU_FDSCurrentSide() >> 1) + 1, (FCEU_FDSCurrentSide() & 1) ? 'B' : 'A'),
-				renderer(), projP);
+			fdsControl.compile(std::format("FDS Control (Disk {}:{})", (FCEU_FDSCurrentSide() >> 1) + 1, (FCEU_FDSCurrentSide() & 1) ? 'B' : 'A'),
+				renderer());
 	}
 
 	TextMenuItem options
 	{
 		"Console Options", &defaultFace(),
-		[this](TextMenuItem &, View &, Input::Event e)
-		{
-			if(system().hasContent())
-			{
-				pushAndShow(makeView<ConsoleOptionView>(), e);
-			}
-		}
+		[this](Input::Event e) { pushAndShow(makeView<ConsoleOptionView>(), e); }
 	};
 
 public:
-	CustomSystemActionsView(ViewAttachParams attach): EmuSystemActionsView{attach, true}
+	CustomSystemActionsView(ViewAttachParams attach): SystemActionsView{attach, true}
 	{
-		item.emplace_back(&fdsControl);
+		if(isFDS)
+			item.emplace_back(&fdsControl);
 		item.emplace_back(&options);
 		loadStandardItems();
 	}
 
 	void onShow()
 	{
-		EmuSystemActionsView::onShow();
+		SystemActionsView::onShow();
 		refreshFDSItem();
 	}
 };

@@ -31,16 +31,17 @@
 #include <mednafen/FileStream.h>
 #include <time.h>
 #include <trio/trio.h>
+#include <emuframework/EmuSystem.hh>
 
 namespace MDFN_IEN_WSWAN
 {
 
 static uint32 wsRAMSize;
 uint8 wsRAM[65536];
-static uint8 *wsSRAM = NULL;
+uint8 *wsSRAM = NULL;
 
 uint8 *wsCartROM;
-static uint32 sram_size;
+uint32 sram_size;
 uint32 eeprom_size;
 
 static uint8 ButtonWhich, ButtonReadLatch;
@@ -157,7 +158,10 @@ static INLINE void WriteMem(uint32 A, uint8 V)
    }
   }
   else if(sram_size)
+  {
    wsSRAM[(offset | (BankSelector[1] << 16)) & (sram_size - 1)] = V;
+   EmuEx::gSystem().onBackupMemoryWritten();
+  }
  }
 }	
 

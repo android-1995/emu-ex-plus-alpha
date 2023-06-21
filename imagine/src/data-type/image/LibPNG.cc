@@ -125,7 +125,8 @@ static void png_memFree(png_structp png_ptr, png_voidp ptr)
 	delete[] (uint8_t*)ptr;
 }
 
-PngImage::PngImage(IO io)
+PngImage::PngImage(IO io, PixmapReaderParams params):
+	premultiplyAlpha{params.premultiplyAlpha}
 {
 	//logMsg("reading header from file handle @ %p",stream);
 	
@@ -134,11 +135,11 @@ PngImage::PngImage(IO io)
 	//log_mPrintf(LOG_MSG, "%d items %d size, %d", 10, 500, PNG_UINT_32_MAX/500);
 	if(!io)
 		return;
-	uint8_t header[INITIAL_HEADER_READ_BYTES];
-	if(io.read(&header, INITIAL_HEADER_READ_BYTES) != INITIAL_HEADER_READ_BYTES)
+	std::array <uint8_t, INITIAL_HEADER_READ_BYTES> header;
+	if(io.read(header).bytes != INITIAL_HEADER_READ_BYTES)
 		return;
 
-	int isPng = !png_sig_cmp(header, 0, INITIAL_HEADER_READ_BYTES);
+	int isPng = !png_sig_cmp(header.data(), 0, INITIAL_HEADER_READ_BYTES);
 	if (!isPng)
 	{
 		logErr("error - not a png file");
@@ -242,6 +243,13 @@ void PngImage::setTransforms(PixelFormat outFormat, png_infop transInfo)
 			png_set_filler(png, 0xFF, PNG_FILLER_AFTER);
 	}
 
+	#ifdef PNG_READ_ALPHA_MODE_SUPPORTED
+	if(premultiplyAlpha)
+	{
+		png_set_alpha_mode(png, PNG_ALPHA_STANDARD, PNG_GAMMA_LINEAR);
+	}
+	#endif
+
 	if(supportUncommonConv)
 	{
 		if((png_get_color_type(png, info) == PNG_COLOR_TYPE_GRAY || png_get_color_type(png, info) == PNG_COLOR_TYPE_GRAY_ALPHA) &&
@@ -310,7 +318,7 @@ std::errc PngImage::readImage(PixmapView dest)
 
 		for (int i = 0; i < height; i++)
 		{
-			png_read_row(png, (png_bytep)dest.pixel({0, i}), nullptr);
+			png_read_row(png, (png_bytep)&dest[0, i], nullptr);
 		}
 	}
 	else // read the whole image in 1 call with interlace handling, but needs array of row pointers allocated
@@ -320,7 +328,7 @@ std::errc PngImage::readImage(PixmapView dest)
 		for (int i = 0; i < height; i++)
 		{
 			//logr_mPrintf(LOG_MSG,row relative offset = %d", offset);
-			rowPtr[i] = (png_bytep)dest.pixel({0, i});
+			rowPtr[i] = (png_bytep)&dest[0, i];
 			//log_mPrintf(LOG_MSG, "set row pointer %d to %p", i, row_pointers[i]);
 		}
 
@@ -376,29 +384,31 @@ PixmapImage::operator PixmapSource()
 	return {[this](MutablePixmapView dest){ return write(dest); }, pixmapView()};
 }
 
-PixmapImage PixmapReader::load(IO io) const
+bool PixmapImage::isPremultipled() const { return premultiplyAlpha; }
+
+PixmapImage PixmapReader::load(IO io, PixmapReaderParams params) const
 {
-	return PixmapImage{std::move(io)};
+	return PixmapImage{std::move(io), params};
 }
 
-PixmapImage PixmapReader::load(const char *name) const
+PixmapImage PixmapReader::load(const char *name, PixmapReaderParams params) const
 {
 	if(!std::string_view{name}.ends_with(".png"))
 	{
 		logErr("suffix doesn't match PNG image");
 		return {};
 	}
-	return load(FileIO{name, IOAccessHint::ALL, OpenFlagsMask::TEST});
+	return load(FileIO{name, IOAccessHint::All, OpenFlagsMask::Test}, params);
 }
 
-PixmapImage PixmapReader::loadAsset(const char *name, const char *appName) const
+PixmapImage PixmapReader::loadAsset(const char *name, PixmapReaderParams params, const char *appName) const
 {
-	return load(appContext().openAsset(name, IOAccessHint::ALL, {}, appName));
+	return load(appContext().openAsset(name, IOAccessHint::All, {}, appName), params);
 }
 
 bool PixmapWriter::writeToFile(PixmapView pix, const char *path) const
 {
-	FileIO fp{path, OpenFlagsMask::NEW | OpenFlagsMask::TEST};
+	FileIO fp{path, OpenFlagsMask::New | OpenFlagsMask::Test};
 	if(!fp)
 	{
 		return false;

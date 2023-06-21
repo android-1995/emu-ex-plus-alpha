@@ -26,6 +26,8 @@
 #include <emuframework/VController.hh>
 #include <emuframework/TurboInput.hh>
 #include <emuframework/Option.hh>
+#include <emuframework/AutosaveManager.hh>
+#include <emuframework/OutputTimingManager.hh>
 #include <imagine/input/Input.hh>
 #include <imagine/input/android/MogaManager.hh>
 #include <imagine/gui/ViewManager.hh>
@@ -34,8 +36,8 @@
 #include <imagine/fs/FSDefs.hh>
 #include <imagine/base/ApplicationContext.hh>
 #include <imagine/base/Application.hh>
-#include <imagine/base/Timer.hh>
 #include <imagine/base/VibrationManager.hh>
+#include <imagine/base/PerformanceHintManager.hh>
 #include <imagine/audio/Manager.hh>
 #include <imagine/gfx/Renderer.hh>
 #include <imagine/gfx/Vec3.hh>
@@ -48,6 +50,7 @@
 #include <cstring>
 #include <optional>
 #include <span>
+#include <string>
 
 namespace IG
 {
@@ -60,6 +63,7 @@ namespace EmuEx
 {
 
 struct MainWindowData;
+class EmuMainMenuView;
 
 struct RecentContentInfo
 {
@@ -77,15 +81,46 @@ enum class Tristate : uint8_t
 	OFF, IN_EMU, ON
 };
 
+WISE_ENUM_CLASS((AssetFileID, size_t),
+	ui,
+	gamepadOverlay,
+	keyboardOverlay);
+
 WISE_ENUM_CLASS((AssetID, size_t),
-	ARROW,
-	CLOSE,
-	ACCEPT,
-	GAME_ICON,
-	MENU,
-	FAST_FORWARD,
-	GAMEPAD_OVERLAY,
-	KEYBOARD_OVERLAY);
+	arrow,
+	accept,
+	close,
+	more,
+	fast,
+	slow,
+	speed,
+	menu,
+	leftSwitch,
+	rightSwitch,
+	load,
+	save,
+	display,
+	screenshot,
+	openFile,
+	gamepadOverlay,
+	keyboardOverlay);
+
+constexpr const char *assetFilename[wise_enum::size<AssetFileID>]
+{
+	"ui.png",
+	"gpOverlay.png",
+	"kbOverlay.png",
+};
+
+struct AssetDesc
+{
+	AssetFileID fileID;
+	FRect texBounds;
+	IP aspectRatio{1, 1};
+
+	constexpr size_t fileIdx() const { return to_underlying(fileID); }
+	constexpr auto filename() const { return assetFilename[fileIdx()]; }
+};
 
 enum class ScanValueMode
 {
@@ -98,20 +133,20 @@ WISE_ENUM_CLASS((ImageChannel, uint8_t),
 	Green,
 	Blue);
 
-WISE_ENUM_CLASS((AutosaveLaunchMode, uint8_t),
-	Load,
-	LoadNoState,
-	Ask);
+enum class AltSpeedMode
+{
+	fast, slow
+};
 
-enum class LoadAutosaveMode{Normal, NoState};
+WISE_ENUM_CLASS((CPUAffinityMode, uint8_t),
+	Auto, Any, Manual
+);
 
-constexpr const char *defaultAutosaveFilename = "auto-00";
-constexpr const char *noAutosaveName = "\a";
+constexpr float menuVideoBrightnessScale = .25f;
 
 class EmuApp : public IG::Application
 {
 public:
-	using OnMainMenuOptionChanged = DelegateFunc<void()>;
 	using CreateSystemCompleteDelegate = DelegateFunc<void (const Input::Event &)>;
 	using NavView = BasicNavView;
 	static constexpr int MAX_RECENT = 10;
@@ -135,9 +170,14 @@ public:
 	static bool needsGlobalInstance;
 
 	EmuApp(IG::ApplicationInitParams, IG::ApplicationContext &);
+
+	// required sub-class API functions
+	bool willCreateSystem(ViewAttachParams, const Input::Event &);
+	AssetDesc vControllerAssetDesc(unsigned key) const;
+
 	void mainInitCommon(IG::ApplicationInitParams, IG::ApplicationContext);
 	static void onCustomizeNavView(NavView &v);
-	void createSystemWithMedia(IG::IO, IG::CStringView path, std::string_view displayName,
+	void createSystemWithMedia(IG::IO, CStringView path, std::string_view displayName,
 		const Input::Event &, EmuSystemCreateParams, ViewAttachParams, CreateSystemCompleteDelegate);
 	void closeSystem();
 	void closeSystemWithoutSave();
@@ -162,40 +202,26 @@ public:
 	void showUI(bool updateTopView = true);
 	void launchSystem(const Input::Event &);
 	static bool hasArchiveExtension(std::string_view name);
-	void setOnMainMenuItemOptionChanged(OnMainMenuOptionChanged func);
-	void dispatchOnMainMenuItemOptionChanged();
 	void unpostMessage();
 	void printScreenshotResult(bool success);
-	bool saveAutosave();
-	bool loadAutosave(LoadAutosaveMode m = LoadAutosaveMode::Normal);
-	bool setAutosave(std::string_view name);
-	bool renameAutosave(std::string_view name, std::string_view newName);
-	bool deleteAutosave(std::string_view name);
-	const auto &currentAutosave() const { return autoSaveSlot; }
-	std::string currentAutosaveName() const;
-	std::string currentAutosaveStateTimeAsString() const;
-	IG::Time currentAutosaveStateTime() const;
-	IG::Time currentAutosaveBackupMemoryTime() const;
-	FS::PathString currentAutosaveStatePath() const { return autosaveStatePath(autoSaveSlot); }
-	FS::PathString autosaveStatePath(std::string_view name) const;
 	FS::PathString contentSavePath(std::string_view name) const;
 	FS::PathString contentSaveFilePath(std::string_view ext) const;
-	bool saveState(IG::CStringView path);
+	bool saveState(CStringView path);
 	bool saveStateWithSlot(int slot);
-	bool loadState(IG::CStringView path);
+	bool loadState(CStringView path);
 	bool loadStateWithSlot(int slot);
 	bool shouldOverwriteExistingState() const;
-	void setDefaultVControlsButtonSpacing(int spacing);
-	void setDefaultVControlsButtonStagger(int stagger);
 	const auto &contentSearchPath() const { return contentSearchPath_; }
 	FS::PathString contentSearchPath(std::string_view name) const;
 	void setContentSearchPath(std::string_view path);
 	FS::PathString validSearchPath(const FS::PathString &) const;
-	static void updateLegacySavePath(IG::ApplicationContext, IG::CStringView path);
+	static void updateLegacySavePath(IG::ApplicationContext, CStringView path);
 	const auto &userScreenshotPath() const { return userScreenshotDir; }
 	void setUserScreenshotPath(CStringView path) { userScreenshotDir = path; }
 	auto screenshotDirectory() const { return system().userPath(userScreenshotDir); }
 	static std::unique_ptr<View> makeCustomView(ViewAttachParams attach, ViewID id);
+	bool handleKeyInput(InputAction, const Input::Event &srcEvent);
+	void handleSystemKeyInput(InputAction);
 	void addTurboInputEvent(unsigned action);
 	void removeTurboInputEvent(unsigned action);
 	void removeTurboInputEvents() { turboActions = {}; }
@@ -207,44 +233,43 @@ public:
 	bool hasSavedSessionOptions();
 	void deleteSessionOptions();
 	void syncEmulationThread();
-	void prepareAudio();
 	void startAudio();
 	EmuAudio &audio() { return emuAudio; }
 	EmuVideo &video() { return emuVideo; }
+	EmuVideoLayer &videoLayer() { return emuVideoLayer; }
 	EmuViewController &viewController();
-	void pauseAutosaveStateTimer();
-	void cancelAutosaveStateTimer();
-	void resetAutosaveStateTimer();
-	void startAutosaveStateTimer();
-	IG::Time nextAutosaveTimerFireTime() const;
-	IG::Time autosaveTimerFrequency() const;
-	void configFrameTime();
-	void setFaceButtonMapping(FaceButtonImageMap map);
-	void applyEnabledFaceButtons(std::span<const std::pair<int, bool>> applyEnableMap);
-	void applyEnabledCenterButtons(std::span<const std::pair<int, bool>> applyEnableMap);
+	const EmuViewController &viewController() const;
+	const Screen &emuScreen() const;
+	Window &emuWindow();
+	AutosaveManager &autosaveManager() { return autosaveManager_; }
+	FrameTimeConfig configFrameTime();
+	void setDisabledInputKeys(std::span<const unsigned> keys);
+	void unsetDisabledInputKeys();
 	void updateKeyboardMapping();
 	void toggleKeyboard();
-	void updateVControllerMapping();
-	Gfx::Texture &asset(AssetID) const;
+	Gfx::TextureSpan asset(AssetID) const;
+	Gfx::TextureSpan asset(AssetDesc) const;
 	void updateInputDevices(IG::ApplicationContext);
 	void setOnUpdateInputDevices(DelegateFunc<void ()>);
-	VController &defaultVController();
+	VController &defaultVController() { return vController; }
 	static std::unique_ptr<View> makeView(ViewAttachParams, ViewID);
 	void applyOSNavStyle(IG::ApplicationContext, bool inGame);
 	void setCPUNeedsLowLatency(IG::ApplicationContext, bool needed);
 	void runFrames(EmuSystemTaskContext, EmuVideo *, EmuAudio *, int frames, bool skipForward);
 	void skipFrames(EmuSystemTaskContext, int frames, EmuAudio *);
 	bool skipForwardFrames(EmuSystemTaskContext, int frames);
-	FloatSeconds bestFrameTimeForScreen(VideoSystem system) const;
-	void applyFrameRates(bool updateFrameTime = true);
 	IG::Audio::Manager &audioManager() { return audioManager_; }
 	void renderSystemFramebuffer(EmuVideo &);
-	bool writeScreenshot(IG::PixmapView, IG::CStringView path);
+	bool writeScreenshot(IG::PixmapView, CStringView path);
 	FS::PathString makeNextScreenshotFilename();
-	bool mogaManagerIsActive() const;
+	bool mogaManagerIsActive() const { return bool(mogaManagerPtr); }
 	void setMogaManagerActive(bool on, bool notify);
 	constexpr IG::VibrationManager &vibrationManager() { return vibrationManager_; }
 	std::span<const KeyCategory> inputControlCategories() const;
+	const KeyCategory &categoryOfSystemKey(unsigned key) const;
+	std::string_view systemKeyName(unsigned key) const;
+	unsigned transposeKeyForPlayer(unsigned keys, int player) const;
+	unsigned validateSystemKey(unsigned key, bool isUIKey) const;
 	BluetoothAdapter *bluetoothAdapter();
 	void closeBluetoothConnections();
 	ViewAttachParams attachParams();
@@ -259,14 +284,14 @@ public:
 	auto &savedInputDeviceList() { return savedInputDevs; };
 	IG::Viewport makeViewport(const Window &win) const;
 	void setEmuViewOnExtraWindow(bool on, IG::Screen &);
-	void setWindowFrameClockSource(IG::Window::FrameTimeSource src) { winFrameTimeSrc = src; }
-	IG::Window::FrameTimeSource windowFrameClockSource() const { return winFrameTimeSrc; }
-	double intendedFrameRate(const IG::Window &) const;
+	void record(FrameTimeStatEvent, SteadyClockTimePoint t = {});
+	bool supportsPresentModes() const { return windowFrameTimeSource != WindowFrameTimeSource::RENDERER; }
+	void setIntendedFrameRate(Window &, FrameTimeConfig);
 	static std::u16string_view mainViewName();
 	void runBenchmarkOneShot(EmuVideo &);
-	void onSelectFileFromPicker(IG::IO, IG::CStringView path, std::string_view displayName,
+	void onSelectFileFromPicker(IG::IO, CStringView path, std::string_view displayName,
 		const Input::Event &, EmuSystemCreateParams, ViewAttachParams);
-	void handleOpenFileCommand(IG::CStringView path);
+	void handleOpenFileCommand(CStringView path);
 	static bool hasGooglePlayStoreFeatures();
 	EmuSystem &system();
 	const EmuSystem &system() const;
@@ -274,32 +299,15 @@ public:
 	static EmuApp &get(ApplicationContext);
 	MainWindowData &mainWindowData() const;
 
-	// Audio Options
-	void setAudioOutputAPI(IG::Audio::Api);
-	IG::Audio::Api audioOutputAPI() const;
-	void setSoundRate(int rate);
-	int soundRate() const { return optionSoundRate; }
-	int soundRateMax() const { return optionSoundRate.defaultVal; }
-	bool canChangeSoundRate() const { return !optionSoundRate.isConst; }
-	bool setSoundVolume(int vol);
-	int soundVolume() const { return optionSoundVolume; }
-	void setSoundBuffers(int buffers);
-	int soundBuffers() const { return optionSoundBuffers; }
-	void setSoundEnabled(bool on);
-	bool soundIsEnabled() const;
-	void setAddSoundBuffersOnUnderrun(bool on);
-	bool addSoundBuffersOnUnderrun() const { return optionAddSoundBuffersOnUnderrun; }
-	void setSoundDuringFastSlowModeEnabled(bool on);
-	bool soundDuringFastSlowModeIsEnabled() const;
-
 	// Video Options
 	bool setWindowDrawableConfig(Gfx::DrawableConfig);
 	Gfx::DrawableConfig windowDrawableConfig() const { return windowDrawableConf; }
 	IG::PixelFormat windowPixelFormat() const;
 	void setRenderPixelFormat(std::optional<IG::PixelFormat>);
 	IG::PixelFormat renderPixelFormat() const { return renderPixelFmt; }
-	bool setVideoAspectRatio(double val);
-	double videoAspectRatio() const;
+	bool setVideoAspectRatio(float val);
+	float videoAspectRatio() const;
+	float defaultVideoAspectRatio() const;
 	auto &videoFilterOption() { return optionImgFilter; }
 	auto &videoEffectOption() { return optionImgEffect; }
 	IG::PixelFormat videoEffectPixelFormat() const;
@@ -307,13 +315,8 @@ public:
 	auto &overlayEffectOption() { return optionOverlayEffect; }
 	bool setOverlayEffectLevel(EmuVideoLayer &, uint8_t val);
 	uint8_t overlayEffectLevel() { return optionOverlayEffectLevel; }
-	std::pair<IG::FloatSeconds, bool> setFrameTime(VideoSystem system, IG::FloatSeconds time);
-	FloatSeconds frameTime(VideoSystem) const;
-	bool frameTimeIsConst(VideoSystem) const;
 	void setFrameInterval(int);
 	int frameInterval() const;
-	void setShouldSkipLateFrames(bool on) { optionSkipLateFrames = on; }
-	bool shouldSkipLateFrames() const { return optionSkipLateFrames; }
 	bool setVideoZoom(uint8_t val);
 	uint8_t videoZoom() const { return optionImageZoom; }
 	bool setViewportZoom(uint8_t val);
@@ -321,23 +324,23 @@ public:
 	auto &showOnSecondScreenOption() { return optionShowOnSecondScreen; }
 	auto &textureBufferModeOption() { return optionTextureBufferMode; }
 	auto &videoImageBuffersOption() { return optionVideoImageBuffers; }
-	void setUsePresentationTime(bool on) { usePresentationTime_ = on; }
-	bool usePresentationTime() const { return usePresentationTime_; }
 	void setContentRotation(IG::Rotation);
 	IG::Rotation contentRotation() const { return contentRotation_; }
 	void updateContentRotation();
-	bool shouldForceMaxScreenFrameRate() const { return forceMaxScreenFrameRate; }
-	void setForceMaxScreenFrameRate(bool on) { forceMaxScreenFrameRate = on; }
-	float videoBrightness(ImageChannel);
-	int videoBrightnessAsInt(ImageChannel ch) { return videoBrightness(ch) * 100.f; }
+	float videoBrightness(ImageChannel) const;
+	const Gfx::Vec3 &videoBrightnessAsRGB() const { return videoBrightnessRGB; }
+	int videoBrightnessAsInt(ImageChannel ch) const { return videoBrightness(ch) * 100.f; }
 	void setVideoBrightness(float brightness, ImageChannel);
 
 	// System Options
-	auto &autosaveTimerMinsOption() { return optionAutosaveTimerMins; }
 	auto &confirmOverwriteStateOption() { return optionConfirmOverwriteState; }
-	auto &fastSlowModeSpeedOption() { return optionFastSlowModeSpeed; }
-	double fastSlowModeSpeedAsDouble() { return optionFastSlowModeSpeed.val / 100.; }
+	bool setAltSpeed(AltSpeedMode mode, int16_t speed);
+	int16_t altSpeed(AltSpeedMode mode) const { return altSpeedRef(mode); }
+	double altSpeedAsDouble(AltSpeedMode mode) const { return altSpeed(mode) / 100.; }
 	auto &sustainedPerformanceModeOption() { return optionSustainedPerformanceMode; }
+	void setCPUAffinity(int cpuNumber, bool on);
+	bool cpuAffinity(int cpuNumber) const;
+	void applyCPUAffinity(bool active);
 
 	// GUI Options
 	auto &pauseUnfocusedOption() { return optionPauseUnfocused; }
@@ -389,7 +392,7 @@ public:
 
 	void postMessage(int secs, bool error, UTF16Convertible auto &&msg)
 	{
-		viewController().popupMessageView().post(IG_forward(msg), secs, error);
+		viewController().popup.post(IG_forward(msg), secs, error);
 	}
 
 	void postErrorMessage(UTF16Convertible auto &&msg)
@@ -419,32 +422,33 @@ public:
 	template <std::floating_point T>
 	static std::pair<T, int> scanValue(const char *str, ScanValueMode)
 	{
-		double val;
-		double denom;
-		int items = sscanf(str, "%lf /%lf", &val, &denom);
-		if(items > 1 && denom > 0)
+		T val, denom;
+		int items = sscanf(str, std::is_same_v<T, double> ? "%lf /%lf" : "%f /%f", &val, &denom);
+		if(items > 1 && denom != 0)
 		{
 			val /= denom;
 		}
 		return {val, items};
 	}
 
-	template <std::same_as<std::pair<double, double>> T>
+	template <class T>
+	requires std::same_as<T, std::pair<float, float>> || std::same_as<T, std::pair<double, double>>
 	static std::pair<T, int> scanValue(const char *str, ScanValueMode)
 	{
 		// special case for getting a fraction
-		T val{};
-		int items = sscanf(str, "%lf /%lf", &val.first, &val.second);
-		if(!val.second)
+		using PairValue = typename T::first_type;
+		PairValue val, denom{};
+		int items = sscanf(str, std::is_same_v<PairValue, double> ? "%lf /%lf" : "%f /%f", &val, &denom);
+		if(denom == 0)
 		{
-			val.second = 1.;
+			denom = 1.;
 		}
-		return {val, items};
+		return {{val, denom}, items};
 	}
 
 	template<class T, ScanValueMode mode = ScanValueMode::NORMAL>
 	void pushAndShowNewCollectValueInputView(ViewAttachParams attach, const Input::Event &e,
-		IG::CStringView msgText, IG::CStringView initialContent, IG::Callable<bool, EmuApp&, T> auto &&collectedValueFunc)
+		CStringView msgText, CStringView initialContent, IG::Callable<bool, EmuApp&, T> auto &&collectedValueFunc)
 	{
 		pushAndShowNewCollectTextInputView(attach, e, msgText, initialContent,
 			[collectedValueFunc](CollectTextInputView &view, const char *str)
@@ -475,7 +479,7 @@ public:
 
 	template<class T, T low, T high>
 	void pushAndShowNewCollectValueRangeInputView(ViewAttachParams attach, const Input::Event &e,
-			IG::CStringView msgText, IG::CStringView initialContent, IG::Callable<bool, EmuApp&, T> auto &&collectedValueFunc)
+			CStringView msgText, CStringView initialContent, IG::Callable<bool, EmuApp&, T> auto &&collectedValueFunc)
 	{
 		pushAndShowNewCollectValueInputView<int>(attach, e, msgText, initialContent,
 			[collectedValueFunc](EmuApp &app, auto val)
@@ -501,13 +505,15 @@ protected:
 	EmuVideo emuVideo;
 	EmuVideoLayer emuVideoLayer;
 	EmuSystemTask emuSystemTask;
-	mutable Gfx::Texture assetBuffImg[wise_enum::size<AssetID>];
+	mutable Gfx::Texture assetBuffImg[wise_enum::size<AssetFileID>];
 	VController vController;
-	IG::Timer autoSaveTimer;
-	IG::Time autoSaveTimerStartTime{};
-	IG::Time autoSaveTimerElapsedTime{};
+	AutosaveManager autosaveManager_;
+public:
+	OutputTimingManager outputTimingManager;
+protected:
+	IG_UseMemberIf(enableFrameTimeStats, FrameTimeStats, frameTimeStats);
+	IG_UseMemberIf(Config::threadPerformanceHints, SteadyClockTimePoint, frameStartTimePoint){};
 	DelegateFunc<void ()> onUpdateInputDevices_;
-	OnMainMenuOptionChanged onMainMenuOptionChanged_;
 	KeyConfigContainer customKeyConfigs;
 	InputDeviceSavedConfigContainer savedInputDevs;
 	TurboInput turboActions;
@@ -516,27 +522,21 @@ protected:
 	[[no_unique_address]] IG::Data::PixmapReader pixmapReader;
 	[[no_unique_address]] IG::Data::PixmapWriter pixmapWriter;
 	[[no_unique_address]] IG::VibrationManager vibrationManager_;
-	#ifdef CONFIG_BLUETOOTH
+	[[no_unique_address]] PerformanceHintManager perfHintManager;
+	[[no_unique_address]] PerformanceHintSession perfHintSession;
 	BluetoothAdapter *bta{};
-	#endif
 	IG_UseMemberIf(MOGA_INPUT, std::unique_ptr<Input::MogaManager>, mogaManagerPtr);
 	RecentContentList recentContentList;
-	std::string autoSaveSlot;
 	std::string userScreenshotDir;
-	DoubleOption optionAspectRatio;
-	DoubleOption optionFrameRate;
-	DoubleOption optionFrameRatePAL;
-	Byte4Option optionSoundRate;
+	IG_UseMemberIf(Config::cpuAffinity, CPUMask, cpuAffinityMask){};
+	int savedAdvancedFrames{};
+	static constexpr int16_t defaultFastModeSpeed{800};
+	static constexpr int16_t defaultSlowModeSpeed{50};
+	int16_t fastModeSpeed{defaultFastModeSpeed};
+	int16_t slowModeSpeed{defaultSlowModeSpeed};
 	Byte2Option optionFontSize;
 	Byte1Option optionPauseUnfocused;
-	Byte1Option optionAutosaveTimerMins;
 	Byte1Option optionConfirmOverwriteState;
-	Byte2Option optionFastSlowModeSpeed;
-	Byte1Option optionSound;
-	Byte1Option optionSoundVolume;
-	Byte1Option optionSoundBuffers;
-	Byte1Option optionAddSoundBuffersOnUnderrun;
-	IG_UseMemberIf(IG::Audio::Config::MULTIPLE_SYSTEM_APIS, Byte1Option, optionAudioAPI);
 	Byte1Option optionNotificationIcon;
 	Byte1Option optionTitleBar;
 	Byte1Option optionSystemActionsIsDefaultMenu;
@@ -556,58 +556,41 @@ protected:
 	Byte1Option optionImageEffectPixelFormat;
 	Byte1Option optionOverlayEffect;
 	Byte1Option optionOverlayEffectLevel;
-	IG_UseMemberIf(Config::SCREEN_FRAME_INTERVAL, Byte1Option, optionFrameInterval);
-	Byte1Option optionSkipLateFrames;
+	Byte1Option optionFrameInterval;
 	Byte1Option optionImageZoom;
 	Byte1Option optionViewportZoom;
 	Byte1Option optionShowOnSecondScreen;
 	Byte1Option optionTextureBufferMode;
 	Byte1Option optionVideoImageBuffers;
+	bool turboModifierActive{};
 	Gfx::DrawableConfig windowDrawableConf;
 	IG::PixelFormat renderPixelFmt;
 	IG::Rotation contentRotation_{IG::Rotation::ANY};
 	bool showHiddenFilesInPicker_{};
 	IG_UseMemberIf(Config::TRANSLUCENT_SYSTEM_UI, bool, layoutBehindSystemUI){};
-	IG::WindowFrameTimeSource winFrameTimeSrc{IG::WindowFrameTimeSource::AUTO};
-	IG_UseMemberIf(Config::envIsAndroid, bool, usePresentationTime_){true};
-	IG_UseMemberIf(Config::envIsAndroid, bool, forceMaxScreenFrameRate){};
 
 	//region 爱吾
     FS::PathString screenshotPathAiWu{};
 	//endregion
 public:
-	AutosaveLaunchMode autosaveLaunchMode{};
+	IG_UseMemberIf(Config::multipleScreenFrameRates, FrameRate, overrideScreenFrameRate){};
+	WindowFrameTimeSource windowFrameTimeSource{WindowFrameTimeSource::AUTO};
+	IG_UseMemberIf(Config::cpuAffinity, CPUAffinityMode, cpuAffinityMode){CPUAffinityMode::Auto};
+	IG_UseMemberIf(Config::envIsAndroid && Config::DEBUG_BUILD, bool, useNoopThread){};
+	IG_UseMemberIf(enableFrameTimeStats, bool, showFrameTimeStats){};
+	IG_UseMemberIf(Gfx::supportsPresentModes, Gfx::PresentMode, presentMode){};
+	IG_UseMemberIf(Gfx::supportsPresentationTime, bool, usePresentationTime){true};
+	bool allowBlankFrameInsertion{};
+	bool enableBlankFrameInsertion{};
 
 protected:
-	class ConfigParams
+	struct ConfigParams
 	{
-	public:
-		static constexpr uint8_t BACK_NAVIGATION_IS_SET_BIT = IG::bit(0);
-		static constexpr uint8_t BACK_NAVIGATION_BIT = IG::bit(1);
-
-		constexpr std::optional<bool> backNavigation() const
-		{
-			if(flags & BACK_NAVIGATION_IS_SET_BIT)
-				return flags & BACK_NAVIGATION_BIT;
-			return {};
-		}
-
-		constexpr void setBackNavigation(std::optional<bool> opt)
-		{
-			if(!opt)
-				return;
-			flags |= BACK_NAVIGATION_IS_SET_BIT;
-			flags = IG::setOrClearBits(flags, BACK_NAVIGATION_BIT, *opt);
-		}
-
-	protected:
-		uint8_t flags{};
 		Gfx::DrawableConfig windowDrawableConf{};
 	};
 
-	bool willCreateSystem(ViewAttachParams, const Input::Event &);
 	void onMainWindowCreated(ViewAttachParams, const Input::Event &);
-	Gfx::Texture *collectTextCloseAsset() const;
+	Gfx::TextureSpan collectTextCloseAsset() const;
 	ConfigParams loadConfigFile(IG::ApplicationContext);
 	void saveConfigFile(IG::ApplicationContext);
 	void saveConfigFile(FileIO &);
@@ -629,21 +612,9 @@ protected:
 	void addOnFrameDelegate(IG::OnFrameDelegate);
 	void onFocusChange(bool in);
 	void configureAppForEmulation(bool running);
-
-	const DoubleOption &frameTimeOption(VideoSystem system) const
-	{
-		switch(system)
-		{
-			default:
-			case VideoSystem::NATIVE_NTSC: return optionFrameRate;
-			case VideoSystem::PAL: return optionFrameRatePAL;
-		}
-	}
-
-	DoubleOption &frameTimeOption(VideoSystem system)
-	{
-		return const_cast<DoubleOption&>(std::as_const(*this).frameTimeOption(system));
-	}
+	int16_t &altSpeedRef(AltSpeedMode mode) { return mode == AltSpeedMode::slow ? slowModeSpeed : fastModeSpeed; }
+	const int16_t &altSpeedRef(AltSpeedMode mode) const { return mode == AltSpeedMode::slow ? slowModeSpeed : fastModeSpeed; }
+	void reportFrameWorkTime();
 };
 
 // Global instance access if required by the emulated system, valid if EmuApp::needsGlobalInstance initialized to true

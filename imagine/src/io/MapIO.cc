@@ -31,62 +31,31 @@ namespace IG
 
 template class IOUtils<MapIO>;
 
-MapIO::MapIO(IOBuffer buff):
-	currPos{buff.data()},
-	buff{std::move(buff)} {}
-
-ssize_t MapIO::read(void *buff, size_t bytes)
+ssize_t MapIO::read(void *buff, size_t bytesToRead, std::optional<off_t> offset)
 {
-	assert(currPos >= data());
-	auto bytesRead = readAtAddr(buff, bytes, currPos);
-	if(bytesRead > 0)
-	{
-		currPos += bytesRead;
-	}
-	return bytesRead;
+	return copyBuffer(buff, bytesToRead, offset);
 }
 
-ssize_t MapIO::readAtPos(void *buff, size_t bytes, off_t offset)
+ssize_t MapIO::write(const void *buff, size_t bytesToWrite, std::optional<off_t> offset)
 {
-	return readAtAddr(buff, bytes, data() + offset);
-}
-
-std::span<uint8_t> MapIO::map()
-{
-	return {data(), size()};
-}
-
-ssize_t MapIO::write(const void *buff, size_t bytes)
-{
-	// TODO
-	return -1;
+	return copyBuffer(buff, bytesToWrite, offset);
 }
 
 off_t MapIO::seek(off_t offset, IOSeekMode mode)
 {
-	auto newPos = transformOffsetToAbsolute(mode, offset, data(), dataEnd(), currPos);
-	if(newPos < data() || newPos > dataEnd())
+	size_t newPos = transformOffsetToAbsolute(mode, offset, 0, off_t(size()), off_t(currPos));
+	if(newPos > size())
 	{
 		logErr("illegal seek position");
 		return -1;
 	}
 	currPos = newPos;
-	return currPos - data();
+	return newPos;
 }
 
-size_t MapIO::size()
+void MapIO::sync()
 {
-	return buff.size();
-}
-
-bool MapIO::eof()
-{
-	return currPos >= dataEnd();
-}
-
-MapIO::operator bool() const
-{
-	return data();
+	msync(data(), size(), MS_SYNC);
 }
 
 static int adviceToMAdv(IOAdvice advice)
@@ -94,75 +63,59 @@ static int adviceToMAdv(IOAdvice advice)
 	switch(advice)
 	{
 		default: return MADV_NORMAL;
-		case IOAdvice::SEQUENTIAL: return MADV_SEQUENTIAL;
-		case IOAdvice::RANDOM: return MADV_RANDOM;
-		case IOAdvice::WILLNEED: return MADV_WILLNEED;
+		case IOAdvice::Sequential: return MADV_SEQUENTIAL;
+		case IOAdvice::Random: return MADV_RANDOM;
+		case IOAdvice::WillNeed: return MADV_WILLNEED;
 	}
 }
 
 #if defined __linux__ || defined __APPLE__
 void MapIO::advise(off_t offset, size_t bytes, Advice advice)
 {
-	assert(offset >= 0);
 	if(!bytes)
 		bytes = size();
-	if(bytes > size() - offset) // clip to end of data
+	auto span = subSpan(offset, bytes);
+	if(!span.data())
+		return;
+	void *pageSrcAddr = roundDownToPageSize(span.data());
+	bytes = span.size_bytes() + (uintptr_t(span.data()) - uintptr_t(pageSrcAddr)); // add extra bytes from rounding down to page size
+	if(madvise(pageSrcAddr, bytes, adviceToMAdv(advice)) != 0)
 	{
-		bytes = size() - offset;
-	}
-	auto srcAddr = data() + offset;
-	void *pageSrcAddr = roundDownToPageSize(srcAddr);
-	bytes += (uintptr_t)srcAddr - (uintptr_t)pageSrcAddr; // add extra bytes from rounding down to page size
-	int mAdv = adviceToMAdv(advice);
-	if(madvise(pageSrcAddr, bytes, mAdv) != 0 && Config::DEBUG_BUILD)
-	{
-		logWarn("madvise(%p, %zu, %s) failed:%s", pageSrcAddr, bytes, adviceStr(advice), strerror(errno));
-	}
-	else
-	{
-		logDMsg("madvise(%p, %zu, %s)", pageSrcAddr, bytes, adviceStr(advice));
+		logWarn("madvise(%p, %zu, %s) failed:%s",
+			pageSrcAddr, bytes, asString(advice), Config::DEBUG_BUILD ? strerror(errno) : "");
 	}
 }
 #endif
 
-IOBuffer MapIO::releaseBuffer()
+std::span<uint8_t> MapIO::subSpan(off_t offset, size_t maxBytes) const
 {
-	logMsg("releasing buffer:%p (%zu bytes)", buff.data(), buff.size());
-	return std::move(buff);
-}
-
-uint8_t *MapIO::data() const
-{
-	return buff.data();
-}
-
-uint8_t *MapIO::dataEnd() const
-{
-	return data() + buff.size();
-}
-
-ssize_t MapIO::readAtAddr(void* buff, size_t bytes, const uint8_t *addr)
-{
-	if(addr >= dataEnd())
+	if(offset > off_t(size())) [[unlikely]]
 	{
-		if(!data()) [[unlikely]]
-			return -1;
-		else
-			return 0;
+		logErr("offset%zd is larger than size:%zu", ssize_t(offset), size());
+		return {};
 	}
+	auto bytes = std::min(maxBytes, size_t(size() - offset));
+	//if(bytes != maxBytes) logDMsg("reduced size of span:%zu to %zu", maxBytes, bytes);
+	return {data() + offset, bytes};
+}
 
-	size_t bytesToRead;
-	const uint8_t *posToReadTo = addr + bytes;
-	if(posToReadTo > dataEnd())
+ssize_t MapIO::copyBuffer(auto *buff, size_t bytes, std::optional<off_t> offset)
+{
+	if(!data()) [[unlikely]]
+		return -1;
+	auto span = subSpan(offset ? *offset : currPos, bytes);
+	if(!span.data())
+		return 0;
+	if constexpr(std::is_const_v<std::remove_pointer_t<decltype(buff)>>)
+		memcpy(span.data(), buff, span.size_bytes()); // write from provided buffer
+	else
+		memcpy(buff, span.data(), span.size_bytes()); // read to provided buffer
+	if(!offset)
 	{
-		bytesToRead = dataEnd() - addr;
+		currPos += span.size_bytes();
+		assert(currPos <= size());
 	}
-	else bytesToRead = bytes;
-
-	//logDMsg("reading %llu bytes at offset %llu", (unsigned long long)bytesToRead, (unsigned long long)(addr - data));
-	memcpy(buff, addr, bytesToRead);
-
-	return bytesToRead;
+	return span.size_bytes();
 }
 
 }
