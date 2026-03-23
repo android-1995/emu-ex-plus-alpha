@@ -1644,7 +1644,7 @@ namespace IG
     	if (key == "audioEnabled") {
     		app.audio.setEnabled(value == "true");
     	}else if (key == "debugEnabled") {
-    		logger_setEnabled(value == "true");
+    		Log::setEnabled(value == "true");
     	}else if (key == "linearFilter") {
     		app.videoLayer.setLinearFilter(value == "true");
     		app.viewController().postDrawToEmuWindows();
