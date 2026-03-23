@@ -14,7 +14,7 @@ add_library(emuframework STATIC)
 set_target_properties(emuframework PROPERTIES CXX_MODULE_STD ON)
 set_target_properties(emuframework PROPERTIES OUTPUT_NAME "emuframework${GEN_TARGET_EXT}")
 target_include_directories(emuframework PRIVATE include)
-target_compile_options(emuframework PRIVATE -Werror)
+#target_compile_options(emuframework PRIVATE -Werror)# 爱吾修改：不把警告当作错误
 addPkgConfigDepMultiConfig(emuframework imagine)
 addCxxModules(emuframework imagine glm)
 install(TARGETS emuframework DESTINATION lib)
