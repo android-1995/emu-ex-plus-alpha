@@ -251,7 +251,7 @@ bool ApplicationContext::usesPermission(Permission) const
 	return true;
 }
 
-bool ApplicationContext::permissionIsRestricted(Permission p) const
+bool ApplicationContext::permissionIsRestricted(Permission _p) const
 {
 	//return p == Permission::WRITE_EXT_STORAGE ? androidSDK() >= 30 : false;
 	return false;//爱吾修改：去掉SDK30的限制（target28可以正常使用File Api）

@@ -16,8 +16,8 @@ ifeq ($(ENV), ios)
 endif
 
 # setup warnings
-# 爱吾修改：增加-Wno-unused -Wno-unused-parameter，关闭未使用的警告‌
-CFLAGS_WARN ?= -Wall -Wextra -Werror=return-type -Wno-comment -Wno-unused -Wno-unused-parameter
+
+CFLAGS_WARN ?= -Wall -Wextra -Werror=return-type -Wno-comment
 CXXFLAGS_WARN ?= $(CFLAGS_WARN) -Woverloaded-virtual
 
 # setup optimizations
