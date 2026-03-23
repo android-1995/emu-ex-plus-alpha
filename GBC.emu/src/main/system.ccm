@@ -22,7 +22,6 @@ export module system;
 import emuex;
 import imagine;
 import std;
-#include <list>
 
 namespace EmuEx
 {
