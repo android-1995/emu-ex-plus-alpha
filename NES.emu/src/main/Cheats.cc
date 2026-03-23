@@ -16,7 +16,6 @@
 module;
 #include <fceu/driver.h>
 #include <fceu/cheat.h>
-#include "MainSystem.hh"
 
 module system;
 
