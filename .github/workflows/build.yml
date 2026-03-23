@@ -30,7 +30,7 @@ jobs:
     - name: Install CMake
       uses: lukka/get-cmake@latest
       with:
-        cmakeVersion: "3.28.0"
+        cmakeVersion: "4.2.3"
     - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:
@@ -86,7 +86,7 @@ jobs:
     - name: Install CMake
       uses: lukka/get-cmake@latest
       with:
-        cmakeVersion: "3.28.0"
+        cmakeVersion: "4.2.3"
     - name: Set up JDK 21
       uses: actions/setup-java@v4
       with:

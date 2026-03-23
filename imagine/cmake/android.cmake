@@ -5,9 +5,6 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(ENV android)
 set(ENV_KERNEL linux)
 
-# Enable C++20 module support (must be set before compiler detection)
-set(CMAKE_EXPERIMENTAL_CXX_IMPORT_STD "d0edc3af-4c50-42ea-a356-e2862fe7a444")
-
 if(NOT IS_DIRECTORY ${ANDROID_NDK_PATH})
 	message(FATAL_ERROR "androidNDKPath.cmake was not included in toolchain file")
 endif()
