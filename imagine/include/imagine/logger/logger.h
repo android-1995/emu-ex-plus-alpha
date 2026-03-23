@@ -28,6 +28,8 @@ typedef uint8_t LoggerSeverity;
 
 CLINK void logger_printf(LoggerSeverity severity, const char* msg, ...) __attribute__((format (printf, 2, 3)));
 CLINK void logger_vprintf(LoggerSeverity severity, const char* msg, va_list arg);
+//爱吾修改：添加打印日志的接口
+CLINK void logger_setEnabled(bool enable);
 
 
 #define logger_printfn(severity, msg, ...) logger_printf(severity, msg "\n", ## __VA_ARGS__)
