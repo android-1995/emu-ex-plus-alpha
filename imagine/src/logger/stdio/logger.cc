@@ -166,6 +166,12 @@ void setEnabled(bool enable)
 
 bool isEnabled() { return logEnabled; }
 
+//爱吾修改：添加打印日志的接口
+extern "C" void logger_setEnabled(bool enable)
+{
+	logEnabled = enable;
+}
+
 void printMsg([[maybe_unused]] Level lv, const char* str, size_t strSize)
 {
 	const char newLine = '\n';
