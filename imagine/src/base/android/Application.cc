@@ -288,7 +288,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                     {
                             "onKeyPress", "(II)V",
                             (void*)
-                                    +[](JNIEnv* _env, jobject _thiz, jint keyCode, jint player)
+                                    +[](JNIEnv* env, jobject thiz, jint keyCode, jint player)
                                     {
                                         //uint playerMask = player << 28;
                                         IG::gAiWuAppContext().onKeyPressAiWu(keyCode , player);
@@ -297,7 +297,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                     {
                             "onKeyRelease", "(II)V",
                             (void*)
-                                    +[](JNIEnv* _env, jobject _thiz, jint keyCode, jint player)
+                                    +[](JNIEnv* env, jobject thiz, jint keyCode, jint player)
                                     {
                                         //uint playerMask = player << 28;
                                         IG::gAiWuAppContext().onKeyReleaseAiWu(keyCode , player);
@@ -306,7 +306,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                     {
                             "showSetting", "(Z)V",
                             (void*)
-                                    +[](JNIEnv* _env, jobject _thiz,jboolean isShow)
+                                    +[](JNIEnv* env, jobject thiz,jboolean isShow)
                                     {
                                         IG::gAiWuAppContext().showSettingAiWu(isShow);
                                     }
@@ -314,7 +314,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                     {
                             "changeEmulatorState", "(Z)V",
                             (void*)
-                                    +[](JNIEnv* _env, jobject _thiz,jboolean pause)
+                                    +[](JNIEnv* env, jobject thiz,jboolean pause)
                                     {
                                         IG::gAiWuAppContext().changeEmulatorStateAiWu(pause);
                                     }
@@ -322,7 +322,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                     {
                             "reset", "()V",
                             (void*)
-                                    +[](JNIEnv* _env, jobject _thiz)
+                                    +[](JNIEnv* env, jobject thiz)
                                     {
                                         IG::gAiWuAppContext().resetAiWu();
                                     }
@@ -330,7 +330,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                     {
                             "exit", "()V",
                             (void*)
-                                    +[](JNIEnv* _env, jobject _thiz)
+                                    +[](JNIEnv* env, jobject thiz)
                                     {
                                         IG::gAiWuAppContext().exit();
                                     }
@@ -338,7 +338,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                     {
                             "screenshot", "(Ljava/lang/String;Lcom/imagine/OnScreenshotCompleteListener;)V",
                             (void*)
-                                    +[](JNIEnv* env, jobject _thiz,jstring jPath,jobject listener)
+                                    +[](JNIEnv* env, jobject thiz,jstring jPath,jobject listener)
                                     {
                                         if (IG::g_android_screenshot_complete_callback) {
                                             return;
@@ -360,7 +360,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                     {
                             "fastForward", "(D)V",
                             (void*)
-                                    +[](JNIEnv* _env, jobject _thiz, jdouble jSpeed)
+                                    +[](JNIEnv* env, jobject thiz, jdouble jSpeed)
                                     {
                                         IG::gAiWuAppContext().fastForwardAiWu(jSpeed);
                                     }
@@ -368,7 +368,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                     {
                             "saveState", "(Ljava/lang/String;Z)V",
                             (void*)
-                                    +[](JNIEnv* env, jobject _thiz,jstring jPath,jboolean notify)
+                                    +[](JNIEnv* env, jobject thiz,jstring jPath,jboolean notify)
                                     {
                                         std::string tempString = GetJString(env, jPath);
                                         const char *path = tempString.c_str();
@@ -378,7 +378,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                     {
                             "loadState", "(Ljava/lang/String;)V",
                             (void*)
-                                    +[](JNIEnv* env, jobject _thiz,jstring jPath)
+                                    +[](JNIEnv* env, jobject thiz,jstring jPath)
                                     {
                                         std::string tempString = GetJString(env, jPath);
                                         const char *path = tempString.c_str();
@@ -388,7 +388,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                     {
                             "saveStateMemory", "()[B",
                             (void*)
-                                    +[](JNIEnv* env, jobject _thiz) -> jbyteArray
+                                    +[](JNIEnv* env, jobject thiz) -> jbyteArray
                                     {
 										DynArray<uint8_t> data = IG::gAiWuAppContext().saveStateMemoryAiWu();
 										int size = data.size();
@@ -402,7 +402,7 @@ void AndroidApplication::aiWuFunInit(JNIEnv *env, jobject baseActivity, jclass b
                     {
                             "loadStateMemory", "([B)V",
                             (void*)
-                                    +[](JNIEnv* env, jobject _thiz, jbyteArray state)
+                                    +[](JNIEnv* env, jobject thiz, jbyteArray state)
                                     {
 										 if (state == nullptr) {
                 							return;
