@@ -26,7 +26,7 @@ namespace EmuEx
 const std::string_view AppMeta::creditsViewStr{CREDITS_INFO_STRING "(c) 2011-2026\nRobert Broglia\nwww.explusalpha.com\n\n\nPortions (c) the\nGambatte Team\ngambatte.sourceforge.net"};
 const std::string_view AppMeta::configFilename{"GbcEmu.config"};
 const bool AppMeta::hasCheats{true};
-const AspectRatioInfo AppMeta::aspectRatioInfo{"10:9 (Original)", {10, 9}};
+const AspectRatioInfo AppMeta::aspectRatioInfo{"10:9 (原画)", {10, 9}};
 const NameFilterFunc AppMeta::defaultFsFilter = [](std::string_view name) { return endsWithAnyCaseless(name, ".gb", ".gbc", ".dmg"); };
 
 constexpr auto dpadKeyInfo = makeArray<KeyInfo>

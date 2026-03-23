@@ -114,7 +114,7 @@ public:
 	{
 		.defaultValue = true
 	}> optionSmsFM;
-	Property<bool, CFGKEY_6_BTN_PAD> option6BtnPad;
+	Property<bool, CFGKEY_6_BTN_PAD,{.defaultValue = true}> option6BtnPad;//爱吾修改：默认开启6按键模式
 	Property<bool, CFGKEY_MULTITAP> optionMultiTap;
 	Property<int8_t, CFGKEY_INPUT_PORT_1,
 	{
@@ -197,7 +197,9 @@ public:
 	bool removeCheat(Cheat&);
 	void forEachCheat(DelegateFunc<bool(Cheat&, std::string_view)>);
 	void forEachCheatCode(Cheat&, DelegateFunc<bool(CheatCode&, std::string_view)>);
-
+	//region 爱吾修改
+	void setCheatListAiWu(const std::list<std::string>& cheatList);
+	//endregion
 private:
 	void setupSmsInput(EmuApp&);
 	void setupMdInput(EmuApp&);

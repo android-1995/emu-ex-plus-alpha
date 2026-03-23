@@ -28,7 +28,7 @@ const std::string_view AppMeta::creditsViewStr{CREDITS_INFO_STRING "(c) 2011-202
 const std::string_view AppMeta::configFilename{"SwanEmu.config"};
 const bool AppMeta::needsGlobalInstance{true};
 const NameFilterFunc AppMeta::defaultFsFilter = [](std::string_view name) { return endsWithAnyCaseless(name, ".ws", ".wsc", ".bin"); };
-const AspectRatioInfo AppMeta::aspectRatioInfo{"14:9 (Original)", {14, 9}};
+const AspectRatioInfo AppMeta::aspectRatioInfo{"14:9 (原画)", {14, 9}};
 
 constexpr auto dpadKeyInfo = makeArray<KeyInfo>
 (

@@ -27,7 +27,7 @@ namespace EmuEx
 const std::string_view AppMeta::creditsViewStr{CREDITS_INFO_STRING "(c) 2011-2026\nRobert Broglia\nwww.explusalpha.com\n\nPortions (c) the\nMednafen Team\nmednafen.github.io"};
 const std::string_view AppMeta::configFilename{"NgpEmu.config"};
 const bool AppMeta::needsGlobalInstance{true};
-const AspectRatioInfo AppMeta::aspectRatioInfo{"20:19 (Original)", {20, 19}};
+const AspectRatioInfo AppMeta::aspectRatioInfo{"20:19 (原画)", {20, 19}};
 const NameFilterFunc AppMeta::defaultFsFilter = [](std::string_view name)
 {
 	return endsWithAnyCaseless(name, ".ngc", ".ngp", ".npc", ".ngpc");
